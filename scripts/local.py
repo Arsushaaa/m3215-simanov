@@ -22,6 +22,7 @@ def prepare_env(
     cloud: bool,
     ask: Callable[[str], str] = getpass.getpass,
     environ: Mapping[str, str] | None = None,
+    require_llm: bool = False,
 ) -> Path:
     path = root / (".env.cloud" if cloud else ".env")
     existing = dotenv_values(path, interpolate=False)
@@ -35,12 +36,20 @@ def prepare_env(
         "POSTGRES_USER": "bot",
         "LOG_LEVEL": "INFO",
         "HEALTH_PORT": "8080",
+        "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
+        "OPENROUTER_MODEL": "nvidia/nemotron-3-super-120b-a12b:free",
+        "LLM_TIMEOUT_SECONDS": "60",
+        "LLM_MAX_OUTPUT_TOKENS": "2048",
+        "HISTORY_MAX_MESSAGES": "20",
+        "HISTORY_MAX_TOKENS": "6000",
     }
     for key, default in defaults.items():
         if not values.get(key):
             updates[key] = default
     if not values.get("BOT_TOKEN"):
         updates["BOT_TOKEN"] = ask("Токен бота из BotFather (ввод скрыт): ").strip()
+    if require_llm and not values.get("OPENROUTER_API_KEY"):
+        updates["OPENROUTER_API_KEY"] = ask("Ключ OpenRouter (ввод скрыт): ").strip()
     if not values.get("POSTGRES_PASSWORD"):
         updates["POSTGRES_PASSWORD"] = secrets.token_urlsafe(24)
     if "TELEGRAM_PROXY_URL" not in values or (cloud and not values.get("TELEGRAM_PROXY_URL")):
@@ -50,7 +59,7 @@ def prepare_env(
     merged = {**values, **updates}
     if cloud and not merged.get("TELEGRAM_PROXY_URL"):
         raise ConfigError("Для облака необходимо указать внешний прокси Telegram.")
-    Settings.load(path, environ=merged)
+    Settings.load(path, environ=merged, require_llm=require_llm)
     if not path.exists():
         private_write(path, "# Секретные настройки. Не добавляйте этот файл в Git.\n")
     for key, value in updates.items():
@@ -89,7 +98,7 @@ def local_main(root: Path, action: str, setup_only: bool) -> int:
     run_command(["docker", "info"], label="Docker недоступен: запустите Docker Desktop/Engine")
     run_command(["docker", "compose", "version"], label="Проверка Docker Compose")
     if action == "up":
-        path = prepare_env(root, cloud=False)
+        path = prepare_env(root, cloud=False, require_llm=not setup_only)
         settings = Settings.load(path)
         if settings.postgres_host not in {"127.0.0.1", "localhost"}:
             raise ConfigError("Для локального запуска POSTGRES_HOST должен быть 127.0.0.1.")

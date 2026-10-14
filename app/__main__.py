@@ -6,9 +6,13 @@ from aiogram import Dispatcher
 
 from app.config import ConfigError, Settings
 from app.db import create_pool
-from app.handlers.echo import router
+from app.dialog import DialogService
+from app.handlers.assistant import create_router
 from app.health import HealthState, start_health_server
+from app.llm import OpenRouterClient
 from app.logging_setup import configure_logging
+from app.migration import migrate
+from app.repository import DialogRepository
 from app.telegram import create_bot
 
 logger = logging.getLogger("app")
@@ -18,9 +22,11 @@ async def run(settings: Settings) -> None:
     state = HealthState()
     bot = create_bot(settings)
     runner = None
+    llm = None
     try:
         state.pool = await create_pool(settings)
         logger.info("PostgreSQL подключён: SELECT 1 выполнен.")
+        await migrate(state.pool)
         # Начальная проверка токена и маршрута через прокси ограничена по времени.
         async with asyncio.timeout(30):
             me = await bot.get_me()
@@ -31,13 +37,17 @@ async def run(settings: Settings) -> None:
                 "или используйте отдельного учебного бота."
             )
         logger.info("Telegram доступен. Бот @%s запускает polling.", me.username)
+        llm = OpenRouterClient(settings)
+        await llm.start()
+        dialog = DialogService(DialogRepository(state.pool), llm, settings)
         dispatcher = Dispatcher()
-        dispatcher.include_router(router)
+        dispatcher.include_router(create_router())
         runner = await start_health_server(state, settings.health_port)
         state.polling_task = asyncio.create_task(
             dispatcher.start_polling(
                 bot,
                 db=state.pool,
+                dialog=dialog,
                 allowed_updates=dispatcher.resolve_used_update_types(),
                 close_bot_session=False,
             )
@@ -52,6 +62,8 @@ async def run(settings: Settings) -> None:
         if runner:
             await runner.cleanup()
         await bot.session.close()
+        if llm:
+            await llm.close()
         if state.pool:
             try:
                 async with asyncio.timeout(10):
@@ -61,11 +73,11 @@ async def run(settings: Settings) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Учебный текстовый эхо-бот")
+    parser = argparse.ArgumentParser(description="Лабби — учебный AI-помощник")
     parser.add_argument("--env-file", default=".env")
     args = parser.parse_args()
     try:
-        settings = Settings.load(args.env_file)
+        settings = Settings.load(args.env_file, require_llm=True)
     except ConfigError as exc:
         print(str(exc))
         return 1

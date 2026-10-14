@@ -1,15 +1,10 @@
 import asyncio
 import logging
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram import Bot, Dispatcher
-from aiogram.methods import SendMessage
-from aiogram.types import Chat, Message, PhotoSize, Update, User
 
 from app.config import ConfigError, Settings
-from app.handlers.echo import router
 from app.health import HealthState, health_result
 from app.logging_setup import SecretFilter
 from app.telegram import create_bot
@@ -22,54 +17,6 @@ def settings(tmp_path):
     path = tmp_path / ".env"
     path.write_text(f"BOT_TOKEN={TOKEN}\nPOSTGRES_PASSWORD=secret-db\n", encoding="utf-8")
     return Settings.load(path, environ={})
-
-
-@pytest.mark.parametrize("text", ["Привет 👋", "/start", "<b>текст</b> & *слово*", "строка\nдва"])
-async def test_echo_preserves_exact_text(text):
-    # Arrange
-    bot = Bot(TOKEN)
-    bot.session = AsyncMock()
-    dispatcher = Dispatcher()
-    # A Router can have only one parent; use its handler callback through a fresh router.
-    from aiogram import Router
-
-    from app.handlers.echo import echo_text
-
-    test_router = Router()
-    from aiogram import F
-
-    test_router.message.register(echo_text, F.text)
-    dispatcher.include_router(test_router)
-    message = Message(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat(id=42, type="private"),
-        from_user=User(id=42, is_bot=False, first_name="Студент"),
-        text=text,
-    )
-    # Act
-    await dispatcher.feed_update(bot, Update(update_id=1, message=message))
-    # Assert
-    method = bot.session.call_args.args[1]
-    assert isinstance(method, SendMessage)
-    assert method.chat_id == 42
-    assert method.text == text
-    assert method.parse_mode is None
-
-
-async def test_photo_does_not_match_text_handler():
-    # Arrange
-    handler = router.message.handlers[0]
-    message = Message(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat(id=42, type="private"),
-        photo=[PhotoSize(file_id="a", file_unique_id="b", width=1, height=1)],
-    )
-    # Act
-    matches, _ = await handler.check(message)
-    # Assert
-    assert matches is False
 
 
 def test_settings_environment_overrides_file(tmp_path):
@@ -181,3 +128,54 @@ def test_log_filter_redacts_secrets_and_exception():
     # Assert
     assert all(secret not in rendered for secret in (TOKEN, "db-secret", "proxy-secret"))
     assert "ValueError" in rendered
+
+
+def test_llm_key_is_required_for_application_but_not_database_setup(tmp_path):
+    path = tmp_path / ".env"
+    values = {"BOT_TOKEN": TOKEN, "POSTGRES_PASSWORD": "fake-db"}
+    Settings.load(path, environ=values)
+    with pytest.raises(ConfigError, match="OPENROUTER_API_KEY"):
+        Settings.load(path, environ=values, require_llm=True)
+    values["OPENROUTER_API_KEY"] = "fake-secret-key"
+    settings = Settings.load(path, environ=values, require_llm=True)
+    assert "fake-secret-key" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("OPENROUTER_MODEL", "paid/model"),
+        ("OPENROUTER_BASE_URL", "https://user:private-key@untrusted.example"),
+        ("HISTORY_MAX_MESSAGES", "3"),
+        ("HISTORY_MAX_TOKENS", "0"),
+        ("LLM_TIMEOUT_SECONDS", "bad"),
+    ],
+)
+def test_llm_configuration_errors_do_not_leak_credentials(tmp_path, field, value):
+    with pytest.raises(ConfigError) as exc:
+        Settings.load(
+            tmp_path / ".env",
+            environ={
+                "BOT_TOKEN": TOKEN,
+                "POSTGRES_PASSWORD": "fake-db",
+                field: value,
+            },
+        )
+    assert field in str(exc.value)
+    assert "private-key" not in str(exc.value)
+
+
+def test_logging_masks_openrouter_key(bot_settings, capsys):
+    from app.logging_setup import configure_logging
+
+    root = logging.getLogger()
+    handlers, level = root.handlers[:], root.level
+    try:
+        configure_logging(bot_settings)
+        logging.getLogger("test").error("Authorization: Bearer %s", bot_settings.openrouter_api_key)
+        output = capsys.readouterr().err
+        assert bot_settings.openrouter_api_key not in output
+        assert "[скрыто]" in output
+    finally:
+        root.handlers = handlers
+        root.setLevel(level)

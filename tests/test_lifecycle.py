@@ -43,6 +43,7 @@ async def test_telegram_failure_closes_pool_and_session(monkeypatch):
         session=Mock(close=AsyncMock()),
     )
     monkeypatch.setattr(application, "create_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr(application, "migrate", AsyncMock())
     monkeypatch.setattr(application, "create_bot", Mock(return_value=bot))
     settings = Settings(bot_token="unused", postgres_password="unused")
     # Act
@@ -64,6 +65,33 @@ async def test_db_failure_closes_http_session(monkeypatch):
     with pytest.raises(ConnectionError):
         await application.run(Settings(bot_token="unused", postgres_password="unused"))
     # Assert
+    bot.session.close.assert_awaited_once()
+
+
+async def test_polling_failure_closes_llm_health_and_database(monkeypatch):
+    from app import __main__ as application
+
+    pool = Mock(close=AsyncMock())
+    bot = Mock(
+        get_me=AsyncMock(return_value=Mock(username="test")),
+        get_webhook_info=AsyncMock(return_value=Mock(url="")),
+        session=Mock(close=AsyncMock()),
+    )
+    llm = Mock(start=AsyncMock(), close=AsyncMock())
+    runner = Mock(cleanup=AsyncMock())
+    dispatcher = Mock(start_polling=AsyncMock(side_effect=RuntimeError("polling failed")))
+    monkeypatch.setattr(application, "create_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr(application, "migrate", AsyncMock())
+    monkeypatch.setattr(application, "create_bot", Mock(return_value=bot))
+    monkeypatch.setattr(application, "OpenRouterClient", Mock(return_value=llm))
+    monkeypatch.setattr(application, "Dispatcher", Mock(return_value=dispatcher))
+    monkeypatch.setattr(application, "start_health_server", AsyncMock(return_value=runner))
+    with pytest.raises(RuntimeError, match="polling failed"):
+        await application.run(Settings(bot_token="unused", postgres_password="unused"))
+    llm.start.assert_awaited_once()
+    llm.close.assert_awaited_once()
+    runner.cleanup.assert_awaited_once()
+    pool.close.assert_awaited_once()
     bot.session.close.assert_awaited_once()
 
 

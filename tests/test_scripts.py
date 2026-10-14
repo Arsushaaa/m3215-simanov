@@ -253,6 +253,9 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
 
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("", encoding="utf-8")
+    migrations = tmp_path / "app" / "migrations"
+    migrations.mkdir()
+    (migrations / "001_test.sql").write_text("SELECT 1;", encoding="utf-8")
     (tmp_path / "app" / ".env").write_text("SECRET=yes", encoding="utf-8")
     (tmp_path / ".env.cloud").write_text("SECRET=yes", encoding="utf-8")
     (tmp_path / ".deploy").mkdir()
@@ -263,6 +266,7 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
         names = archive.getnames()
     # Assert
     assert "app/__init__.py" in names
+    assert "app/migrations/001_test.sql" in names
     assert all(".env" not in n and "id_ed25519" not in n for n in names)
 
 

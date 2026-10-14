@@ -1,0 +1,207 @@
+from dataclasses import replace
+
+import pytest
+
+from app.dialog import DialogService, build_context, estimate_tokens
+from app.llm import ModelError
+from app.prompts import PROMPTS
+
+
+async def test_history_roles_order_and_user_isolation(dialog_setup):
+    service, repo, llm = dialog_setup
+    await service.respond(1, 10, "Первый вопрос")
+    await service.respond(2, 10, "Чужой вопрос")
+    await service.respond(1, 11, "Уточнение")
+    messages, temperature = llm.complete.call_args.args
+    assert messages == [
+        {"role": "system", "content": PROMPTS["study"]},
+        {"role": "user", "content": "Первый вопрос"},
+        {"role": "assistant", "content": "Ответ модели."},
+        {"role": "user", "content": "Уточнение"},
+    ]
+    assert temperature == 0.3
+    assert await repo.history(2, 20) == [
+        {"role": "user", "content": "Чужой вопрос"},
+        {"role": "assistant", "content": "Ответ модели."},
+    ]
+
+
+async def test_duplicate_message_reuses_successful_answer(dialog_setup):
+    service, repo, llm = dialog_setup
+    first = await service.respond(1, 5, "Привет")
+    second = await service.respond(1, 5, "Привет")
+    assert first == second == "Ответ модели."
+    llm.complete.assert_awaited_once()
+    assert len(await repo.history(1, 20)) == 2
+
+
+async def test_mode_clears_own_history_preserves_temperature_and_changes_prompt(dialog_setup):
+    service, repo, llm = dialog_setup
+    await service.respond(1, 1, "Старый контекст")
+    await service.respond(2, 1, "Чужой контекст")
+    await service.preferences(1, "0.7")
+    reply = await service.mode(1, "translate")
+    assert reply == "Режим: Перевод. История очищена. Укажи язык перевода и отправь текст."
+    assert await repo.history(1, 20) == []
+    assert len(await repo.history(2, 20)) == 2
+    await service.respond(1, 2, "На английский: привет")
+    assert llm.complete.call_args.args == (
+        [
+            {"role": "system", "content": PROMPTS["translate"]},
+            {"role": "user", "content": "На английский: привет"},
+        ],
+        0.7,
+    )
+
+
+async def test_reset_clears_only_history(dialog_setup):
+    service, repo, _ = dialog_setup
+    await service.mode(1, "quiz")
+    await service.preferences(1, "1.0")
+    await service.respond(1, 1, "Python")
+    await service.respond(2, 1, "SQL")
+    assert await service.reset(1) == "История очищена. Режим и температура сохранены."
+    user = await repo.user(1)
+    assert (user.mode, user.temperature) == ("quiz", 1.0)
+    assert await repo.history(1, 20) == []
+    assert len(await repo.history(2, 20)) == 2
+
+
+@pytest.mark.parametrize("value", ["0.0", "0.3", "0.7", "1.0", "0,3"])
+async def test_settings_accepts_allowed_values(dialog_setup, value):
+    service, repo, llm = dialog_setup
+    reply = await service.preferences(1, value)
+    assert (await repo.user(1)).temperature == float(value.replace(",", "."))
+    assert "Модель: nvidia/nemotron-3-super-120b-a12b:free" in reply
+    llm.complete.assert_not_awaited()
+
+
+@pytest.mark.parametrize("value", ["0.5", "-1", "2", "NaN", "sNaN", "Infinity", "0.3 extra"])
+async def test_settings_rejects_bad_values_without_api_or_state_change(dialog_setup, value):
+    service, repo, llm = dialog_setup
+    await service.preferences(1, "0.7")
+    assert await service.preferences(1, value) == (
+        "Допустимые значения: /settings 0.0, 0.3, 0.7 или 1.0."
+    )
+    assert (await repo.user(1)).temperature == 0.7
+    llm.complete.assert_not_awaited()
+
+
+async def test_model_failure_does_not_store_a_partial_exchange(dialog_setup):
+    service, repo, llm = dialog_setup
+    await service.respond(1, 1, "Первый вопрос")
+    before = await repo.history(1, 20)
+    llm.complete.side_effect = ModelError("Модель не успела ответить.")
+    with pytest.raises(ModelError, match="не успела"):
+        await service.respond(1, 2, "Второй вопрос")
+    assert await repo.history(1, 20) == before
+
+
+async def test_service_recreation_restores_settings_and_history(dialog_setup):
+    service, repo, llm = dialog_setup
+    await service.mode(1, "quiz")
+    await service.preferences(1, "0.0")
+    await service.respond(1, 1, "Тема Python")
+    recreated = DialogService(repo, llm, service.settings)
+    await recreated.respond(1, 2, "Мой ответ")
+    messages, temperature = llm.complete.call_args.args
+    assert messages[0]["content"].startswith(PROMPTS["quiz"])
+    assert "Сейчас пользователь отвечает на вопрос 1 из пяти" in messages[0]["content"]
+    assert "вопрос 2 из пяти" in messages[0]["content"]
+    assert messages[1]["content"] == "Тема Python"
+    assert temperature == 0.0
+
+
+def test_context_trims_oldest_complete_pairs_and_preserves_current(bot_settings):
+    settings = replace(bot_settings, history_max_messages=4)
+    history = [
+        {"role": "user", "content": "Старый вопрос"},
+        {"role": "assistant", "content": "Старый ответ"},
+        {"role": "user", "content": "Новый вопрос"},
+        {"role": "assistant", "content": "Новый ответ"},
+    ]
+    result = build_context("Инструкция", history, "Текущий вопрос", settings)
+    assert result == [
+        {"role": "system", "content": "Инструкция"},
+        *history[2:],
+        {"role": "user", "content": "Текущий вопрос"},
+    ]
+    assert len(history) == 4
+
+
+def test_context_obeys_estimated_token_budget(bot_settings):
+    history = [
+        {"role": "user", "content": "ж" * 1200},
+        {"role": "assistant", "content": "я" * 1200},
+        {"role": "user", "content": "Недавний вопрос"},
+        {"role": "assistant", "content": "Недавний ответ"},
+    ]
+    settings = replace(bot_settings, history_max_tokens=100)
+    result = build_context("Инструкция", history, "Текущий вопрос", settings)
+    assert result[1:-1] == history[2:]
+    assert result[-1]["content"] == "Текущий вопрос"
+    assert estimate_tokens(result) <= 100
+
+
+def test_oversized_current_message_is_rejected_without_removing_system(bot_settings):
+    settings = replace(bot_settings, history_max_tokens=20)
+    with pytest.raises(ModelError, match="слишком длинное"):
+        build_context("Инструкция", [], "д" * 200, settings)
+
+
+async def test_concurrent_reset_from_another_instance_discards_stale_answer(dialog_setup):
+    service, repo, llm = dialog_setup
+
+    async def complete(*args):
+        await repo.reset(1)
+        return "Устаревший ответ"
+
+    llm.complete.side_effect = complete
+    with pytest.raises(ModelError, match="Диалог изменился"):
+        await service.respond(1, 1, "Вопрос")
+    assert await repo.history(1, 20) == []
+
+
+async def test_quiz_has_five_questions_hint_keeps_progress_and_restart_restores_it(dialog_setup):
+    service, repo, llm = dialog_setup
+    await service.mode(1, "quiz")
+    answer = await service.respond(1, 1, "Тема: Python")
+    assert answer.startswith("Вопрос 1/5\n\n")
+    hint = await service.respond(1, 2, "Дай подсказку")
+    assert hint.startswith("Подсказка к вопросу 1/5\n\n")
+    assert (await repo.user(1)).quiz_question == 1
+    assert "не задавая новый вопрос" in llm.complete.call_args.args[0][0]["content"]
+    service = DialogService(repo, llm, service.settings)
+    for number in range(2, 6):
+        answer = await service.respond(1, number + 1, "Ответ на предыдущий вопрос")
+        assert answer.startswith(f"Вопрос {number}/5\n\n")
+    finished = await service.respond(1, 7, "Ответ на пятый вопрос")
+    assert finished.startswith("Тренировка завершена.\n\n")
+    assert (await repo.user(1)).quiz_finished is True
+    calls = llm.complete.await_count
+    with pytest.raises(ModelError, match="Для новой тренировки"):
+        await service.respond(1, 8, "Дальше")
+    assert llm.complete.await_count == calls
+    await service.reset(1)
+    user = await repo.user(1)
+    assert (user.mode, user.quiz_question, user.quiz_topic, user.quiz_finished) == (
+        "quiz",
+        0,
+        None,
+        False,
+    )
+
+
+async def test_quiz_topic_remains_in_context_after_history_trimming(dialog_setup):
+    service, repo, llm = dialog_setup
+    service.settings = replace(service.settings, history_max_messages=4)
+    await service.mode(1, "quiz")
+    await service.respond(1, 1, "Тема: циклы Python")
+    await service.respond(1, 2, "Первый ответ")
+    await service.respond(1, 3, "Второй ответ")
+    messages = llm.complete.call_args.args[0]
+    assert messages[1] == {"role": "user", "content": "Тема: циклы Python"}
+    assert messages[2]["content"] == "Первый ответ"
+    assert messages[3]["role"] == "assistant"
+    assert messages[4]["content"] == "Второй ответ"
+    assert len(messages) - 1 == 4

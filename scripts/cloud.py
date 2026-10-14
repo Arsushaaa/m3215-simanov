@@ -81,6 +81,7 @@ def source_archive(root: Path) -> Path:
         ]
     ]
     candidates.extend((root / "app").rglob("*.py"))
+    candidates.extend((root / "app" / "migrations").glob("*.sql"))
     with tarfile.open(archive_path, "w:gz") as archive:
         for path in sorted(candidates):
             if path.is_file() and "__pycache__" not in path.parts and not path.is_symlink():
@@ -494,7 +495,7 @@ def cloud_main(root: Path, args) -> int:
             raise CommandError(f"Установите OpenSSH: не найдена команда {command}.")
     settings = None
     if args.action == "up":
-        settings = Settings.load(prepare_env(root, cloud=True))
+        settings = Settings.load(prepare_env(root, cloud=True, require_llm=True), require_llm=True)
     if args.action != "up" and not (root / ".deploy" / "state.json").exists():
         raise CommandError("Нет состояния деплоя. Сначала выполните deploy up.")
     yc_path = install_yc()

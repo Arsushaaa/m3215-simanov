@@ -25,10 +25,21 @@ class Settings:
     postgres_user: str = "bot"
     log_level: str = "INFO"
     health_port: int = 8080
+    openrouter_api_key: str = field(default="", repr=False)
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    llm_timeout_seconds: int = 60
+    llm_max_output_tokens: int = 2048
+    history_max_messages: int = 20
+    history_max_tokens: int = 6000
 
     @classmethod
     def load(
-        cls, env_file: Path | str = ".env", *, environ: Mapping[str, str] | None = None
+        cls,
+        env_file: Path | str = ".env",
+        *,
+        environ: Mapping[str, str] | None = None,
+        require_llm: bool = False,
     ) -> "Settings":
         values = {
             **dotenv_values(env_file, interpolate=False),
@@ -46,6 +57,15 @@ class Settings:
                 return result
             except ValueError:
                 raise ConfigError(f"{key}: нужен номер порта от 1 до 65535.") from None
+
+        def number(key: str, default: str, minimum: int, maximum: int) -> int:
+            try:
+                result = int(value(key, default))
+                if not minimum <= result <= maximum:
+                    raise ValueError
+                return result
+            except ValueError:
+                raise ConfigError(f"{key}: нужно целое число от {minimum} до {maximum}.") from None
 
         token = value("BOT_TOKEN")
         try:
@@ -76,6 +96,18 @@ class Settings:
         level = value("LOG_LEVEL", "INFO").upper()
         if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
             raise ConfigError("LOG_LEVEL: используйте DEBUG, INFO, WARNING, ERROR или CRITICAL.")
+        api_key = value("OPENROUTER_API_KEY").strip()
+        if require_llm and not api_key:
+            raise ConfigError("OPENROUTER_API_KEY: добавьте ключ OpenRouter в env-файл.")
+        base_url = value("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        if base_url != "https://openrouter.ai/api/v1":
+            raise ConfigError("OPENROUTER_BASE_URL: используйте https://openrouter.ai/api/v1.")
+        model = value("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+        if not model.endswith(":free") or "/" not in model or any(c.isspace() for c in model):
+            raise ConfigError("OPENROUTER_MODEL: укажите идентификатор бесплатной модели с :free.")
+        message_limit = number("HISTORY_MAX_MESSAGES", "20", 4, 200)
+        if message_limit % 2:
+            raise ConfigError("HISTORY_MAX_MESSAGES: нужно чётное число для целых пар диалога.")
         return cls(
             bot_token=token,
             postgres_password=password,
@@ -86,4 +118,11 @@ class Settings:
             postgres_user=value("POSTGRES_USER", "bot"),
             log_level=level,
             health_port=port("HEALTH_PORT", "8080"),
+            openrouter_api_key=api_key,
+            openrouter_base_url=base_url,
+            openrouter_model=model,
+            llm_timeout_seconds=number("LLM_TIMEOUT_SECONDS", "60", 1, 300),
+            llm_max_output_tokens=number("LLM_MAX_OUTPUT_TOKENS", "2048", 64, 8192),
+            history_max_messages=message_limit,
+            history_max_tokens=number("HISTORY_MAX_TOKENS", "6000", 1024, 100000),
         )

@@ -31,6 +31,7 @@ def configure_logging(settings: Settings) -> None:
         SecretFilter(
             [
                 settings.bot_token,
+                settings.openrouter_api_key,
                 settings.postgres_password,
                 settings.telegram_proxy_url,
                 proxy.password or "",
