@@ -5,6 +5,7 @@ import pytest
 
 from app.config import Settings
 from app.dialog import DialogService
+from app.llm import Completion
 from app.repository import UserSettings
 
 
@@ -14,6 +15,7 @@ class FakeRepository:
     def __init__(self):
         self.users = {}
         self.exchanges = {}
+        self.complete = {}
 
     async def user(self, user_id):
         return self.users.setdefault(user_id, UserSettings(user_id, "study", 0.3, 0))
@@ -34,10 +36,15 @@ class FakeRepository:
         pair = self.exchanges.get((user_id, message_id))
         return pair[1] if pair else None
 
-    async def save_exchange(self, user, message_id, question, answer, **quiz):
+    async def has_incomplete_answer(self, user_id):
+        keys = [key for key in self.exchanges if key[0] == user_id]
+        return bool(keys) and not self.complete[keys[-1]]
+
+    async def save_exchange(self, user, message_id, question, answer, *, is_complete=True, **quiz):
         if self.users[user.user_id].revision != user.revision:
             return False
         self.exchanges[user.user_id, message_id] = (question, answer)
+        self.complete[user.user_id, message_id] = is_complete
         self.users[user.user_id] = replace(user, revision=user.revision + 1, **quiz)
         return True
 
@@ -73,5 +80,5 @@ def bot_settings():
 def dialog_setup(bot_settings):
     repo = FakeRepository()
     llm = AsyncMock()
-    llm.complete.return_value = "Ответ модели."
+    llm.complete.return_value = Completion("Ответ модели.")
     return DialogService(repo, llm, bot_settings), repo, llm

@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 from aiohttp import web
 
-from app.llm import ModelError, OpenRouterClient
+from app.llm import Completion, ModelError, OpenRouterClient
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ async def test_client_sends_roles_parameters_and_free_price_limit(http_server, b
     await client.start()
     messages = [{"role": "system", "content": "Инструкция"}, {"role": "user", "content": "Вопрос"}]
     try:
-        assert await client.complete(messages, 0.7) == "Ответ"
+        assert await client.complete(messages, 0.7) == Completion("Ответ")
         headers, body = state["requests"][0]
         assert headers["Authorization"] == "Bearer fake-openrouter"
         assert body == {
@@ -92,7 +92,7 @@ async def test_empty_or_invalid_result_is_rejected(http_server, bot_settings, bo
         await client.close()
 
 
-async def test_truncated_result_explains_model_limit_and_parts_without_retry(
+async def test_truncated_result_preserves_all_received_text_without_retry(
     http_server, bot_settings
 ):
     url, state = http_server
@@ -102,9 +102,8 @@ async def test_truncated_result_explains_model_limit_and_parts_without_retry(
     client = OpenRouterClient(replace(bot_settings, openrouter_base_url=url))
     await client.start()
     try:
-        with pytest.raises(ModelError, match="ограничении длины") as exc:
-            await client.complete([{"role": "user", "content": "Эссе"}], 0.55)
-        assert "по частям" in exc.value.user_message
+        result = await client.complete([{"role": "user", "content": "Эссе"}], 0.55)
+        assert result == Completion("Оборванный ответ", truncated=True)
         assert len(state["requests"]) == 1
     finally:
         await client.close()

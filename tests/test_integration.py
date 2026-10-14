@@ -130,7 +130,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 3
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 4
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
@@ -209,5 +209,26 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
             {"role": "user", "content": "Вопрос Боба"},
             {"role": "assistant", "content": "Ответ Бобу"},
         ]
+        assert not await repository.has_incomplete_answer(101)
+        assert not await repository.has_incomplete_answer(202)
+        assert await repository.save_exchange(
+            alice, 20, "Эссе", "Неполный текст для продолжения", is_complete=False
+        )
+        await pool.close()
+        pool = await create_pool(settings)
+        repository = DialogRepository(pool)
+        assert await repository.has_incomplete_answer(101)
+        assert not await repository.has_incomplete_answer(202)
+        assert await repository.answer(101, 20) == "Неполный текст для продолжения"
+        flags = await pool.fetch(
+            "SELECT role, is_complete FROM labbi_messages WHERE user_id=101 ORDER BY id"
+        )
+        assert [(row["role"], row["is_complete"]) for row in flags] == [
+            ("user", True),
+            ("assistant", False),
+        ]
+        alice = await repository.user(101)
+        assert await repository.save_exchange(alice, 21, "Продолжи", "Конец эссе")
+        assert not await repository.has_incomplete_answer(101)
     finally:
         await pool.close()

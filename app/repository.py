@@ -49,6 +49,16 @@ class DialogRepository:
             message_id,
         )
 
+    async def has_incomplete_answer(self, user_id: int) -> bool:
+        return (
+            await self.pool.fetchval(
+                "SELECT NOT is_complete FROM labbi_messages "
+                "WHERE user_id=$1 AND role='assistant' ORDER BY id DESC LIMIT 1",
+                user_id,
+            )
+            is True
+        )
+
     async def save_exchange(
         self,
         user: UserSettings,
@@ -56,6 +66,7 @@ class DialogRepository:
         question: str,
         answer: str,
         *,
+        is_complete: bool = True,
         quiz_question: int | None = None,
         quiz_topic: str | None = None,
         quiz_finished: bool = False,
@@ -67,12 +78,14 @@ class DialogRepository:
             if revision != user.revision:
                 return False
             await connection.execute(
-                "INSERT INTO labbi_messages(user_id, telegram_message_id, role, content) "
-                "VALUES ($1, $2, 'user', $3), ($1, $2, 'assistant', $4)",
+                "INSERT INTO labbi_messages(user_id, telegram_message_id, role, content, "
+                "is_complete) "
+                "VALUES ($1, $2, 'user', $3, true), ($1, $2, 'assistant', $4, $5)",
                 user.user_id,
                 message_id,
                 question,
                 answer,
+                is_complete,
             )
             await connection.execute(
                 "UPDATE labbi_users SET revision=revision+1, updated_at=now(), "

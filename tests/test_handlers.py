@@ -8,9 +8,10 @@ from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.methods import SendMessage
 from aiogram.types import Chat, Message, PhotoSize, Update, User
 
+from app.dialog import TRUNCATED_NOTICE
 from app.formatting import format_reply
 from app.handlers.assistant import DATABASE_ERROR, START_TEXT, create_router, split_text
-from app.llm import ModelError
+from app.llm import Completion, ModelError
 
 
 def update(text=None, *, user_id=1, message_id=1, chat_type="private", photo=None):
@@ -63,7 +64,7 @@ async def test_start_and_commands_do_not_call_model(dispatcher_setup, dialog_set
 async def test_regular_message_calls_model_and_sends_plain_answer(dispatcher_setup, dialog_setup):
     dispatcher, bot = dispatcher_setup
     service, repo, llm = dialog_setup
-    llm.complete.return_value = "<b>буквальный текст</b> 👋"
+    llm.complete.return_value = Completion("<b>буквальный текст</b> 👋")
     await dispatcher.feed_update(bot, update("Что такое список?"), dialog=service)
     assert sent_texts(bot) == ["<b>буквальный текст</b> 👋"]
     sent = next(
@@ -77,7 +78,7 @@ async def test_markdown_is_sent_as_telegram_entities(dispatcher_setup, dialog_se
     dispatcher, bot = dispatcher_setup
     service, repo, llm = dialog_setup
     source = "### Как это работает\n\n**Дробь** `0.7`\n\n```python\nx = 0.7\nprint(x)\n```"
-    llm.complete.return_value = source
+    llm.complete.return_value = Completion(source)
     await dispatcher.feed_update(bot, update("Объясни 0.7"), dialog=service)
     sent = next(
         call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
@@ -92,7 +93,7 @@ async def test_long_code_keeps_formatting_across_messages(dispatcher_setup, dial
     dispatcher, bot = dispatcher_setup
     service, _, llm = dialog_setup
     source = "```python\n" + "print('👋')\n" * 900 + "```"
-    llm.complete.return_value = source
+    llm.complete.return_value = Completion(source)
     await dispatcher.feed_update(bot, update("Покажи код"), dialog=service)
     sent = [
         call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
@@ -111,7 +112,7 @@ async def test_telegram_entity_failure_falls_back_without_losing_answer(
 ):
     dispatcher, bot = dispatcher_setup
     service, _, llm = dialog_setup
-    llm.complete.return_value = "**Готово**"
+    llm.complete.return_value = Completion("**Готово**")
 
     async def send(_bot, method, **kwargs):
         if isinstance(method, SendMessage) and method.entities:
@@ -131,7 +132,7 @@ async def test_telegram_rate_limit_retries_same_part_before_next(
 ):
     dispatcher, bot = dispatcher_setup
     service, _, llm = dialog_setup
-    llm.complete.return_value = "я" * 5000
+    llm.complete.return_value = Completion("я" * 5000)
     attempts = []
     sleep = AsyncMock()
     monkeypatch.setattr("app.handlers.assistant.asyncio.sleep", sleep)
@@ -188,12 +189,38 @@ async def test_long_answer_is_sent_in_order_without_text_loss(dispatcher_setup, 
     dispatcher, bot = dispatcher_setup
     service, _, llm = dialog_setup
     original = "я" * 4095 + "😀" * 100 + "\nПоследняя строка"
-    llm.complete.return_value = original
+    llm.complete.return_value = Completion(original)
     await dispatcher.feed_update(bot, update("Длинный ответ"), dialog=service)
     parts = sent_texts(bot)
     assert len(parts) == 2
     assert "".join(parts) == original
     assert all(len(part.encode("utf-16-le")) // 2 <= 4096 for part in parts)
+
+
+async def test_truncated_answer_is_delivered_in_parts_instead_of_refusal(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, repo, llm = dialog_setup
+    body = "Текст эссе. " * 1000 + "НЕЗАВЕРШЁННЫЙ КОНЕЦ"
+    llm.complete.return_value = Completion(body, truncated=True)
+    await dispatcher.feed_update(bot, update("Напиши эссе"), dialog=service)
+    parts = sent_texts(bot)
+    assert len(parts) > 2
+    assert "".join(parts) == TRUNCATED_NOTICE + "\n\n" + body
+    assert all(len(part.encode("utf-16-le")) // 2 <= 4096 for part in parts)
+    assert await repo.has_incomplete_answer(1)
+    llm.complete.assert_awaited_once()
+
+
+async def test_unbounded_request_warns_immediately_without_model(dispatcher_setup, dialog_setup):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    await dispatcher.feed_update(
+        bot, update("напиши мне огромное эссе, насколько большое ты можешь"), dialog=service
+    )
+    assert "не поместится в один ответ" in sent_texts(bot)[0]
+    llm.complete.assert_not_awaited()
 
 
 def test_split_preserves_unicode_and_boundaries():
@@ -210,7 +237,7 @@ async def test_same_user_requests_are_serialized_with_replies(dispatcher_setup, 
         if messages[-1]["content"] == "Первый":
             entered.set()
             await release.wait()
-        return "Ответ " + messages[-1]["content"]
+        return Completion("Ответ " + messages[-1]["content"])
 
     llm.complete.side_effect = complete
     first = asyncio.create_task(dispatcher.feed_update(bot, update("Первый"), dialog=service))

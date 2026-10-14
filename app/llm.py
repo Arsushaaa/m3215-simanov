@@ -3,12 +3,19 @@
 import logging
 import time
 import uuid
+from dataclasses import dataclass, field
 
 import aiohttp
 
 from app.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Completion:
+    text: str = field(repr=False)
+    truncated: bool = False
 
 
 class ModelError(Exception):
@@ -32,7 +39,7 @@ class OpenRouterClient:
         if self.session is not None:
             await self.session.close()
 
-    async def complete(self, messages: list[dict[str, str]], temperature: float) -> str:
+    async def complete(self, messages: list[dict[str, str]], temperature: float) -> Completion:
         if self.session is None:
             raise RuntimeError("LLM-клиент не запущен.")
         request_id = uuid.uuid4().hex[:12]
@@ -68,12 +75,8 @@ class OpenRouterClient:
                     ) from None
                 if not isinstance(text, str) or not text.strip():
                     raise ModelError("Модель вернула пустой ответ. Попробуй ещё раз.")
-                if choice.get("finish_reason") == "length":
-                    raise ModelError(
-                        "Модель остановилась на ограничении длины, поэтому полный ответ "
-                        "не получен. Попроси текст по частям, например первую часть на 500 слов."
-                    )
-                outcome = "ok"
+                truncated = choice.get("finish_reason") == "length"
+                outcome = "truncated" if truncated else "ok"
         except TimeoutError:
             raise ModelError("Модель не успела ответить. Попробуй ещё раз позже.") from None
         except aiohttp.ClientError:
@@ -85,4 +88,4 @@ class OpenRouterClient:
                 outcome,
                 time.monotonic() - started,
             )
-        return text
+        return Completion(text, truncated=truncated)

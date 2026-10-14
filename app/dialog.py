@@ -7,33 +7,17 @@ from weakref import WeakValueDictionary
 
 from app.config import Settings
 from app.llm import ModelError, OpenRouterClient
+from app.output_limits import check_output_size
 from app.prompts import MODE_NAMES, PROMPTS
 from app.repository import DialogRepository
 
-LARGE_OUTPUT = (
-    "Такой объём не поместится в один ответ модели. Попроси текст по частям: "
-    "например, «Напиши первую часть эссе на 500 слов», затем следующую часть. "
-    "Готовый ответ я разделю на сообщения для Telegram."
+TRUNCATED_NOTICE = (
+    "Ответ достиг ограничения длины. Ниже — весь полученный текст, но он ещё не закончен. "
+    "Чтобы получить следующую часть, напиши «Продолжи»."
 )
-OUTPUT_SIZE = re.compile(
-    r"\b(?:напиши|написать|дай|составь|создай|сделай|write|generate|produce)\b"
-    r".{0,100}?\b(?:на|из|объёмом|объемом|длиной|of|in)\s+"
-    r"(\d[\d\s_]*(?:[.,]\d+)?\s*[кk]?)\s*"
-    r"(слов(?:а|о)?|символ(?:ов|а)?|знак(?:ов|а)?|words?|characters?|chars?)\b",
-    re.IGNORECASE,
+CONTINUE = re.compile(
+    r"^\s*(?:пожалуйста[,\s]+)?(?:продолжи|продолжай|дальше|continue)\b", re.IGNORECASE
 )
-
-
-def check_output_size(text: str, token_budget: int) -> None:
-    # Предварительная оценка только явного запроса на объём ответа, не размера входа.
-    for match in OUTPUT_SIZE.finditer(text):
-        amount, unit = match.groups()
-        amount = re.sub(r"[\s_]", "", amount).lower().replace(",", ".")
-        multiplier = 1000 if amount.endswith(("к", "k")) else 1
-        count = Decimal(amount.rstrip("кk")) * multiplier
-        estimate = count * (3 if unit.lower().startswith(("слов", "word")) else Decimal("0.67"))
-        if estimate > token_budget:
-            raise ModelError(LARGE_OUTPUT)
 
 
 def estimate_tokens(messages: list[dict[str, str]]) -> int:
@@ -48,6 +32,7 @@ def build_context(
     settings: Settings,
     *,
     pinned: list[dict[str, str]] | None = None,
+    preserve_last: bool = False,
 ) -> list[dict[str, str]]:
     system, current = {"role": "system", "content": prompt}, {"role": "user", "content": text}
     pinned = pinned or []
@@ -59,7 +44,16 @@ def build_context(
         len(pinned) + len(recent) + 1 > settings.history_max_messages
         or estimate_tokens([system, *pinned, *recent, current]) > settings.history_max_tokens
     ):
-        del recent[:2]
+        if preserve_last and len(recent) == 2:
+            # Для продолжения большого ответа сохраняем его конец, даже если вся пара не влезает.
+            tail = recent[-1]["content"]
+            if len(tail) <= 128:
+                raise ModelError(
+                    "Контекст не вмещает продолжение. Укажи тему и попроси следующую часть."
+                )
+            recent[-1] = {"role": "assistant", "content": tail[len(tail) // 4 :]}
+        else:
+            del recent[:2]
     return [system, *pinned, *recent, current]
 
 
@@ -81,9 +75,13 @@ class DialogService:
         cached = await self.repository.answer(user_id, message_id)
         if cached is not None:
             return cached
-        check_output_size(text, self.settings.llm_max_output_tokens)
         user = await self.repository.user(user_id)
         history = await self.repository.history(user_id, self.settings.history_max_messages)
+        previous = history[-1]["content"] if history else None
+        check_output_size(text, self.settings.llm_max_output_tokens, previous)
+        continuing = bool(CONTINUE.search(text)) and await self.repository.has_incomplete_answer(
+            user_id
+        )
         prompt, pinned, quiz = PROMPTS[user.mode], [], {}
         if user.mode == "quiz":
             if user.quiz_finished:
@@ -119,14 +117,34 @@ class DialogService:
                     f"\nСейчас пользователь отвечает на вопрос {user.quiz_question} из пяти. "
                     f"Дай обратную связь и сформулируй только вопрос {number} из пяти. "
                 )
-        messages = build_context(prompt, history, text, self.settings, pinned=pinned)
-        answer = await self.llm.complete(messages, user.temperature)
+        prompt += (
+            f"\nБюджет текущего ответа — {self.settings.llm_max_output_tokens} токенов. "
+            "Выдай законченную часть, уложившись в этот бюджет; не обещай неограниченный объём."
+        )
+        if continuing:
+            prompt += (
+                "\nПоследний ответ оборван. Продолжи его с места остановки без повторения "
+                "уже отправленного текста. Заверши текущую часть; если нужен код, открой новый "
+                "блок кода. Не считай слово «Продолжи» ответом на вопрос тренировки."
+            )
+        messages = build_context(
+            prompt, history, text, self.settings, pinned=pinned, preserve_last=continuing
+        )
+        result = await self.llm.complete(messages, user.temperature)
+        answer = result.text
         if quiz:
             prefix = "Тренировка завершена." if quiz["quiz_finished"] else f"Вопрос {number}/5"
             if hint:
                 prefix = f"Подсказка к вопросу {number}/5"
             answer = prefix + "\n\n" + answer
-        if not await self.repository.save_exchange(user, message_id, text, answer, **quiz):
+        if result.truncated:
+            answer = TRUNCATED_NOTICE + "\n\n" + answer
+            if quiz:
+                # Неполный вопрос/итог не должен продвигать тренировку.
+                quiz.update(quiz_question=user.quiz_question, quiz_finished=user.quiz_finished)
+        if not await self.repository.save_exchange(
+            user, message_id, text, answer, is_complete=not result.truncated, **quiz
+        ):
             raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
         return answer
 
