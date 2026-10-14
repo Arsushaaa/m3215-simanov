@@ -8,7 +8,6 @@ from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.methods import SendMessage
 from aiogram.types import Chat, Message, PhotoSize, Update, User
 
-from app.dialog import TRUNCATED_NOTICE
 from app.formatting import format_reply
 from app.handlers.assistant import DATABASE_ERROR, START_TEXT, create_router, split_text
 from app.llm import Completion, ModelError
@@ -197,35 +196,67 @@ async def test_long_answer_is_sent_in_order_without_text_loss(dispatcher_setup, 
     assert all(len(part.encode("utf-16-le")) // 2 <= 4096 for part in parts)
 
 
-async def test_truncated_answer_is_delivered_in_parts_instead_of_refusal(
+def test_split_preserves_unicode_and_boundaries():
+    assert split_text("я" * 4096) == ["я" * 4096]
+    assert split_text("😀" * 2049) == ["😀" * 2048, "😀"]
+
+
+async def test_automatic_parts_arrive_before_next_generation_without_extra_user_message(
     dispatcher_setup, dialog_setup
 ):
     dispatcher, bot = dispatcher_setup
     service, repo, llm = dialog_setup
-    body = "Текст эссе. " * 1000 + "НЕЗАВЕРШЁННЫЙ КОНЕЦ"
-    llm.complete.return_value = Completion(body, truncated=True)
-    await dispatcher.feed_update(bot, update("Напиши эссе"), dialog=service)
-    parts = sent_texts(bot)
-    assert len(parts) > 2
-    assert "".join(parts) == TRUNCATED_NOTICE + "\n\n" + body
-    assert all(len(part.encode("utf-16-le")) // 2 <= 4096 for part in parts)
-    assert await repo.has_incomplete_answer(1)
-    llm.complete.assert_awaited_once()
+    calls = 0
+    first = "я" * 5000
+
+    async def complete(messages, temperature):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return Completion(first, truncated=True)
+        assert "".join(sent_texts(bot)) == first
+        return Completion("Финальная часть")
+
+    llm.complete.side_effect = complete
+    await dispatcher.feed_update(bot, update("Напиши длинный ответ"), dialog=service)
+    assert sent_texts(bot) == ["я" * 4096, "я" * 904, "Финальная часть"]
+    assert llm.complete.await_count == 2
+    assert (await repo.reply(1, 1)).is_complete
+    assert "Продолжи" not in "".join(sent_texts(bot))
 
 
-async def test_unbounded_request_warns_immediately_without_model(dispatcher_setup, dialog_setup):
+async def test_cached_code_parts_keep_their_own_formatting_without_new_model_call(
+    dispatcher_setup, dialog_setup
+):
     dispatcher, bot = dispatcher_setup
-    service, _, llm = dialog_setup
-    await dispatcher.feed_update(
-        bot, update("напиши мне огромное эссе, насколько большое ты можешь"), dialog=service
-    )
-    assert "не поместится в один ответ" in sent_texts(bot)[0]
-    llm.complete.assert_not_awaited()
+    service, repo, llm = dialog_setup
+    sources = ["```python\nx = 1", "```python\nprint(x)\n```"]
+    llm.complete.side_effect = [Completion(sources[0], truncated=True), Completion(sources[1])]
+    await dispatcher.feed_update(bot, update("Покажи пример"), dialog=service)
+    await dispatcher.feed_update(bot, update("Покажи пример"), dialog=service)
+    sent = [
+        call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
+    ]
+    assert [part.text for part in sent] == ["x = 1", "print(x)", "x = 1", "print(x)"]
+    assert all(part.entities[0].type == "pre" for part in sent)
+    assert llm.complete.await_count == 2
+    assert (await repo.reply(1, 1)).parts == sources
 
 
-def test_split_preserves_unicode_and_boundaries():
-    assert split_text("я" * 4096) == ["я" * 4096]
-    assert split_text("😀" * 2049) == ["😀" * 2048, "😀"]
+async def test_quota_error_during_auto_reply_keeps_prior_text_in_chat_and_database(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, repo, llm = dialog_setup
+    llm.complete.side_effect = [
+        Completion("Начало", truncated=True),
+        ModelError("Квота исчерпана."),
+    ]
+    await dispatcher.feed_update(bot, update("Эссе"), dialog=service)
+    assert sent_texts(bot)[0] == "Начало"
+    assert sent_texts(bot)[1].startswith("Ответ прерван: Квота исчерпана.")
+    assert len(sent_texts(bot)) == 2
+    assert not (await repo.reply(1, 1)).is_complete
 
 
 async def test_same_user_requests_are_serialized_with_replies(dispatcher_setup, dialog_setup):

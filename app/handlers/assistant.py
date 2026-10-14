@@ -4,7 +4,7 @@ from contextlib import suppress
 
 from aiogram import F, Router
 from aiogram.enums import ChatAction
-from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
@@ -60,25 +60,41 @@ def create_router() -> Router:
     router = Router(name="assistant")
     router.message.filter(F.chat.type == "private", F.from_user, F.text)
 
-    async def execute(message: Message, dialog: DialogService, action, *, generating=False):
+    async def execute(
+        message: Message, dialog: DialogService, action, *, generating=False, stream=False
+    ):
         async with dialog.lock(message.from_user.id):
             formatted = generating
+            delivered, failed = False, False
+
+            async def deliver(text):
+                nonlocal delivered
+                for part in format_reply(text):
+                    await send_part(message, part)
+                delivered = True
+
             indicator = asyncio.create_task(typing(message)) if generating else None
             try:
                 try:
-                    answer = await action()
+                    answer = await action(deliver) if stream else await action()
                 except ModelError as exc:
                     answer = exc.user_message
                     formatted = False
+                    failed = True
+                except TelegramAPIError:
+                    raise
                 except Exception as exc:
                     # Не журналируем исключения с текстом запросов или SQL-параметрами.
                     logger.error("Диалог: ошибка %s", type(exc).__name__)
                     answer = DATABASE_ERROR
                     formatted = False
+                    failed = True
             finally:
                 if indicator:
                     indicator.cancel()
                     await asyncio.gather(indicator, return_exceptions=True)
+            if stream and delivered and not failed:
+                return
             parts = format_reply(answer) if formatted else split_formatted(FormattedText(answer))
             for part in parts:
                 await send_part(message, part)
@@ -116,8 +132,11 @@ def create_router() -> Router:
         await execute(
             message,
             dialog,
-            lambda: dialog.respond(message.from_user.id, message.message_id, message.text),
+            lambda deliver: dialog.respond(
+                message.from_user.id, message.message_id, message.text, on_part=deliver
+            ),
             generating=True,
+            stream=True,
         )
 
     return router

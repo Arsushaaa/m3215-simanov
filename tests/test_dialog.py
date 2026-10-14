@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 
-from app.dialog import TRUNCATED_NOTICE, DialogService, build_context, estimate_tokens
+from app.dialog import DialogService, build_context, estimate_tokens
 from app.llm import Completion, ModelError
 from app.prompts import PROMPTS
 
@@ -105,15 +105,13 @@ async def test_settings_rejects_bad_values_without_api_or_state_change(dialog_se
         "Напиши максимально длинный ответ",
     ],
 )
-async def test_excessive_output_is_rejected_before_model_call(dialog_setup, question):
+async def test_long_output_requests_are_accepted(dialog_setup, question):
     service, repo, llm = dialog_setup
     await service.respond(1, 1, "Первый вопрос")
-    before = await repo.history(1, 20)
-    llm.complete.reset_mock()
-    with pytest.raises(ModelError, match="не поместится в один ответ"):
-        await service.respond(1, 2, question)
-    llm.complete.assert_not_awaited()
-    assert await repo.history(1, 20) == before
+    llm.complete.return_value = Completion("Текст " * 12000)
+    answer = await service.respond(1, 2, question)
+    assert answer == "Текст " * 12000
+    assert len(await repo.history(1, 20)) == 4
 
 
 @pytest.mark.parametrize(
@@ -130,18 +128,21 @@ async def test_reasonable_output_and_input_size_discussion_are_allowed(dialog_se
     llm.complete.assert_awaited_once()
 
 
-async def test_relative_request_is_estimated_from_last_answer_before_model_call(dialog_setup):
+async def test_relative_request_can_use_more_than_one_generation(dialog_setup):
     service, repo, llm = dialog_setup
     llm.complete.return_value = Completion("Пример текста. " * 250)
     await service.respond(1, 1, "Напиши эссе")
-    before = await repo.history(1, 20)
     llm.complete.reset_mock()
-    with pytest.raises(ModelError, match="не поместится в один ответ"):
-        await service.respond(
-            1, 2, "напиши мне такой же ответ, только в три раза длиннее и на русском языке"
-        )
-    llm.complete.assert_not_awaited()
-    assert await repo.history(1, 20) == before
+    llm.complete.side_effect = [
+        Completion("Первая часть. " * 400),
+        Completion("Вторая часть. " * 500),
+    ]
+    answer = await service.respond(
+        1, 2, "напиши мне такой же ответ, только в три раза длиннее и на русском языке"
+    )
+    assert llm.complete.await_count == 2
+    assert answer.startswith("Первая часть") and "Вторая часть" in answer
+    assert not await repo.has_incomplete_answer(1)
 
 
 async def test_small_relative_request_can_be_generated(dialog_setup):
@@ -149,58 +150,6 @@ async def test_small_relative_request_can_be_generated(dialog_setup):
     await service.respond(1, 1, "Напиши небольшой пример")
     await service.respond(1, 2, "Сделай в 3 раза длиннее")
     assert llm.complete.await_count == 2
-
-
-async def test_truncated_text_is_saved_and_can_continue_after_service_restart(dialog_setup):
-    service, repo, llm = dialog_setup
-    partial = "### Эссе\n\nПервая часть и незавершённое предложение"
-    llm.complete.return_value = Completion(partial, truncated=True)
-    reply = await service.respond(1, 1, "Напиши эссе")
-    assert reply == TRUNCATED_NOTICE + "\n\n" + partial
-    assert await repo.has_incomplete_answer(1)
-    assert await repo.answer(1, 1) == reply
-    assert (await repo.history(1, 20))[-1]["content"] == reply
-    assert llm.complete.await_count == 1
-    assert await service.respond(1, 1, "Напиши эссе") == reply
-    assert llm.complete.await_count == 1
-
-    service = DialogService(repo, llm, service.settings)
-    llm.complete.return_value = Completion("Продолжение и завершение эссе.")
-    assert await service.respond(1, 2, "Продолжи") == "Продолжение и завершение эссе."
-    messages = llm.complete.call_args.args[0]
-    assert messages[2]["content"] == reply
-    assert "Продолжи его с места остановки" in messages[0]["content"]
-    assert not await repo.has_incomplete_answer(1)
-
-
-async def test_continuation_preserves_tail_when_partial_answer_exceeds_context(dialog_setup):
-    service, _, llm = dialog_setup
-    service.settings = replace(service.settings, history_max_tokens=1600)
-    tail = "ПОСЛЕДНЯЯ ФРАЗА"
-    llm.complete.return_value = Completion("я" * 15000 + tail, truncated=True)
-    await service.respond(1, 1, "Напиши эссе")
-    llm.complete.return_value = Completion("Продолжение")
-    await service.respond(1, 2, "Продолжи")
-    messages = llm.complete.call_args.args[0]
-    assert messages[-2]["role"] == "assistant"
-    assert messages[-2]["content"].endswith(tail)
-    assert messages[-3] == {"role": "user", "content": "Напиши эссе"}
-    assert estimate_tokens(messages) <= 1600
-
-
-async def test_incomplete_quiz_question_does_not_advance_and_continuation_keeps_topic(dialog_setup):
-    service, repo, llm = dialog_setup
-    await service.mode(1, "quiz")
-    llm.complete.return_value = Completion("Незаконченный вопрос о циклах", truncated=True)
-    reply = await service.respond(1, 1, "Тема: циклы Python")
-    assert reply.startswith(TRUNCATED_NOTICE)
-    user = await repo.user(1)
-    assert user.quiz_question == 0 and user.quiz_topic == "Тема: циклы Python"
-    llm.complete.return_value = Completion("Какие значения выдаёт range(3)?")
-    await service.respond(1, 2, "Продолжи")
-    user = await repo.user(1)
-    assert user.quiz_question == 1 and user.quiz_topic == "Тема: циклы Python"
-    assert "Не считай слово «Продолжи» ответом" in llm.complete.call_args.args[0][0]["content"]
 
 
 async def test_model_failure_does_not_store_a_partial_exchange(dialog_setup):

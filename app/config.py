@@ -30,6 +30,7 @@ class Settings:
     openrouter_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
     llm_timeout_seconds: int = 60
     llm_max_output_tokens: int = 2048
+    llm_max_response_parts: int = 24
     history_max_messages: int = 20
     history_max_tokens: int = 6000
 
@@ -123,6 +124,7 @@ class Settings:
             openrouter_model=model,
             llm_timeout_seconds=number("LLM_TIMEOUT_SECONDS", "60", 1, 300),
             llm_max_output_tokens=number("LLM_MAX_OUTPUT_TOKENS", "2048", 64, 8192),
+            llm_max_response_parts=number("LLM_MAX_RESPONSE_PARTS", "24", 1, 64),
             history_max_messages=message_limit,
             history_max_tokens=number("HISTORY_MAX_TOKENS", "6000", 1024, 100000),
         )

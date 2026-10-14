@@ -2,19 +2,17 @@
 
 import asyncio
 import re
+from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from weakref import WeakValueDictionary
 
 from app.config import Settings
 from app.llm import ModelError, OpenRouterClient
-from app.output_limits import check_output_size
+from app.output_limits import output_target
 from app.prompts import MODE_NAMES, PROMPTS
 from app.repository import DialogRepository
 
-TRUNCATED_NOTICE = (
-    "Ответ достиг ограничения длины. Ниже — весь полученный текст, но он ещё не закончен. "
-    "Чтобы получить следующую часть, напиши «Продолжи»."
-)
 CONTINUE = re.compile(
     r"^\s*(?:пожалуйста[,\s]+)?(?:продолжи|продолжай|дальше|continue)\b", re.IGNORECASE
 )
@@ -69,16 +67,32 @@ class DialogService:
             self.locks[user_id] = lock
         return lock
 
-    async def respond(self, user_id: int, message_id: int, text: str) -> str:
+    async def respond(
+        self,
+        user_id: int,
+        message_id: int,
+        text: str,
+        *,
+        on_part: Callable[[str], Awaitable[None]] | None = None,
+    ) -> str:
         if not text.strip():
             raise ModelError("Отправь непустое текстовое сообщение.")
-        cached = await self.repository.answer(user_id, message_id)
+        cached = await self.repository.reply(user_id, message_id)
         if cached is not None:
-            return cached
+            if on_part:
+                for part in cached.parts:
+                    await on_part(part)
+            return cached.content
         user = await self.repository.user(user_id)
         history = await self.repository.history(user_id, self.settings.history_max_messages)
         previous = history[-1]["content"] if history else None
-        check_output_size(text, self.settings.llm_max_output_tokens, previous)
+        target = output_target(
+            text,
+            self.settings.llm_max_output_tokens * self.settings.llm_max_response_parts,
+            previous,
+        )
+        if target and target.estimated_tokens <= self.settings.llm_max_output_tokens:
+            target = None
         continuing = bool(CONTINUE.search(text)) and await self.repository.has_incomplete_answer(
             user_id
         )
@@ -117,36 +131,108 @@ class DialogService:
                     f"\nСейчас пользователь отвечает на вопрос {user.quiz_question} из пяти. "
                     f"Дай обратную связь и сформулируй только вопрос {number} из пяти. "
                 )
-        prompt += (
-            f"\nБюджет текущего ответа — {self.settings.llm_max_output_tokens} токенов. "
-            "Выдай законченную часть, уложившись в этот бюджет; не обещай неограниченный объём."
+        parts, generated = [], []
+        saved = False
+        pending_quiz = (
+            {**quiz, "quiz_question": user.quiz_question, "quiz_finished": user.quiz_finished}
+            if quiz
+            else {}
         )
-        if continuing:
-            prompt += (
-                "\nПоследний ответ оборван. Продолжи его с места остановки без повторения "
-                "уже отправленного текста. Заверши текущую часть; если нужен код, открой новый "
-                "блок кода. Не считай слово «Продолжи» ответом на вопрос тренировки."
+
+        async def persist(complete: bool) -> str:
+            nonlocal saved, user
+            answer = "\n\n".join(parts)
+            state = quiz if complete else pending_quiz
+            if saved:
+                ok = await self.repository.update_exchange(
+                    user, message_id, answer, is_complete=complete, parts=list(parts), **state
+                )
+            else:
+                ok = await self.repository.save_exchange(
+                    user, message_id, text, answer, is_complete=complete, parts=list(parts), **state
+                )
+            if not ok:
+                raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
+            saved = True
+            user = replace(user, revision=user.revision + 1, **state)
+            return answer
+
+        async def stop(notice: str) -> str:
+            parts.append(notice)
+            answer = await persist(False)
+            if on_part:
+                await on_part(notice)
+            return answer
+
+        for index in range(self.settings.llm_max_response_parts):
+            combined = "\n\n".join(parts)
+            instruction = (
+                f"\nБюджет одной части — {self.settings.llm_max_output_tokens} токенов. "
+                "Выдай очередную часть без повторений. Продолжение приложение запрашивает "
+                "автоматически; не проси пользователя написать «Продолжи». "
+                "Если нужен код, оформляй каждую часть отдельным блоком кода."
             )
-        messages = build_context(
-            prompt, history, text, self.settings, pinned=pinned, preserve_last=continuing
+            if target:
+                instruction += (
+                    f" Всего требуется {target.amount} {target.unit}; "
+                    f"уже выдано примерно {target.count(combined)}, "
+                    f"осталось {max(0, target.amount - target.count(combined))}. "
+                    "Не заканчивай всё задание раньше требуемого объёма."
+                )
+            if continuing or generated:
+                instruction += (
+                    " Продолжи с места остановки, не повторяй предыдущий текст. "
+                    "Не считай автоматическое продолжение ответом на вопрос тренировки."
+                )
+            recent = history
+            current = text
+            if generated:
+                recent = [
+                    *history,
+                    {"role": "user", "content": text},
+                    {"role": "assistant", "content": combined},
+                ]
+                current = "Автоматическое продолжение текущего ответа. Выдай следующую часть."
+            try:
+                messages = build_context(
+                    prompt + instruction,
+                    recent,
+                    current,
+                    self.settings,
+                    pinned=pinned,
+                    preserve_last=continuing or bool(generated),
+                )
+                result = await self.llm.complete(messages, user.temperature)
+            except ModelError as exc:
+                if not parts:
+                    raise
+                return await stop(
+                    f"Ответ прерван: {exc.user_message} Уже отправленные части сохранены."
+                )
+            fragment = result.text
+            if generated and fragment.strip() == generated[-1].strip():
+                return await stop(
+                    "Модель повторила предыдущую часть. Генерация остановлена; "
+                    "полученный текст сохранён."
+                )
+            generated.append(fragment)
+            if quiz and index == 0:
+                prefix = "Тренировка завершена." if quiz["quiz_finished"] else f"Вопрос {number}/5"
+                if hint:
+                    prefix = f"Подсказка к вопросу {number}/5"
+                fragment = prefix + "\n\n" + fragment
+            parts.append(fragment)
+            enough = target is None or target.count("\n\n".join(parts)) >= target.amount
+            complete = not result.truncated and enough
+            answer = await persist(complete)
+            if on_part:
+                await on_part(fragment)
+            if complete:
+                return answer
+        return await stop(
+            "Достигнут предел длины одного задания. Все полученные части отправлены; "
+            "ответ ещё не завершён."
         )
-        result = await self.llm.complete(messages, user.temperature)
-        answer = result.text
-        if quiz:
-            prefix = "Тренировка завершена." if quiz["quiz_finished"] else f"Вопрос {number}/5"
-            if hint:
-                prefix = f"Подсказка к вопросу {number}/5"
-            answer = prefix + "\n\n" + answer
-        if result.truncated:
-            answer = TRUNCATED_NOTICE + "\n\n" + answer
-            if quiz:
-                # Неполный вопрос/итог не должен продвигать тренировку.
-                quiz.update(quiz_question=user.quiz_question, quiz_finished=user.quiz_finished)
-        if not await self.repository.save_exchange(
-            user, message_id, text, answer, is_complete=not result.truncated, **quiz
-        ):
-            raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
-        return answer
 
     async def mode(self, user_id: int, mode: str) -> str:
         await self.repository.user(user_id)

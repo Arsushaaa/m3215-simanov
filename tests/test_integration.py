@@ -130,7 +130,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 4
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 5
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
@@ -230,5 +230,33 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
         alice = await repository.user(101)
         assert await repository.save_exchange(alice, 21, "Продолжи", "Конец эссе")
         assert not await repository.has_incomplete_answer(101)
+        saved = await repository.reply(101, 21)
+        assert saved.parts == ["Конец эссе"] and saved.is_complete
+        alice = await repository.user(101)
+        assert await repository.save_exchange(
+            alice, 22, "Длинный текст", "Начало", is_complete=False, parts=["Начало"]
+        )
+        old = alice
+        alice = await repository.user(101)
+        assert not await repository.update_exchange(
+            old, 22, "Устаревшее", is_complete=True, parts=["Устаревшее"]
+        )
+        assert await repository.update_exchange(
+            alice, 22, "Начало\n\nКонец", is_complete=True, parts=["Начало", "Конец"]
+        )
+        await pool.close()
+        pool = await create_pool(settings)
+        repository = DialogRepository(pool)
+        reply = await repository.reply(101, 22)
+        assert reply.parts == ["Начало", "Конец"] and reply.is_complete
+        alice = await repository.user(101)
+        with pytest.raises(asyncpg.CheckViolationError):
+            await repository.update_exchange(alice, 22, "", is_complete=False, parts=[""])
+        assert (await repository.reply(101, 22)) == reply
+        await pool.execute(
+            "UPDATE labbi_messages SET parts='[]'::jsonb "
+            "WHERE user_id=101 AND telegram_message_id=21"
+        )
+        assert (await repository.reply(101, 21)).parts == ["Конец эссе"]
     finally:
         await pool.close()

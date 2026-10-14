@@ -6,7 +6,7 @@ import pytest
 from app.config import Settings
 from app.dialog import DialogService
 from app.llm import Completion
-from app.repository import UserSettings
+from app.repository import StoredReply, UserSettings
 
 
 class FakeRepository:
@@ -16,6 +16,7 @@ class FakeRepository:
         self.users = {}
         self.exchanges = {}
         self.complete = {}
+        self.parts = {}
 
     async def user(self, user_id):
         return self.users.setdefault(user_id, UserSettings(user_id, "study", 0.3, 0))
@@ -40,11 +41,29 @@ class FakeRepository:
         keys = [key for key in self.exchanges if key[0] == user_id]
         return bool(keys) and not self.complete[keys[-1]]
 
-    async def save_exchange(self, user, message_id, question, answer, *, is_complete=True, **quiz):
+    async def reply(self, user_id, message_id):
+        key = user_id, message_id
+        pair = self.exchanges.get(key)
+        return StoredReply(pair[1], self.parts[key], self.complete[key]) if pair else None
+
+    async def save_exchange(
+        self, user, message_id, question, answer, *, is_complete=True, parts=None, **quiz
+    ):
         if self.users[user.user_id].revision != user.revision:
             return False
         self.exchanges[user.user_id, message_id] = (question, answer)
         self.complete[user.user_id, message_id] = is_complete
+        self.parts[user.user_id, message_id] = list(parts or [answer])
+        self.users[user.user_id] = replace(user, revision=user.revision + 1, **quiz)
+        return True
+
+    async def update_exchange(self, user, message_id, answer, *, is_complete, parts, **quiz):
+        key = user.user_id, message_id
+        if self.users[user.user_id].revision != user.revision or key not in self.exchanges:
+            return False
+        self.exchanges[key] = self.exchanges[key][0], answer
+        self.complete[key] = is_complete
+        self.parts[key] = list(parts)
         self.users[user.user_id] = replace(user, revision=user.revision + 1, **quiz)
         return True
 
