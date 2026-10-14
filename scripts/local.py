@@ -40,7 +40,6 @@ def prepare_env(
         "OPENROUTER_MODEL": "nvidia/nemotron-3-super-120b-a12b:free",
         "LLM_TIMEOUT_SECONDS": "60",
         "LLM_MAX_OUTPUT_TOKENS": "2048",
-        "LLM_MAX_RESPONSE_PARTS": "24",
         "HISTORY_MAX_MESSAGES": "20",
         "HISTORY_MAX_TOKENS": "6000",
     }
