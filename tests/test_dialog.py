@@ -67,24 +67,64 @@ async def test_reset_clears_only_history(dialog_setup):
     assert len(await repo.history(2, 20)) == 2
 
 
-@pytest.mark.parametrize("value", ["0.0", "0.3", "0.7", "1.0", "0,3"])
+@pytest.mark.parametrize(
+    "value", ["0", "0.0", "0.3", "0.7", "1", "1.0", "0,3", "0.55", "0,125", "0.123456789"]
+)
 async def test_settings_accepts_allowed_values(dialog_setup, value):
     service, repo, llm = dialog_setup
     reply = await service.preferences(1, value)
     assert (await repo.user(1)).temperature == float(value.replace(",", "."))
     assert "Модель: nvidia/nemotron-3-super-120b-a12b:free" in reply
+    assert f"Температура: {float(value.replace(',', '.'))}" in reply
     llm.complete.assert_not_awaited()
 
 
-@pytest.mark.parametrize("value", ["0.5", "-1", "2", "NaN", "sNaN", "Infinity", "0.3 extra"])
+@pytest.mark.parametrize(
+    "value", ["-0.001", "1.001", "-1", "2", "NaN", "sNaN", "Infinity", "0.3 extra"]
+)
 async def test_settings_rejects_bad_values_without_api_or_state_change(dialog_setup, value):
     service, repo, llm = dialog_setup
     await service.preferences(1, "0.7")
     assert await service.preferences(1, value) == (
-        "Допустимые значения: /settings 0.0, 0.3, 0.7 или 1.0."
+        "Укажи число от 0 до 1 включительно, например /settings 0.55."
     )
     assert (await repo.user(1)).temperature == 0.7
     llm.complete.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "дай мне эссе на 10000 слов",
+        "Напиши эссе на 10 000 слов",
+        "Составь текст объёмом 10к слов",
+        "Напиши рассказ на 10000 символов",
+        "Write an essay of 10000 words",
+    ],
+)
+async def test_excessive_output_is_rejected_before_model_call(dialog_setup, question):
+    service, repo, llm = dialog_setup
+    await service.respond(1, 1, "Первый вопрос")
+    before = await repo.history(1, 20)
+    llm.complete.reset_mock()
+    with pytest.raises(ModelError, match="не поместится в один ответ"):
+        await service.respond(1, 2, question)
+    llm.complete.assert_not_awaited()
+    assert await repo.history(1, 20) == before
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Напиши первую часть эссе на 500 слов",
+        "Как подсчитать символы в тексте на 10000 слов?",
+        "Объясни обработку строки из 10000 символов",
+    ],
+)
+async def test_reasonable_output_and_input_size_discussion_are_allowed(dialog_setup, question):
+    service, _, llm = dialog_setup
+    await service.respond(1, 1, question)
+    llm.complete.assert_awaited_once()
 
 
 async def test_model_failure_does_not_store_a_partial_exchange(dialog_setup):

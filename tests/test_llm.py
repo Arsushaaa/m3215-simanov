@@ -78,10 +78,9 @@ async def test_http_errors_are_safe_and_not_retried(http_server, bot_settings, s
         {"choices": [{"message": {"content": None}}]},
         {"choices": [{"message": {"content": "   "}}]},
         {"choices": [{"message": {"content": []}}]},
-        {"choices": [{"message": {"content": "Оборванный ответ"}, "finish_reason": "length"}]},
     ],
 )
-async def test_empty_invalid_or_truncated_result_is_rejected(http_server, bot_settings, body):
+async def test_empty_or_invalid_result_is_rejected(http_server, bot_settings, body):
     url, state = http_server
     state["body"] = body
     client = OpenRouterClient(replace(bot_settings, openrouter_base_url=url))
@@ -89,6 +88,24 @@ async def test_empty_invalid_or_truncated_result_is_rejected(http_server, bot_se
     try:
         with pytest.raises(ModelError):
             await client.complete([{"role": "user", "content": "Вопрос"}], 0.3)
+    finally:
+        await client.close()
+
+
+async def test_truncated_result_explains_model_limit_and_parts_without_retry(
+    http_server, bot_settings
+):
+    url, state = http_server
+    state["body"] = {
+        "choices": [{"message": {"content": "Оборванный ответ"}, "finish_reason": "length"}]
+    }
+    client = OpenRouterClient(replace(bot_settings, openrouter_base_url=url))
+    await client.start()
+    try:
+        with pytest.raises(ModelError, match="ограничении длины") as exc:
+            await client.complete([{"role": "user", "content": "Эссе"}], 0.55)
+        assert "по частям" in exc.value.user_message
+        assert len(state["requests"]) == 1
     finally:
         await client.close()
 

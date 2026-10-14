@@ -4,10 +4,12 @@ from contextlib import suppress
 
 from aiogram import F, Router
 from aiogram.enums import ChatAction
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
 from app.dialog import DialogService
+from app.formatting import FormattedText, format_reply, split_formatted
 from app.llm import ModelError
 
 logger = logging.getLogger(__name__)
@@ -25,17 +27,26 @@ DATABASE_ERROR = "Не удалось сохранить или прочитат
 
 
 def split_text(text: str, limit: int = 4096) -> list[str]:
-    # Telegram считает UTF-16: emoji вне BMP занимают две единицы.
-    chunks, start, units = [], 0, 0
-    for index, char in enumerate(text):
-        width = 2 if ord(char) > 0xFFFF else 1
-        if units + width > limit:
-            chunks.append(text[start:index])
-            start, units = index, 0
-        units += width
-    if start < len(text):
-        chunks.append(text[start:])
-    return chunks
+    return [part.text for part in split_formatted(FormattedText(text), limit)]
+
+
+async def send_part(message: Message, part: FormattedText) -> None:
+    entities = part.entities
+    retries = 0
+    while True:
+        try:
+            await message.answer(part.text, entities=entities, parse_mode=None)
+            return
+        except TelegramRetryAfter as exc:
+            if retries == 2:
+                raise
+            retries += 1
+            await asyncio.sleep(exc.retry_after)
+        except TelegramBadRequest as exc:
+            if not entities or "entit" not in exc.message.casefold():
+                raise
+            logger.warning("Telegram отклонил разметку; отправляем ту же часть обычным текстом.")
+            entities = []
 
 
 async def typing(message: Message) -> None:
@@ -51,22 +62,26 @@ def create_router() -> Router:
 
     async def execute(message: Message, dialog: DialogService, action, *, generating=False):
         async with dialog.lock(message.from_user.id):
+            formatted = generating
             indicator = asyncio.create_task(typing(message)) if generating else None
             try:
                 try:
                     answer = await action()
                 except ModelError as exc:
                     answer = exc.user_message
+                    formatted = False
                 except Exception as exc:
                     # Не журналируем исключения с текстом запросов или SQL-параметрами.
                     logger.error("Диалог: ошибка %s", type(exc).__name__)
                     answer = DATABASE_ERROR
+                    formatted = False
             finally:
                 if indicator:
                     indicator.cancel()
                     await asyncio.gather(indicator, return_exceptions=True)
-            for part in split_text(answer):
-                await message.answer(part, parse_mode=None)
+            parts = format_reply(answer) if formatted else split_formatted(FormattedText(answer))
+            for part in parts:
+                await send_part(message, part)
 
     @router.message(CommandStart())
     async def start(message: Message, dialog: DialogService):

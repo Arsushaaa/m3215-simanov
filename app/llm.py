@@ -69,7 +69,10 @@ class OpenRouterClient:
                 if not isinstance(text, str) or not text.strip():
                     raise ModelError("Модель вернула пустой ответ. Попробуй ещё раз.")
                 if choice.get("finish_reason") == "length":
-                    raise ModelError("Ответ модели не поместился в лимит. Попробуй сузить вопрос.")
+                    raise ModelError(
+                        "Модель остановилась на ограничении длины, поэтому полный ответ "
+                        "не получен. Попроси текст по частям, например первую часть на 500 слов."
+                    )
                 outcome = "ok"
         except TimeoutError:
             raise ModelError("Модель не успела ответить. Попробуй ещё раз позже.") from None

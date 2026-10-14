@@ -1,6 +1,7 @@
 """Сервис диалога: порядок запросов, лимиты контекста и настройки пользователя."""
 
 import asyncio
+import re
 from decimal import Decimal, InvalidOperation
 from weakref import WeakValueDictionary
 
@@ -9,7 +10,30 @@ from app.llm import ModelError, OpenRouterClient
 from app.prompts import MODE_NAMES, PROMPTS
 from app.repository import DialogRepository
 
-TEMPERATURES = {Decimal("0.0"), Decimal("0.3"), Decimal("0.7"), Decimal("1.0")}
+LARGE_OUTPUT = (
+    "Такой объём не поместится в один ответ модели. Попроси текст по частям: "
+    "например, «Напиши первую часть эссе на 500 слов», затем следующую часть. "
+    "Готовый ответ я разделю на сообщения для Telegram."
+)
+OUTPUT_SIZE = re.compile(
+    r"\b(?:напиши|написать|дай|составь|создай|сделай|write|generate|produce)\b"
+    r".{0,100}?\b(?:на|из|объёмом|объемом|длиной|of|in)\s+"
+    r"(\d[\d\s_]*(?:[.,]\d+)?\s*[кk]?)\s*"
+    r"(слов(?:а|о)?|символ(?:ов|а)?|знак(?:ов|а)?|words?|characters?|chars?)\b",
+    re.IGNORECASE,
+)
+
+
+def check_output_size(text: str, token_budget: int) -> None:
+    # Предварительная оценка только явного запроса на объём ответа, не размера входа.
+    for match in OUTPUT_SIZE.finditer(text):
+        amount, unit = match.groups()
+        amount = re.sub(r"[\s_]", "", amount).lower().replace(",", ".")
+        multiplier = 1000 if amount.endswith(("к", "k")) else 1
+        count = Decimal(amount.rstrip("кk")) * multiplier
+        estimate = count * (3 if unit.lower().startswith(("слов", "word")) else Decimal("0.67"))
+        if estimate > token_budget:
+            raise ModelError(LARGE_OUTPUT)
 
 
 def estimate_tokens(messages: list[dict[str, str]]) -> int:
@@ -57,6 +81,7 @@ class DialogService:
         cached = await self.repository.answer(user_id, message_id)
         if cached is not None:
             return cached
+        check_output_size(text, self.settings.llm_max_output_tokens)
         user = await self.repository.user(user_id)
         history = await self.repository.history(user_id, self.settings.history_max_messages)
         prompt, pinned, quiz = PROMPTS[user.mode], [], {}
@@ -124,15 +149,15 @@ class DialogService:
         if argument:
             try:
                 temperature = Decimal(argument.strip().replace(",", "."))
-                if not temperature.is_finite() or temperature not in TEMPERATURES:
+                if not temperature.is_finite() or not Decimal(0) <= temperature <= Decimal(1):
                     raise ValueError
             except (InvalidOperation, ValueError):
-                return "Допустимые значения: /settings 0.0, 0.3, 0.7 или 1.0."
+                return "Укажи число от 0 до 1 включительно, например /settings 0.55."
             await self.repository.user(user_id)
             await self.repository.set_temperature(user_id, float(temperature))
         user = await self.repository.user(user_id)
         return (
             f"Режим: {MODE_NAMES[user.mode]}\nМодель: {self.settings.openrouter_model}\n"
-            f"Температура: {user.temperature:.1f}\n"
-            "Изменить: /settings 0.0, 0.3, 0.7 или 1.0."
+            f"Температура: {user.temperature}\n"
+            "Изменить: /settings <число от 0 до 1>, например /settings 0.55."
         )

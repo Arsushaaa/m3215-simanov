@@ -4,9 +4,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.methods import SendMessage
 from aiogram.types import Chat, Message, PhotoSize, Update, User
 
+from app.formatting import format_reply
 from app.handlers.assistant import DATABASE_ERROR, START_TEXT, create_router, split_text
 from app.llm import ModelError
 
@@ -69,6 +71,81 @@ async def test_regular_message_calls_model_and_sends_plain_answer(dispatcher_set
     )
     assert sent.parse_mode is None
     assert len(await repo.history(1, 20)) == 2
+
+
+async def test_markdown_is_sent_as_telegram_entities(dispatcher_setup, dialog_setup):
+    dispatcher, bot = dispatcher_setup
+    service, repo, llm = dialog_setup
+    source = "### Как это работает\n\n**Дробь** `0.7`\n\n```python\nx = 0.7\nprint(x)\n```"
+    llm.complete.return_value = source
+    await dispatcher.feed_update(bot, update("Объясни 0.7"), dialog=service)
+    sent = next(
+        call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
+    )
+    assert sent.text == "Как это работает\n\nДробь 0.7\n\nx = 0.7\nprint(x)"
+    assert {e.type for e in sent.entities} == {"bold", "code", "pre"}
+    assert sent.parse_mode is None
+    assert (await repo.history(1, 20))[-1]["content"] == source
+
+
+async def test_long_code_keeps_formatting_across_messages(dispatcher_setup, dialog_setup):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    source = "```python\n" + "print('👋')\n" * 900 + "```"
+    llm.complete.return_value = source
+    await dispatcher.feed_update(bot, update("Покажи код"), dialog=service)
+    sent = [
+        call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
+    ]
+    assert len(sent) > 2
+    assert "".join(part.text for part in sent) == "".join(
+        part.text for part in format_reply(source)
+    )
+    assert all(part.entities[0].type == "pre" for part in sent)
+    assert all(part.entities[0].language == "python" for part in sent)
+    assert all(len(part.text.encode("utf-16-le")) // 2 <= 4096 for part in sent)
+
+
+async def test_telegram_entity_failure_falls_back_without_losing_answer(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    llm.complete.return_value = "**Готово**"
+
+    async def send(_bot, method, **kwargs):
+        if isinstance(method, SendMessage) and method.entities:
+            raise TelegramBadRequest(method=method, message="can't parse entities")
+
+    bot.session.side_effect = send
+    await dispatcher.feed_update(bot, update("Вопрос"), dialog=service)
+    attempts = [
+        call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
+    ]
+    assert [part.text for part in attempts] == ["Готово", "Готово"]
+    assert attempts[0].entities and not attempts[1].entities
+
+
+async def test_telegram_rate_limit_retries_same_part_before_next(
+    dispatcher_setup, dialog_setup, monkeypatch
+):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    llm.complete.return_value = "я" * 5000
+    attempts = []
+    sleep = AsyncMock()
+    monkeypatch.setattr("app.handlers.assistant.asyncio.sleep", sleep)
+
+    async def send(_bot, method, **kwargs):
+        if isinstance(method, SendMessage):
+            attempts.append(method.text)
+            if len(attempts) == 1:
+                raise TelegramRetryAfter(method=method, message="Too Many Requests", retry_after=1)
+
+    bot.session.side_effect = send
+    await dispatcher.feed_update(bot, update("Вопрос"), dialog=service)
+    assert attempts == ["я" * 4096, "я" * 4096, "я" * 904]
+    sleep.assert_any_await(1)
 
 
 @pytest.mark.parametrize(

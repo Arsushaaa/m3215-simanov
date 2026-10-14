@@ -130,21 +130,34 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 2
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 3
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
         assert (alice.mode, alice.temperature) == ("study", 0.3)
         assert await repository.save_exchange(alice, 1, "Вопрос Алисы 👋", "Ответ Алисе")
         assert await repository.save_exchange(bob, 1, "Вопрос Боба", "Ответ Бобу")
-        await repository.set_temperature(101, 0.7)
+        # Обновление уже заполненной БД со старым ограничением сохраняет историю.
+        await pool.execute(
+            "ALTER TABLE labbi_users DROP CONSTRAINT labbi_users_temperature_check, "
+            "ADD CONSTRAINT labbi_users_temperature_check "
+            "CHECK (temperature IN (0.0, 0.3, 0.7, 1.0)); "
+            "DELETE FROM labbi_schema_migrations WHERE version='003_temperature_range.sql'"
+        )
+        with pytest.raises(asyncpg.CheckViolationError):
+            await repository.set_temperature(101, 0.55)
+        await migrate(pool)
+        await repository.set_temperature(101, 0.55)
+        for value in (-0.001, 1.001, float("nan"), float("inf")):
+            with pytest.raises(asyncpg.CheckViolationError):
+                await repository.set_temperature(101, value)
         await pool.close()
 
         # Новое соединение имитирует перезапуск процесса; память Python не используется.
         pool = await create_pool(settings)
         repository = DialogRepository(pool)
         alice = await repository.user(101)
-        assert alice.temperature == 0.7
+        assert alice.temperature == 0.55
         assert await repository.history(101, 20) == [
             {"role": "user", "content": "Вопрос Алисы 👋"},
             {"role": "assistant", "content": "Ответ Алисе"},
@@ -156,7 +169,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
         assert await repository.history(101, 20) == []
         assert len(await repository.history(202, 20)) == 2
         alice = await repository.user(101)
-        assert (alice.mode, alice.temperature) == ("quiz", 0.7)
+        assert (alice.mode, alice.temperature) == ("quiz", 0.55)
 
         assert await repository.save_exchange(
             alice, 10, "Тема: циклы", "Вопрос 1/5", quiz_topic="Тема: циклы", quiz_question=1
@@ -190,7 +203,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
         assert not await repository.save_exchange(alice, 5, "Устаревший запрос", "Ответ")
         await repository.reset(101)
         alice = await repository.user(101)
-        assert (alice.mode, alice.temperature) == ("quiz", 0.7)
+        assert (alice.mode, alice.temperature) == ("quiz", 0.55)
         assert await repository.history(101, 20) == []
         assert await repository.history(202, 20) == [
             {"role": "user", "content": "Вопрос Боба"},
