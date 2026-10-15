@@ -85,7 +85,12 @@ class DialogService:
                 raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
             return ESSAY_TOPIC_QUESTION
         previous = history[-1]["content"] if history else None
-        check_output_size(text, self.settings.llm_max_output_tokens, previous)
+        check_output_size(
+            text,
+            self.settings.llm_max_output_tokens,
+            previous,
+            output_followup=user.mode == "study" and previous == ESSAY_TOPIC_QUESTION,
+        )
         continuing = bool(CONTINUE.search(text)) and await self.repository.has_incomplete_answer(
             user_id
         )

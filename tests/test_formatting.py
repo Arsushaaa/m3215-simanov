@@ -93,4 +93,52 @@ def test_nested_lists_quotes_and_tables_are_readable():
     )[0]
     assert "1. Первый\n2. Второй\n  • Вложенный" in reply.text
     assert "A | B\n1 | 2" in reply.text
-    assert "blockquote" in {e.type for e in reply.entities}
+    assert "Цитата\n\nA | B" in reply.text
+    assert "blockquote" not in {e.type for e in reply.entities}
+
+
+def test_quote_with_inline_code_keeps_paragraphs_without_fragmented_quote_boxes():
+    reply = format_reply(
+        "> **Важно**: `int` может быть слишком мал.\n"
+        "> Тогда `sizeof(массив)` > `INT_MAX` — переполнение.\n"
+        ">\n"
+        "> Используй `size_t`.\n\n"
+        "Следующий абзац с *выводом*."
+    )[0]
+    assert reply.text == (
+        "Важно: int может быть слишком мал.\n"
+        "Тогда sizeof(массив) > INT_MAX — переполнение.\n\n"
+        "Используй size_t.\n\nСледующий абзац с выводом."
+    )
+    assert [(e.type, entity_text(reply, e)) for e in reply.entities] == [
+        ("bold", "Важно"),
+        ("code", "int"),
+        ("code", "sizeof(массив)"),
+        ("code", "INT_MAX"),
+        ("code", "size_t"),
+        ("italic", "выводом"),
+    ]
+
+
+def test_long_quote_with_code_splits_with_valid_entities_and_all_text_preserved():
+    line = "😀 **Размер объекта**: `size_t` хранит результат `sizeof(объект)`."
+    expected_line = "😀 Размер объекта: size_t хранит результат sizeof(объект)."
+    source = "\n".join("> " + line for _ in range(300)) + "\n\nПосле цитаты."
+    parts = format_reply(source)
+    assert len(parts) > 1
+    assert "".join(part.text for part in parts) == (
+        "\n".join(expected_line for _ in range(300)) + "\n\nПосле цитаты."
+    )
+    all_code = []
+    for part in parts:
+        assert 0 < utf16_length(part.text) <= 4096
+        for entity in part.entities:
+            assert entity.type in {"bold", "code"}
+            assert 0 <= entity.offset < entity.offset + entity.length <= utf16_length(part.text)
+            value = entity_text(part, entity)
+            if entity.type == "code":
+                all_code.append(value)
+            else:
+                assert value in "Размер объекта"
+    # Короткий inline-код не режется по границе сообщения и не теряется.
+    assert all_code == ["size_t", "sizeof(объект)"] * 300

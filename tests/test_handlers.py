@@ -224,6 +224,54 @@ async def test_unbounded_request_warns_immediately_without_model(dispatcher_setu
     llm.complete.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    "question",
+    [
+        "напиши мне эссе по теме c++ на огромное количество слов",
+        "напиши мне эссе по теме c++ на 10000 слов",
+        "Напиши очень длинное эссе о C++",
+    ],
+)
+async def test_large_essay_from_screenshot_is_refused_without_model(
+    dispatcher_setup, dialog_setup, question
+):
+    dispatcher, bot = dispatcher_setup
+    service, repo, llm = dialog_setup
+    # Даже зависающий endpoint не должен задержать ответ на такой запрос.
+    llm.complete.side_effect = AssertionError("Модель не должна вызываться")
+    await dispatcher.feed_update(bot, update(question), dialog=service)
+    assert len(sent_texts(bot)) == 1
+    assert "не поместится в один ответ" in sent_texts(bot)[0]
+    llm.complete.assert_not_awaited()
+    assert await repo.history(1, 20) == []
+
+
+async def test_mixed_quote_and_inline_code_reaches_telegram_as_readable_text(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, repo, llm = dialog_setup
+    source = (
+        "### Размер массива\n\n"
+        "> ❌ `int` может быть слишком мал: `sizeof(массив)` может превышать `INT_MAX`.\n\n"
+        "Используй `size_t`."
+    )
+    llm.complete.return_value = Completion(source)
+    await dispatcher.feed_update(bot, update("Почему нужен size_t?"), dialog=service)
+    sent = [
+        call.args[1] for call in bot.session.call_args_list if isinstance(call.args[1], SendMessage)
+    ]
+    assert len(sent) == 1
+    assert sent[0].text == (
+        "Размер массива\n\n"
+        "❌ int может быть слишком мал: sizeof(массив) может превышать INT_MAX.\n\n"
+        "Используй size_t."
+    )
+    assert {e.type for e in sent[0].entities} == {"bold", "code"}
+    assert (await repo.history(1, 20))[-1]["content"] == source
+    llm.complete.assert_awaited_once()
+
+
 def test_split_preserves_unicode_and_boundaries():
     assert split_text("я" * 4096) == ["я" * 4096]
     assert split_text("😀" * 2049) == ["😀" * 2048, "😀"]

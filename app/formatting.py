@@ -73,7 +73,7 @@ class Renderer:
                     self.entity(kind, start, **attributes)
 
     def render(self, tokens: list[Token]) -> FormattedText:
-        lists, headings, quotes = [], [], []
+        lists, headings = [], []
         previous, column = "", 0
         for token in tokens:
             kind = token.type
@@ -106,12 +106,11 @@ class Renderer:
                 if lists[-1]:
                     lists[-1] += 1
             elif kind == "blockquote_open":
+                # Модель часто оборачивает пояснения с кодом в цитату. Telegram
+                # не допускает общего выделения поверх code/pre: разрезание
+                # цитаты вокруг каждого `int` создаёт множество отдельных плашек.
+                # Показываем цитату обычными абзацами, сохраняя её текст и стили.
                 self.newline()
-                quotes.append(self.offset)
-            elif kind == "blockquote_close":
-                start = quotes.pop()
-                if not quotes:
-                    self.entity("blockquote", start)
             elif kind == "hr":
                 self.newline()
                 self.append("────────")
