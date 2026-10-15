@@ -1,0 +1,139 @@
+<div id="labbi-flow-explainer">
+  <style>
+    #labbi-flow-explainer { color: var(--foreground); }
+    #labbi-flow-explainer h2 { margin: 0 96px 20px 0; }
+    #labbi-flow-explainer .lf-flow { list-style: none; padding: 0; margin: 20px 0 12px; }
+    #labbi-flow-explainer .lf-step { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; position: relative; padding: 0 0 22px; }
+    #labbi-flow-explainer .lf-step:not(:last-child)::after { content: ""; position: absolute; top: 32px; bottom: 4px; left: 15px; border-left: 1px solid var(--border); }
+    #labbi-flow-explainer .lf-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: var(--foreground); background: color-mix(in srgb, var(--viz-series-1) 15%, transparent); }
+    #labbi-flow-explainer .lf-title { font-weight: 500; }
+    #labbi-flow-explainer .lf-location { margin-top: 3px; color: var(--muted-foreground); }
+    #labbi-flow-explainer .lf-status { align-self: start; white-space: nowrap; }
+    #labbi-flow-explainer .lf-note { margin-top: 5px; overflow-wrap: anywhere; }
+    #labbi-flow-explainer .lf-step[data-state="skip"] .lf-number { background: var(--muted); }
+    #labbi-flow-explainer .lf-step[data-state="skip"] .lf-status { color: var(--muted-foreground); }
+    #labbi-flow-explainer .lf-step[data-state="error"] .lf-number,
+    #labbi-flow-explainer .lf-step[data-state="limit"] .lf-number { background: color-mix(in srgb, var(--viz-series-2) 18%, transparent); }
+    #labbi-flow-explainer .lf-result { padding-top: 12px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+    @media (max-width: 480px) {
+      #labbi-flow-explainer .lf-step { grid-template-columns: 30px minmax(0, 1fr); gap: 9px; padding-bottom: 22px; }
+      #labbi-flow-explainer .lf-status { grid-column: 2; white-space: normal; margin-top: -4px; }
+    }
+  </style>
+  <h2>Путь одного сообщения</h2>
+  <div class="viz-controls">
+    <label class="form-label" for="labbi-flow-scenario">Сценарий
+      <select class="form-select" id="labbi-flow-scenario">
+        <option value="normal">Обычный вопрос</option>
+        <option value="huge">Слишком большой объём</option>
+        <option value="topic">Эссе без темы</option>
+        <option value="truncated">Достигнут лимит генерации</option>
+        <option value="model-error">Ошибка OpenRouter</option>
+        <option value="telegram-error">Ошибка отправки в Telegram</option>
+      </select>
+    </label>
+  </div>
+  <ol class="lf-flow" aria-label="Этапы обработки сообщения">
+    <li class="lf-step" data-state="done"><span class="lf-number" aria-hidden="true">1</span><div><div class="lf-title">Получить вопрос</div><div class="lf-location text-small">Telegram → локальный Python</div><div class="lf-note">Личное текстовое сообщение · long polling</div></div><span class="lf-status text-small">✓ Получен</span></li>
+    <li class="lf-step" data-state="done"><span class="lf-number" aria-hidden="true">2</span><div><div class="lf-title">Прочитать память и проверить запрос</div><div class="lf-location text-small">Python ↔ PostgreSQL в Docker</div><div class="lf-note">Режим, температура, история своего user_id</div></div><span class="lf-status text-small">✓ Проверен</span></li>
+    <li class="lf-step" data-state="done"><span class="lf-number" aria-hidden="true">3</span><div><div class="lf-title">Получить ответ модели</div><div class="lf-location text-small">Python → OpenRouter → NVIDIA Nemotron</div><div class="lf-note">Инструкция режима + недавняя история + вопрос</div></div><span class="lf-status text-small">✓ Сгенерирован</span></li>
+    <li class="lf-step" data-state="done"><span class="lf-number" aria-hidden="true">4</span><div><div class="lf-title">Сохранить пару «вопрос — ответ»</div><div class="lf-location text-small">PostgreSQL в Docker · на твоём компьютере</div><div class="lf-note">Одна транзакция · is_complete = true</div></div><span class="lf-status text-small">✓ Сохранена</span></li>
+    <li class="lf-step" data-state="done"><span class="lf-number" aria-hidden="true">5</span><div><div class="lf-title">Оформить и отправить текст</div><div class="lf-location text-small">Локальный Python → Telegram API</div><div class="lf-note">Markdown → entities · части до 4096 единиц UTF-16</div></div><span class="lf-status text-small">✓ Отправлен</span></li>
+    <li class="lf-step" data-state="done"><span class="lf-number" aria-hidden="true">6</span><div><div class="lf-title">Показать ответ в чате</div><div class="lf-location text-small">Telegram на твоём устройстве</div><div class="lf-note">Следующий вопрос получит сохранённую историю</div></div><span class="lf-status text-small">✓ В чате</span></li>
+  </ol>
+  <div class="lf-result" aria-live="polite" aria-atomic="true">Модель: 1 вызов · ответ в БД · отправка успешна</div>
+  <script>
+    (() => {
+      const root = document.getElementById('labbi-flow-explainer');
+      const picker = root.querySelector('#labbi-flow-scenario');
+      const rows = Array.from(root.querySelectorAll('.lf-step'));
+      const result = root.querySelector('.lf-result');
+      const baseline = rows.map(row => ({
+        title: row.querySelector('.lf-title').textContent,
+        place: row.querySelector('.lf-location').textContent,
+        note: row.querySelector('.lf-note').textContent,
+        status: row.querySelector('.lf-status').textContent,
+        state: 'done'
+      }));
+      const cases = {
+        normal: { result: 'Модель: 1 вызов · ответ в БД · отправка успешна', changes: {} },
+        huge: {
+          result: 'Модель: 0 вызовов · новая пара в БД не записана · отправлено предупреждение',
+          changes: {
+            1: { state: 'limit', status: '! Ограничен', note: '«Напиши эссе о C++ на огромное количество слов»' },
+            2: { state: 'skip', status: '— Пропущен', note: 'Объём проверен локально, до OpenRouter' },
+            3: { state: 'skip', status: '— Пропущен', note: 'Отклонённый запрос не создаёт новую пару диалога' },
+            4: { status: '✓ Отправлено', note: 'Короткое предупреждение об объёме' },
+            5: { title: 'Показать предупреждение', note: 'Предложение запросить небольшую часть' }
+          }
+        },
+        topic: {
+          result: 'Модель: 0 вызовов · уточнение сохранено в БД · ожидание темы',
+          changes: {
+            1: { state: 'limit', status: '? Нужна тема', note: '«Напиши мне огромное эссе» · режим /study' },
+            2: { state: 'skip', status: '— Пропущен', note: 'Вопрос о теме формируется локально' },
+            3: { note: 'Запрос и уточняющий вопрос сохраняются одной транзакцией' },
+            4: { note: '«На какую тему написать эссе?»' },
+            5: { title: 'Показать уточняющий вопрос', note: 'Следующее сообщение уточняет тему и объём' }
+          }
+        },
+        truncated: {
+          result: 'Модель: 1 вызов · is_complete = false · продолжение только по новому сообщению',
+          changes: {
+            2: { state: 'limit', status: '! Обрезан', note: 'finish_reason = length · лимит ответа 2048 токенов' },
+            3: { note: 'Полученный текст сохранён · is_complete = false' },
+            4: { note: 'Весь полученный текст + предупреждение о неполноте' },
+            5: { title: 'Показать полученную часть', status: '! Неполный', note: '«Продолжи» запускает следующий запрос модели' }
+          }
+        },
+        'model-error': {
+          result: 'Модель: 1 попытка · новая пара в БД не записана · отправлено сообщение об ошибке',
+          changes: {
+            2: { state: 'error', status: '× Ошибка', note: 'Например, таймаут 60 секунд или исчерпанная квота' },
+            3: { state: 'skip', status: '— Пропущен', note: 'Ошибка без текста ответа не сохраняется как диалог' },
+            4: { status: '✓ Отправлено', note: 'Короткое сообщение об ошибке модели' },
+            5: { title: 'Показать сообщение об ошибке', note: 'Предыдущая история в PostgreSQL сохраняется' }
+          }
+        },
+        'telegram-error': {
+          result: 'Модель: 1 вызов · ответ уже в БД · автоматического восстановления доставки нет',
+          changes: {
+            4: { state: 'error', status: '× Ошибка', note: 'Сетевой сбой sendMessage после сохранения ответа' },
+            5: { state: 'error', title: 'Ответ может отсутствовать в чате', status: '! Не гарантирован', note: 'При нескольких сообщениях часть могла уже прийти' }
+          }
+        }
+      };
+      function apply(value) {
+        const name = Object.prototype.hasOwnProperty.call(cases, value) ? value : 'normal';
+        picker.value = name;
+        const scenario = cases[name];
+        rows.forEach((row, index) => {
+          const stage = { ...baseline[index], ...(scenario.changes[index] || {}) };
+          row.dataset.state = stage.state;
+          row.querySelector('.lf-title').textContent = stage.title;
+          row.querySelector('.lf-location').textContent = stage.place;
+          row.querySelector('.lf-note').textContent = stage.note;
+          row.querySelector('.lf-status').textContent = stage.status;
+        });
+        result.textContent = scenario.result;
+        root.dataset.scenario = name;
+      }
+      function restore(snapshot) {
+        const state = snapshot && snapshot.modelContent;
+        apply(state && state.scenario);
+      }
+      restore(window.openai && window.openai.widgetState);
+      picker.addEventListener('change', () => {
+        apply(picker.value);
+        if (window.openai && typeof window.openai.setWidgetState === 'function') {
+          window.openai.setWidgetState({ modelContent: { scenario: picker.value }, privateContent: null }).catch(() => {});
+        }
+      });
+      window.addEventListener('openai:set_globals', event => {
+        if (event.detail && event.detail.globals && 'widgetState' in event.detail.globals) {
+          restore(event.detail.globals.widgetState);
+        }
+      });
+    })();
+  </script>
+</div>
