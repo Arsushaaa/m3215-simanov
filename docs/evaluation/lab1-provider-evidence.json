@@ -1,0 +1,24 @@
+{
+  "checked_at": "2026-10-17T09:48:06.950570+00:00",
+  "source": "https://openrouter.ai/api/v1/models",
+  "id": "nvidia/nemotron-3-super-120b-a12b:free",
+  "name": "NVIDIA: Nemotron 3 Super (free)",
+  "context_length": 262144,
+  "supported_parameters": [
+    "include_reasoning",
+    "max_tokens",
+    "reasoning",
+    "reasoning_effort",
+    "response_format",
+    "seed",
+    "structured_outputs",
+    "temperature",
+    "tool_choice",
+    "tools",
+    "top_p"
+  ],
+  "pricing": {
+    "prompt": "0",
+    "completion": "0"
+  }
+}

@@ -16,3 +16,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.format]
+# The experiment contains observed model output; preserve its original Python blocks.
+exclude = ["docs/evaluation/lab1-experiment.md"]

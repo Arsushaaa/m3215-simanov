@@ -1,0 +1,37 @@
+{
+  "recorded_at": "2026-10-17T10:00:25.252558+00:00",
+  "python_version": "3.12.15",
+  "environment": "Python 3.12 from project .venv; rootless Docker; isolated integration PostgreSQL; LLM and Telegram substituted in tests",
+  "checks": [
+    {
+      "command": "python -m pip check",
+      "exit_code": 0,
+      "stdout": "No broken requirements found.",
+      "stderr": ""
+    },
+    {
+      "command": "python -m ruff check .",
+      "exit_code": 0,
+      "stdout": "All checks passed!",
+      "stderr": ""
+    },
+    {
+      "command": "python -m ruff format --check .",
+      "exit_code": 0,
+      "stdout": "50 files already formatted",
+      "stderr": ""
+    },
+    {
+      "command": "RUN_INTEGRATION=1 python -m pytest -q -o faulthandler_timeout=30",
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 31%]\n........................................................................ [ 62%]\n........................................................................ [ 93%]\n..............                                                           [100%]\n230 passed in 6.09s",
+      "stderr": ""
+    },
+    {
+      "command": "python -m app.healthcheck",
+      "exit_code": 0,
+      "stdout": "Приложение готово: polling работает, PostgreSQL отвечает на SELECT 1.\nДоступность Telegram при сетевых сбоях проверяйте по логам бота.",
+      "stderr": ""
+    }
+  ]
+}
