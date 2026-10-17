@@ -33,5 +33,23 @@
       "stdout": "Приложение готово: polling работает, PostgreSQL отвечает на SELECT 1.\nДоступность Telegram при сетевых сбоях проверяйте по логам бота.",
       "stderr": ""
     }
-  ]
+  ],
+  "artifact_verification": {
+    "report_source": "docs/lab1-report.md",
+    "source_sha256": "74c3a6cdd8e38e3cfe135df3bb0fa3f62193e97052315cb716aa90735969e1e5",
+    "report_pdf": "docs/lab1-report.pdf",
+    "pdf_sha256": "8ace45cd0d5e759d6a170014b9cf9481093b811da15ab3aa7c556f32104af40c",
+    "rendered_with": "Chromium 153 headless; A4; DejaVu Sans; Markdown source content verified against rendering input",
+    "pdf_pages": 8,
+    "main_text_pages": 6,
+    "appendix_pages": 2,
+    "visually_inspected_pages": [
+      1,
+      4,
+      8
+    ],
+    "local_markdown_links": "pass",
+    "configured_secret_values_scan": "pass; .env remains ignored",
+    "production_app_code_changes": "none"
+  }
 }
