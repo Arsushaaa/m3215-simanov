@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Выполните source scripts/env.sh из терминала для выбора окружения проекта.
-task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 if [[ ! -f "$task_root/.venv/bin/activate" ]]; then
     echo 'Виртуальное окружение .venv ещё не подготовлено.' >&2
     return 1 2>/dev/null || exit 1

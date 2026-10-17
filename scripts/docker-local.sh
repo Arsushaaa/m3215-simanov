@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Управление изолированным Docker проекта без sudo и системных сервисов.
 set -euo pipefail
-task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# RootlessKit открывает namespace через /proc/PID/root: абсолютный симлинк
+# в пути может вывести его в mount namespace родителя вместо дочернего.
+task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 task_runtime="$task_root/.tools/docker-run"
 task_pidfile="$task_runtime/supervisor.pid"
 task_log="$task_runtime/daemon.log"
