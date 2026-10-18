@@ -209,7 +209,7 @@ async def test_reminder_is_only_a_proposal_without_mcp_or_second_model(setup_age
         name="add_reminder",
         arguments={"text": "Сдать отчёт", "remind_at": "2026-10-19T18:30:00+03:00"},
     )
-    reply = await ask(agent)
+    reply = await ask(agent, "Напомни завтра в 18:30 сдать отчёт")
     assert reply.reminder is not None if timezone else reply.reminder is None
     assert "требуется подтверждение" in reply.text if timezone else "/timezone" in reply.text
     mcp.call_tool.assert_not_awaited()

@@ -10,6 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.confirmation_models import Authorization, ConfirmationError, Outcome, PreparedAction
 from app.mcp.client import MCPClient, MCPClientError
 from app.mcp.contracts import ReminderArguments, TimezoneName
+from app.reminder_intent import BUTTON_REQUIRED
 
 if TYPE_CHECKING:
     from app.agent import ReminderProposal
@@ -26,6 +27,27 @@ UNKNOWN_OUTCOME = (
 class ConfirmationService:
     def __init__(self, repository: "ConfirmationRepository", mcp: MCPClient):
         self.repository, self.mcp = repository, mcp
+
+    async def button_reply(self, user_id: int, message_id: int) -> str | None:
+        """A textual yes to an active card never grants permission to write."""
+        if await self.repository.current_card(user_id) is None:
+            return None
+        if await self.repository.has_processed(user_id, message_id):
+            raise ConfirmationError(
+                "ACTION_CONFLICT", "Этот запрос уже обработан. Отправь новое сообщение."
+            )
+        await self.repository.record(
+            user_id,
+            message_id,
+            decision="clarify",
+            target="add_reminder",
+            status="CLARIFY",
+            reason="Для записи подготовленного напоминания требуется кнопка владельца.",
+            error_code="CONFIRMATION_REQUIRED",
+            llm_calls=0,
+            mcp_calls=0,
+        )
+        return BUTTON_REQUIRED
 
     async def prepare(
         self,

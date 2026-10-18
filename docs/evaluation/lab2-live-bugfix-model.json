@@ -1,0 +1,76 @@
+{
+  "protocol": "isolated_agent_routing_after_reminder_guard",
+  "run_at": "2026-10-18T23:36:23.573030+00:00",
+  "fixed_application_now": "2026-10-19T07:00:00+00:00",
+  "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+  "tool_mode": "structured",
+  "saved_timezone": "Europe/Moscow",
+  "maximum_real_llm_decide_calls": 2,
+  "telegram_calls": 0,
+  "database_calls": 0,
+  "cases": [
+    {
+      "case": "complete_explicit_reminder",
+      "input": "Напомни мне завтра в 18:30 приготовить пирог",
+      "history": [],
+      "outcome_code": "PROPOSAL",
+      "proposal": true,
+      "validated_remind_at": "2026-10-20T18:30:00+03:00",
+      "transport_outcome": "RETURNED",
+      "actual_llm_decide_calls": 1,
+      "forbidden_complete_calls": 0,
+      "observed_action": "call_tool",
+      "observed_tool": "add_reminder",
+      "observed_remind_at": "2026-10-20T18:30:00+03:00",
+      "routing_truncated": false,
+      "audit_status": "CLARIFY",
+      "audit_error_code": null,
+      "audit_llm_calls": 1,
+      "audit_mcp_calls": 0
+    },
+    {
+      "case": "explicit_time_followup",
+      "input": "в 18:30",
+      "history": [
+        {
+          "role": "user",
+          "content": "ты сможешь напомнить мне завтра приготовить пирог"
+        },
+        {
+          "role": "assistant",
+          "content": "Во сколько напомнить? Укажи точное время."
+        }
+      ],
+      "outcome_code": "SAFE_REPLY",
+      "proposal": false,
+      "validated_remind_at": null,
+      "transport_outcome": "RETURNED",
+      "actual_llm_decide_calls": 1,
+      "forbidden_complete_calls": 0,
+      "observed_action": "call_tool",
+      "observed_tool": "add_reminder",
+      "observed_remind_at": "2026-10-20T15:30:00+00:00",
+      "routing_truncated": false,
+      "audit_status": "CLARIFY",
+      "audit_error_code": "INVALID_ARGUMENTS",
+      "audit_llm_calls": 1,
+      "audit_mcp_calls": 0
+    }
+  ],
+  "actual_real_llm_decide_calls": 2,
+  "attempted_mcp_calls": 0,
+  "offline_regression_replay_after_normalization": {
+    "source_live_case": "explicit_time_followup",
+    "source_live_outcome_code": "SAFE_REPLY",
+    "observed_timestamp_replayed": "2026-10-20T15:30:00+00:00",
+    "event_text_source": "synthetic original request; raw model event text was not retained",
+    "outcome_code": "PROPOSAL",
+    "proposal": true,
+    "validated_remind_at": "2026-10-20T18:30:00+03:00",
+    "stub_llm_decide_calls": 1,
+    "actual_real_llm_decide_calls": 0,
+    "mcp_calls": 0,
+    "audit_status": "CLARIFY",
+    "audit_error_code": null
+  }
+}

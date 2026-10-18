@@ -1488,6 +1488,16 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         mcp.read_resource.assert_not_awaited()
         assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
         epoch = await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+        assert (await confirmations.current_card(101)).action_id == card.action_id
+        assert await confirmations.current_card(202) is None
+        button_reply = await dialog.respond(101, 3, "давай")
+        assert "Подтвердить" in button_reply
+        assert "не сохранено" in button_reply
+        assert await dialog.respond(101, 3, "давай") == button_reply
+        assert (await confirmations.current_card(101)).action_id == card.action_id
+        assert llm.decide.await_count == 1
+        mcp.call_tool.assert_not_awaited()
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
         assert await dialog.respond(101, 2, "Привет") == "Привет!"
         assert (
             await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
@@ -1518,6 +1528,8 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         assert await repository.history(101, 20) == [
             {"role": "user", "content": question},
             {"role": "assistant", "content": card_text},
+            {"role": "user", "content": "давай"},
+            {"role": "assistant", "content": button_reply},
             {"role": "user", "content": "Привет"},
             {"role": "assistant", "content": "Привет!"},
         ]
@@ -1541,6 +1553,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         await dialog.reset(101)
         assert await dialog.confirm(101, str(card.action_id)) == answer
         assert await dialog.confirmation_card(101, 1) is None
+        assert await confirmations.current_card(101) is None
         assert await repository.history(101, 20) == []
         assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
         mcp.call_tool.assert_awaited_once()

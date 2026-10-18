@@ -80,7 +80,9 @@ class _ApiModel(BaseModel):
 class _Location(_ApiModel):
     id: int = Field(gt=0)
     name: ShortText
-    country: ShortText
+    # Open-Meteo опускает пустые поля, в том числе название страны у территорий.
+    # Проверенный ISO-код остаётся явным обозначением, без догадки о стране.
+    country: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
     country_code: Annotated[str, StringConstraints(pattern=r"^[A-Z]{2}$")]
     admin1: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
     admin2: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] = ""
@@ -94,7 +96,9 @@ class _Location(_ApiModel):
         regions = dict.fromkeys(
             p for p in (self.admin1, self.admin2, self.admin3, self.admin4) if p
         )
-        return Place(name=self.name, country=self.country, region=", ".join(regions))
+        return Place(
+            name=self.name, country=self.country or self.country_code, region=", ".join(regions)
+        )
 
 
 class _Geocoding(_ApiModel):

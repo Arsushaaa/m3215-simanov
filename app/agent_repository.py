@@ -507,18 +507,37 @@ class ConfirmationRepository(AgentRepository):
     async def lookup_card(self, user_id: int, message_id: int) -> PreparedAction | None:
         if not _identifier(user_id) or not _identifier(message_id):
             return None
+        return await self._lookup_card(user_id, message_id)
+
+    async def current_card(self, user_id: int) -> PreparedAction | None:
+        """Return the owner's active card without authorizing or replacing it."""
+        if not _identifier(user_id):
+            return None
+        return await self._lookup_card(user_id)
+
+    async def _lookup_card(
+        self, user_id: int, message_id: int | None = None
+    ) -> PreparedAction | None:
         async with self.pool.acquire() as connection, connection.transaction():
             user = await connection.fetchrow(
                 "SELECT * FROM labbi_users WHERE user_id=$1 FOR UPDATE", user_id
             )
             if user is None:
                 return None
-            action = await connection.fetchrow(
-                "SELECT * FROM labbi_actions WHERE user_id=$1 "
-                "AND telegram_message_id=$2 FOR UPDATE",
-                user_id,
-                message_id,
-            )
+            if message_id is None:
+                action = await connection.fetchrow(
+                    "SELECT * FROM labbi_actions WHERE user_id=$1 "
+                    "AND state IN ('pending', 'approved') "
+                    "ORDER BY prepared_at DESC, id DESC LIMIT 1 FOR UPDATE",
+                    user_id,
+                )
+            else:
+                action = await connection.fetchrow(
+                    "SELECT * FROM labbi_actions WHERE user_id=$1 "
+                    "AND telegram_message_id=$2 FOR UPDATE",
+                    user_id,
+                    message_id,
+                )
             if action is None or action["state"] not in {"pending", "approved"}:
                 return None
             now = await connection.fetchval("SELECT clock_timestamp()")

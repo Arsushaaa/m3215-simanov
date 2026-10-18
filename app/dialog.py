@@ -11,6 +11,7 @@ from app.essay import ESSAY_TOPIC_QUESTION, needs_essay_topic
 from app.llm import ModelError, OpenRouterClient
 from app.output_limits import check_output_size
 from app.prompts import MODE_NAMES, PROMPTS
+from app.reminder_intent import is_confirmation_reply
 from app.repository import DialogRepository
 
 TRUNCATED_NOTICE = (
@@ -89,6 +90,15 @@ class DialogService:
             return cached
         user = await self.repository.user(user_id)
         history = await self.repository.history(user_id, self.settings.history_max_messages)
+        if user.mode == "study" and self.confirmations is not None and is_confirmation_reply(text):
+            try:
+                answer = await self.confirmations.button_reply(user_id, message_id)
+            except ConfirmationError as error:
+                raise ModelError(error.user_message) from None
+            if answer is not None:
+                if not await self.repository.save_exchange(user, message_id, text, answer):
+                    raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
+                return answer
         if user.mode == "study" and needs_essay_topic(text, history):
             if not await self.repository.save_exchange(
                 user, message_id, text, ESSAY_TOPIC_QUESTION

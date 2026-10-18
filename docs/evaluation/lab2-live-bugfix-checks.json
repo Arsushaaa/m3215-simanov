@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-19",
+  "scope": "Fix live weather parsing and prevent reminder preparation/confirmation from being replaced by model prose; LR2 stages 6 and 7 remain pending.",
+  "regressions": {
+    "weather": "Open-Meteo omits country for a namesake in MS; omitted/empty names use checked country_code without removing candidates or selecting the first match.",
+    "reminders": "Local user-only date/time evidence; missing zone/date/time and orphan followups clarify before LLM. Restricted reminder/clarify routing, guarded native text, grounded instant conversion to saved timezone and unchanged future/DST checks.",
+    "confirmation": "Textual yes on a current owner card returns button hint, with 0 LLM/0 MCP, unchanged action and confirmation_epoch; PostgreSQL/real stdio integration asserts this then confirms the same action exactly once."
+  },
+  "checks": {
+    "pip_check": {
+      "exit_code": 0,
+      "result": "No broken requirements found."
+    },
+    "ruff_check": {
+      "exit_code": 0
+    },
+    "ruff_format_check": {
+      "exit_code": 0
+    },
+    "git_diff_check": {
+      "exit_code": 0
+    },
+    "earlier_full_suite": {
+      "command": "source scripts/env.sh; RUN_INTEGRATION=1 python -m pytest -q",
+      "exit_code": 0,
+      "stdout": "851 passed in 60.84s (0:01:00)"
+    },
+    "additional_routing_regressions": {
+      "exit_code": 0,
+      "cases": 31
+    },
+    "final_full_suite": {
+      "command": "source scripts/env.sh; RUN_INTEGRATION=1 python -m pytest -q",
+      "exit_code": 0,
+      "stdout": "871 passed in 59.86s",
+      "passed": 871,
+      "real_postgresql_integration_tests": 20
+    }
+  },
+  "weather_live_probe_after_fix": {
+    "adapter_calls": 2,
+    "http_calls": 3,
+    "automatic_retries": 0,
+    "cases": [
+      {
+        "city": "Санкт-Петербург",
+        "status": "ambiguous",
+        "candidate_countries": [
+          "Россия",
+          "MS"
+        ],
+        "http_calls": 1
+      },
+      {
+        "city": "Санкт-Петербург, Россия",
+        "status": "ok",
+        "timezone": "Europe/Moscow",
+        "observed_at": "2026-10-19T02:15:00+03:00",
+        "temperature_c": 4.2,
+        "weather_code": 3,
+        "wind_kmh": 9.7,
+        "http_calls": 2
+      }
+    ],
+    "llm_calls": 0,
+    "telegram_calls": 0,
+    "reference": "https://open-meteo.com/en/docs/geocoding-api#json_return_object"
+  },
+  "model_probe": {
+    "artifact": "lab2-live-bugfix-model.json",
+    "real_decide_calls": 2,
+    "real_complete_calls": 0,
+    "mcp_calls": 0,
+    "telegram_calls": 0,
+    "database_calls": 0,
+    "note": "Original live observations retained. UTC normalization replay uses a stubbed LLM; no third request was made."
+  },
+  "docker": {
+    "image": "labbi-live-bugfix-check:local",
+    "build_exit_code": 0,
+    "image_id": "7278b9afc55e",
+    "uid": 10001,
+    "smoke_network": "none",
+    "smoke_read_only": true,
+    "smoke_exit_code": 0,
+    "reminder_modules_packaged": true,
+    "schedule_packaged": true,
+    "migrations_packaged": 6
+  },
+  "source_checks": {
+    "existing_migrations_unchanged": true,
+    "migration_sha256": {
+      "001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+      "002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+      "003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+      "004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+      "005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771",
+      "006_agent_state.sql": "70ff420027af200a9eba7c83f63ca46a17fb0e97c2ec5576972be5859f241212"
+    },
+    "lab1_commit": "2d10cf0b9b750b5dc9ce67b849d1c774b1413ff9",
+    "dependencies_unchanged": true,
+    "new_settings": false,
+    "lab2_tag_created": false
+  },
+  "deployment": "Code and image verified locally. Existing Telegram bot process was not restarted by this check."
+}

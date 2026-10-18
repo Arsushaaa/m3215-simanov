@@ -4,6 +4,7 @@ import asyncio
 import json
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 
 import aiohttp
 import pytest
@@ -83,6 +84,61 @@ def session_for(places, weather_data=None):
         FakeResponse({"results": places}),
         FakeResponse(weather_data if weather_data is not None else weather()),
     )
+
+
+@pytest.fixture
+def saint_petersburg_geocoding():
+    # Публичный ответ Open-Meteo от 19.10.2026: у одноимённого места в MS нет country.
+    path = Path(__file__).parent / "fixtures" / "open_meteo_saint_petersburg.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+async def test_real_geocoding_without_country_preserves_city_ambiguity(
+    saint_petersburg_geocoding,
+):
+    session = FakeSession(FakeResponse(saint_petersburg_geocoding))
+    result = await WeatherService(session).get_weather("Санкт-Петербург")
+    assert result.root.status == "ambiguous"
+    assert [place.country for place in result.root.candidates] == ["Россия", "MS"]
+    assert result.root.candidates[1].region == "Parish of Saint Peter"
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize("qualifier", ["Россия", "RU"])
+async def test_real_geocoding_missing_country_does_not_break_explicit_russia(
+    saint_petersburg_geocoding, qualifier
+):
+    session = FakeSession(FakeResponse(saint_petersburg_geocoding), FakeResponse(weather()))
+    result = await WeatherService(session).get_weather(f"Санкт-Петербург, {qualifier}")
+    assert result.root.status == "ok"
+    assert result.root.place.country == "Россия"
+    assert session.calls[1][1]["params"]["latitude"] == 59.93863
+    assert session.calls[1][1]["params"]["longitude"] == 30.31413
+    assert session.calls[1][1]["params"]["timezone"] == "Europe/Moscow"
+    assert [url for url, _ in session.calls] == [GEOCODING_URL, WEATHER_URL]
+
+
+async def test_real_geocoding_missing_country_can_be_selected_only_by_known_qualifier(
+    saint_petersburg_geocoding,
+):
+    session = FakeSession(
+        FakeResponse(saint_petersburg_geocoding),
+        FakeResponse(weather(timezone="America/Montserrat")),
+    )
+    result = await WeatherService(session).get_weather("Санкт-Петербург, MS")
+    assert result.root.status == "ok"
+    assert result.root.place.country == "MS"
+    assert result.root.timezone == "America/Montserrat"
+    assert session.calls[1][1]["params"]["latitude"] == 16.7727
+
+
+@pytest.mark.parametrize("country", ["", "  "])
+async def test_empty_country_uses_validated_iso_code(country):
+    result = await WeatherService(session_for([location(country=country)])).get_weather(
+        "Казань, RU"
+    )
+    assert result.root.status == "ok"
+    assert result.root.place.country == "RU"
 
 
 async def test_weather_uses_fixed_endpoints_checked_units_and_utc_to_iana():
@@ -251,6 +307,10 @@ async def test_identical_geocoder_duplicate_id_is_one_location():
         {"results": [location(latitude="55.79")]},
         {"results": [location(timezone="localtime")]},
         {"results": [location(country_code="invalid")]},
+        {"results": [location(country=None)]},
+        {"results": [location(country=42)]},
+        {"results": [location(country="a" * 101)]},
+        {"results": [location(country="", country_code="invalid")]},
         {"results": [location(id=True)]},
         {"results": [location() for _ in range(101)]},
         {"results": [location(), location(latitude=40.0)]},

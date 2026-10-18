@@ -357,6 +357,14 @@ class ReminderDecision(StrictModel):
     reason: Reason
 
 
+class ReminderRoutingDecision(
+    RootModel[Annotated[ReminderDecision | ClarifyDecision, Field(discriminator="action")]]
+):
+    """Подготовка напоминания не допускает свободного сообщения об успехе."""
+
+    model_config = ConfigDict(strict=True, frozen=True, json_schema_extra={"type": "object"})
+
+
 class ResourceDecision(StrictModel):
     action: Literal["read_resource"]
     uri: Literal["schedule://current-week"]

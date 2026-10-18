@@ -1,0 +1,32 @@
+{
+  "results": [
+    {
+      "id": 498817,
+      "name": "Санкт-Петербург",
+      "latitude": 59.93863,
+      "longitude": 30.31413,
+      "elevation": 11.0,
+      "feature_code": "PPLA",
+      "country_code": "RU",
+      "admin1_id": 536203,
+      "timezone": "Europe/Moscow",
+      "population": 5351935,
+      "country_id": 2017370,
+      "country": "Россия",
+      "admin1": "Санкт-Петербург"
+    },
+    {
+      "id": 3578038,
+      "name": "Санкт-Петербург",
+      "latitude": 16.7727,
+      "longitude": -62.21729,
+      "elevation": 67.0,
+      "feature_code": "PPLA",
+      "country_code": "MS",
+      "admin1_id": 3578039,
+      "timezone": "America/Montserrat",
+      "admin1": "Parish of Saint Peter"
+    }
+  ],
+  "generationtime_ms": 0.2374649
+}

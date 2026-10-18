@@ -18,10 +18,19 @@ from app.mcp.contracts import (
     ClarifyDecision,
     ReminderArguments,
     ReminderDecision,
+    ReminderRoutingDecision,
     ReminderTimeError,
     ResourceDecision,
     RespondDecision,
     validate_reminder_time,
+)
+from app.reminder_intent import (
+    DATE_REQUIRED,
+    REMINDER_CLARIFY,
+    TIME_REQUIRED,
+    is_confirmation_reply,
+    reminder_context,
+    requests_reminder_and_read,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,6 +136,13 @@ class _Trace:
     argument_summary: str = ""
 
 
+def _reminder_clarification(trace, text, *, code=None):
+    trace.decision, trace.target, trace.status = "clarify", "add_reminder", "CLARIFY"
+    trace.reason = "Нужны параметры напоминания; запись не выполнялась."
+    trace.error_code = code
+    return AgentReply(text)
+
+
 class AgentService:
     def __init__(self, llm, mcp, repository, settings: Settings, *, now=None):
         self.llm, self.mcp, self.repository, self.settings = llm, mcp, repository, settings
@@ -222,9 +238,43 @@ class AgentService:
         now = self.now()
         if now.tzinfo is None or now.utcoffset() is None:
             raise ModelError("Не удалось определить текущее время приложения.")
+        # Относительное время модели имеет точность до секунд, без случайных микросекунд.
+        now = now.replace(microsecond=0)
         timezone = await self.repository.timezone(user.user_id)
+        if requests_reminder_and_read(text):
+            trace.decision, trace.status, trace.reason = (
+                "clarify",
+                "CLARIFY",
+                "Запрошено несколько действий; нужен выбор одного.",
+            )
+            return AgentReply(CHOOSE_ONE)
+        reminder = reminder_context(text, history)
+        if reminder is not None:
+            if timezone is None:
+                return _reminder_clarification(
+                    trace,
+                    "Сначала задай свой часовой пояс: /timezone Europe/Moscow "
+                    "(пример для Москвы и Санкт-Петербурга). Напоминание ещё не сохранено.",
+                    code="TIMEZONE_REQUIRED",
+                )
+            if reminder.is_orphaned:
+                return _reminder_clarification(trace, REMINDER_CLARIFY)
+            if not reminder.has_time:
+                return _reminder_clarification(trace, TIME_REQUIRED)
+            if not reminder.has_date:
+                return _reminder_clarification(trace, DATE_REQUIRED)
+            if is_confirmation_reply(text):
+                return _reminder_clarification(
+                    trace,
+                    "Текстовое «да» не сохраняет напоминание. Для подтверждения нужна "
+                    "действующая кнопка под карточкой. Если карточки нет, повтори просьбу "
+                    "с датой и точным временем.",
+                    code="CONFIRMATION_REQUIRED",
+                )
         facts = self._facts(now, timezone)
         tools = self._tools()
+        if reminder is not None:
+            tools = [tool for tool in tools if tool["function"]["name"] == "add_reminder"]
         rules = (
             "\nВыбери одно действие или дай обычный ответ. Погоду и занятия узнавай только "
             "через доступные инструменты/ресурс; не подставляй примеры или данные из памяти. "
@@ -238,8 +288,17 @@ class AgentService:
             "если он null, попроси задать /timezone с IANA-именем. "
             "Если время или текст неясны, задай уточнение."
         )
+        if reminder is not None:
+            rules += (
+                "\nСейчас требуется только подготовить карточку напоминания: верни "
+                "call_tool/add_reminder с параметрами из пользовательских сообщений "
+                "или clarify, если событие неясно. Не заменяй действие обычным ответом. "
+                "Время из предыдущих ответов ассистента не является выбором пользователя. "
+                "Не придумывай время и не предлагай внешние календари вместо карточки."
+            )
         structured = self.settings.llm_tool_mode == "structured"
-        schema = AgentDecision.model_json_schema() if structured else tools
+        decision_type = ReminderRoutingDecision if reminder is not None else AgentDecision
+        schema = decision_type.model_json_schema() if structured else tools
         routing_prompt = prompt + facts + rules
         if structured:
             routing_prompt += (
@@ -266,6 +325,8 @@ class AgentService:
                 )
                 return AgentReply(CHOOSE_ONE)
             if not result.tool_calls:
+                if reminder is not None:
+                    return _reminder_clarification(trace, REMINDER_CLARIFY)
                 if not isinstance(result.text, str) or not result.text.strip():
                     raise ModelError(INVALID_DECISION)
                 trace.status, trace.reason = "OK", "Модель сформировала обычный ответ."
@@ -298,6 +359,10 @@ class AgentService:
             except (ValueError, KeyError, TypeError, ValidationError, RecursionError):
                 raise ModelError(INVALID_DECISION) from None
         trace.decision = decision.action
+        if reminder is not None and not isinstance(decision, ReminderDecision):
+            return _reminder_clarification(trace, REMINDER_CLARIFY)
+        if isinstance(decision, ReminderDecision) and reminder is None:
+            return _reminder_clarification(trace, REMINDER_CLARIFY)
         if isinstance(decision, (RespondDecision, ClarifyDecision)):
             trace.status = "OK" if isinstance(decision, RespondDecision) else "CLARIFY"
             trace.reason = (
@@ -340,7 +405,19 @@ class AgentService:
                     "(пример для Москвы и Санкт-Петербурга)."
                 )
             try:
-                normalized = validate_reminder_time(decision.arguments, now=now, timezone=timezone)
+                # Модель может выразить тот же момент в UTC. Сначала сверяем его
+                # с пользовательским временем, затем даём валидатору параметры
+                # в сохранённой зоне; проверка DST и будущего времени сохраняется.
+                candidate = decision.arguments.remind_at.astimezone(ZoneInfo(timezone))
+                if not reminder.matches(candidate, now=now, timezone=timezone):
+                    return _reminder_clarification(
+                        trace, REMINDER_CLARIFY, code="INVALID_ARGUMENTS"
+                    )
+                normalized = validate_reminder_time(
+                    ReminderArguments(text=decision.arguments.text, remind_at=candidate),
+                    now=now,
+                    timezone=timezone,
+                )
             except ReminderTimeError as error:
                 trace.error_code = error.code
                 return AgentReply(str(error))
