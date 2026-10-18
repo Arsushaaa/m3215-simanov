@@ -9,21 +9,29 @@ import json
 import os
 import secrets
 import socket
+import sys
 import time
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import asyncpg
 import pytest
+from mcp import Client, StdioServerParameters
 
-from app.config import Settings
+from app.agent_repository import ReminderRepository
+from app.config import MCPSettings, Settings
 from app.db import create_pool
 from app.health import HealthState, health_result
+from app.mcp.contracts import ReminderArguments, ReminderResult
 from app.migration import migrate
 from app.repository import DialogRepository
 from scripts.common import CommandError, run_command
+
+ROOT = Path(__file__).resolve().parents[1]
 
 pytestmark = [
     pytest.mark.integration,
@@ -514,5 +522,342 @@ async def test_agent_database_rejects_inconsistent_action_and_audit_data(databas
         )
         assert "capability_hash" in {row["column_name"] for row in columns}
         assert "capability" not in {row["column_name"] for row in columns}
+    finally:
+        await pool.close()
+
+
+async def _confirmed_reminder(pool, user_id, *, timezone="Europe/Moscow", **changes):
+    await DialogRepository(pool).user(user_id)
+    await pool.execute("UPDATE labbi_users SET timezone=$2 WHERE user_id=$1", user_id, timezone)
+    request_id = await _insert_agent_request(pool, user_id, 1)
+    now = await pool.fetchval("SELECT clock_timestamp()")
+    prepared_at = changes.pop("prepared_at", now)
+    token = secrets.token_urlsafe(32)
+    values = {
+        "state": "approved",
+        "prepared_at": prepared_at,
+        "approved_at": prepared_at,
+        "capability_issued_at": prepared_at,
+        "capability_hash": hashlib.sha256(token.encode("ascii")).digest(),
+        "timezone": timezone,
+        "remind_at": now + timedelta(days=1),
+    }
+    values.update(changes)
+    if values["state"] in {"cancelled", "expired", "failed"}:
+        values.setdefault("finished_at", now)
+    action = await _insert_agent_action(pool, user_id, 1, request_id, **values)
+    arguments = ReminderArguments(
+        text=action["text"],
+        remind_at=action["remind_at"].astimezone(ZoneInfo(timezone)),
+    )
+    return action, arguments, {"action_id": str(action["id"]), "capability": token}
+
+
+async def test_reminder_repository_concurrent_confirmation_and_restart_receipt(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        action, arguments, context = await _confirmed_reminder(pool, 101)
+        repository = ReminderRepository(pool)
+        first, second = await asyncio.gather(
+            repository.add_reminder(arguments, context), repository.add_reminder(arguments, context)
+        )
+        assert first.root.status == second.root.status == "ok"
+        assert first.root.reminder_id == second.root.reminder_id
+        assert sorted([first.root.created, second.root.created]) == [False, True]
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE status='OK'") == 2
+        assert (
+            await pool.fetchval(
+                "SELECT receipt_reminder_id FROM labbi_actions WHERE id=$1", action["id"]
+            )
+            == first.root.reminder_id
+        )
+        # A completed receipt survives expired TTL and a changed zone/epoch.
+        await pool.execute(
+            "UPDATE labbi_actions SET prepared_at=prepared_at-INTERVAL '1 hour', "
+            "expires_at=expires_at-INTERVAL '1 hour', approved_at=approved_at-INTERVAL '1 hour', "
+            "capability_issued_at=capability_issued_at-INTERVAL '1 hour' WHERE id=$1",
+            action["id"],
+        )
+        await pool.execute(
+            "UPDATE labbi_users SET timezone='Asia/Tokyo', confirmation_epoch=9 WHERE user_id=101"
+        )
+        await pool.close()
+        pool = await create_pool(settings)
+        repeated = await ReminderRepository(pool).add_reminder(arguments, context)
+        assert repeated.root.status == "ok" and not repeated.root.created
+        assert repeated.root.reminder_id == first.root.reminder_id
+        assert repeated.root.timezone == "Europe/Moscow"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        audit = await pool.fetch("SELECT argument_summary, reason FROM labbi_agent_events")
+        assert all(context["capability"] not in str(dict(row)) for row in audit)
+        assert all(arguments.text not in str(dict(row)) for row in audit)
+        denied = await ReminderRepository(pool).add_reminder(
+            arguments, {**context, "capability": secrets.token_urlsafe(32)}
+        )
+        assert denied.root.error.code == "UNAUTHORIZED"
+
+        # A historical committed result is also readable after remind_at itself.
+        now = await pool.fetchval("SELECT clock_timestamp()")
+        old_action, old_arguments, old_context = await _confirmed_reminder(
+            pool,
+            202,
+            prepared_at=now - timedelta(hours=2),
+            remind_at=now - timedelta(hours=1),
+        )
+        async with pool.acquire() as connection, connection.transaction():
+            old_receipt = await connection.fetchval(
+                "INSERT INTO labbi_reminders(user_id, action_id, text, remind_at, timezone) "
+                "VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                old_action["user_id"],
+                old_action["id"],
+                old_action["text"],
+                old_action["remind_at"],
+                old_action["timezone"],
+            )
+            await connection.execute(
+                "UPDATE labbi_actions SET state='committed', receipt_reminder_id=$2, "
+                "finished_at=$3 WHERE id=$1",
+                old_action["id"],
+                old_receipt,
+                old_action["prepared_at"] + timedelta(seconds=1),
+            )
+        old_result = await ReminderRepository(pool).add_reminder(old_arguments, old_context)
+        assert old_result.root.status == "ok" and not old_result.root.created
+        assert old_result.root.reminder_id == old_receipt
+    finally:
+        await pool.close()
+
+
+async def test_reminder_repository_rejects_unauthorized_stale_or_changed_actions(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repository = ReminderRepository(pool)
+        now = await pool.fetchval("SELECT clock_timestamp()")
+        action, arguments, context = await _confirmed_reminder(pool, 101)
+        checks = [
+            (arguments, None, "UNAUTHORIZED"),
+            (arguments, {**context, "capability": secrets.token_urlsafe(32)}, "UNAUTHORIZED"),
+            (arguments, {**context, "action_id": str(uuid4())}, "UNAUTHORIZED"),
+            (arguments, {**context, "user_id": 202}, "UNAUTHORIZED"),
+            (
+                ReminderArguments(text="Другой текст", remind_at=arguments.remind_at),
+                context,
+                "ACTION_CONFLICT",
+            ),
+            (
+                ReminderArguments(
+                    text=arguments.text, remind_at=arguments.remind_at + timedelta(hours=1)
+                ),
+                context,
+                "ACTION_CONFLICT",
+            ),
+            (
+                ReminderArguments(
+                    text=arguments.text, remind_at=arguments.remind_at.astimezone(UTC)
+                ),
+                context,
+                "INVALID_ARGUMENTS",
+            ),
+        ]
+        for requested, supplied, expected_code in checks:
+            result = await repository.add_reminder(requested, supplied)
+            assert result.root.status == "error" and result.root.error.code == expected_code
+        await pool.execute("UPDATE labbi_users SET confirmation_epoch=1 WHERE user_id=101")
+        result = await repository.add_reminder(arguments, context)
+        assert result.root.error.code == "ACTION_CANCELLED"
+        await pool.execute(
+            "UPDATE labbi_users SET confirmation_epoch=0, timezone=NULL WHERE user_id=101"
+        )
+        result = await repository.add_reminder(arguments, context)
+        assert result.root.error.code == "TIMEZONE_REQUIRED"
+        await pool.execute("UPDATE labbi_users SET timezone='Asia/Tokyo' WHERE user_id=101")
+        result = await repository.add_reminder(arguments, context)
+        assert result.root.error.code == "ACTION_CONFLICT"
+
+        for user_id, state, expected_code in (
+            (202, "cancelled", "ACTION_CANCELLED"),
+            (303, "expired", "ACTION_EXPIRED"),
+            (404, "failed", "ACTION_CONFLICT"),
+        ):
+            _, requested, supplied = await _confirmed_reminder(pool, user_id, state=state)
+            result = await repository.add_reminder(requested, supplied)
+            assert result.root.error.code == expected_code
+        expired, requested, supplied = await _confirmed_reminder(
+            pool, 505, prepared_at=now - timedelta(minutes=10)
+        )
+        result = await repository.add_reminder(requested, supplied)
+        assert result.root.error.code == "ACTION_EXPIRED"
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_actions WHERE id=$1", expired["id"])
+            == "expired"
+        )
+        _, requested, supplied = await _confirmed_reminder(
+            pool, 606, remind_at=now - timedelta(seconds=1)
+        )
+        result = await repository.add_reminder(requested, supplied)
+        assert result.root.error.code == "INVALID_ARGUMENTS"
+        await pool.execute(
+            "UPDATE labbi_actions SET timezone='Unknown/Zone' WHERE id=$1", action["id"]
+        )
+        result = await repository.add_reminder(arguments, context)
+        assert result.root.error.code == "INVALID_ARGUMENTS"
+        _, requested, supplied = await _confirmed_reminder(
+            pool,
+            707,
+            state="pending",
+            approved_at=None,
+            capability_issued_at=None,
+            capability_hash=None,
+        )
+        result = await repository.add_reminder(requested, supplied)
+        assert result.root.error.code == "UNAUTHORIZED"
+        _, requested, supplied = await _confirmed_reminder(pool, 808)
+        result = await repository.add_reminder(
+            requested, {**supplied, "capability": context["capability"]}
+        )
+        assert result.root.error.code == "UNAUTHORIZED"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+    finally:
+        await pool.close()
+
+
+async def test_reminder_repository_unknown_commit_ack_recovers_same_action(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+
+    class LostCommitConnection:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        @asynccontextmanager
+        async def transaction(self):
+            async with self.connection.transaction():
+                yield
+            # A real commit succeeded, but its acknowledgement was lost in transport.
+            raise asyncpg.ConnectionDoesNotExistError("private lost commit acknowledgement")
+
+    class LostCommitPool:
+        @asynccontextmanager
+        async def acquire(self):
+            async with pool.acquire() as connection:
+                yield LostCommitConnection(connection)
+
+    try:
+        await migrate(pool)
+        action, arguments, context = await _confirmed_reminder(pool, 101)
+        result = await ReminderRepository(LostCommitPool()).add_reminder(arguments, context)
+        assert result.root.status == "error" and result.root.error.code == "OUTCOME_UNKNOWN"
+        assert "private" not in result.model_dump_json()
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        receipt = await pool.fetchval(
+            "SELECT receipt_reminder_id FROM labbi_actions WHERE id=$1", action["id"]
+        )
+        recovered = await ReminderRepository(pool).add_reminder(arguments, context)
+        assert recovered.root.status == "ok" and not recovered.root.created
+        assert recovered.root.reminder_id == receipt
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+    finally:
+        await pool.close()
+
+
+async def test_independent_stdio_client_commits_confirmed_reminder_in_real_postgres(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    mcp_settings = MCPSettings(
+        postgres_host=settings.postgres_host,
+        postgres_port=settings.postgres_port,
+        postgres_db=settings.postgres_db,
+        postgres_user=settings.postgres_user,
+        postgres_password=settings.postgres_password,
+        schedule_file=str(ROOT / "data" / "schedule.json"),
+    )
+    parameters = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "app.mcp.server"],
+        cwd=ROOT,
+        env=mcp_settings.environment(),
+    )
+
+    async def database_pids():
+        return {
+            row["pid"]
+            for row in await pool.fetch(
+                "SELECT pid FROM pg_stat_activity WHERE datname=$1", settings.postgres_db
+            )
+        }
+
+    try:
+        await migrate(pool)
+        action, arguments, context = await _confirmed_reminder(pool, 101)
+        initial_pids = await database_pids()
+        async with asyncio.timeout(25):
+            async with Client(parameters, read_timeout_seconds=10) as client:
+                tools = {tool.name for tool in (await client.list_tools()).tools}
+                resources = {resource.uri for resource in (await client.list_resources()).resources}
+                assert tools == {"get_weather", "get_schedule", "add_reminder"}
+                assert resources == {"schedule://current-week"}
+                raw_arguments = arguments.model_dump(mode="json")
+                denied = await client.call_tool("add_reminder", raw_arguments)
+                assert denied.is_error
+                assert denied.structured_content["error"]["code"] == "UNAUTHORIZED"
+                assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+                first = await client.call_tool(
+                    "add_reminder", raw_arguments, meta={"labbi/action-capability": context}
+                )
+                second = await client.call_tool(
+                    "add_reminder", raw_arguments, meta={"labbi/action-capability": context}
+                )
+                assert not first.is_error and not second.is_error
+                created = ReminderResult.model_validate(first.structured_content).root
+                repeated = ReminderResult.model_validate(second.structured_content).root
+                assert created.status == repeated.status == "ok"
+                assert created.created and not repeated.created
+                assert created.reminder_id == repeated.reminder_id
+                assert context["capability"] not in first.model_dump_json()
+                child_pids = await database_pids() - initial_pids
+                assert child_pids
+        # Closing the independent stdio process releases its own database pool.
+        assert child_pids.isdisjoint(await database_pids())
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        assert (
+            await pool.fetchval(
+                "SELECT receipt_reminder_id FROM labbi_actions WHERE id=$1", action["id"]
+            )
+            == created.reminder_id
+        )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE status='OK'") == 2
+    finally:
+        await pool.close()
+
+
+async def test_reminder_repository_rolls_back_write_when_audit_fails(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        action, arguments, context = await _confirmed_reminder(pool, 101)
+        await pool.execute(
+            "CREATE FUNCTION reject_reminder_audit() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "BEGIN RAISE EXCEPTION 'private injected diagnostics'; END $$; "
+            "CREATE TRIGGER reject_reminder_audit BEFORE INSERT ON labbi_agent_events "
+            "FOR EACH ROW EXECUTE FUNCTION reject_reminder_audit()"
+        )
+        result = await ReminderRepository(pool).add_reminder(arguments, context)
+        assert result.root.status == "error" and result.root.error.code == "SOURCE_UNAVAILABLE"
+        assert "private" not in result.model_dump_json()
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        row = await pool.fetchrow(
+            "SELECT state, receipt_reminder_id FROM labbi_actions WHERE id=$1", action["id"]
+        )
+        assert dict(row) == {"state": "approved", "receipt_reminder_id": None}
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 0
     finally:
         await pool.close()

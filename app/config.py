@@ -15,6 +15,108 @@ class ConfigError(ValueError):
     """Ошибка настройки без секретных значений в сообщении."""
 
 
+def _schedule_values(values: Mapping[str, str | None]) -> tuple[str, str]:
+    path = values.get("SCHEDULE_FILE", "data/schedule.json")
+    try:
+        if (
+            not isinstance(path, str)
+            or not path.strip()
+            or any(ord(character) < 32 or ord(character) == 127 for character in path)
+        ):
+            raise ValueError
+        windows_drive = (
+            len(path) >= 3
+            and path[0].isascii()
+            and path[0].isalpha()
+            and path[1] == ":"
+            and path[2] in {"/", "\\"}
+        )
+        if urlsplit(path).scheme and not windows_drive:
+            raise ValueError
+    except ValueError:
+        raise ConfigError(
+            "SCHEDULE_FILE: нужен непустой локальный путь без URI и управляющих символов."
+        ) from None
+    zone = values.get("SCHEDULE_TIMEZONE", "Europe/Moscow")
+    try:
+        if (
+            not isinstance(zone, str)
+            or not zone
+            or zone in {"localtime", "posixrules"}
+            or zone.startswith(("posix/", "right/"))
+        ):
+            raise ValueError
+        ZoneInfo(zone)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise ConfigError(
+            "SCHEDULE_TIMEZONE: укажите существующую IANA-зону, например Europe/Moscow."
+        ) from None
+    return path, zone
+
+
+@dataclass(frozen=True)
+class MCPSettings:
+    """Минимальные настройки сервера без Telegram и OpenRouter-секретов.
+
+    По умолчанию читается только окружение процесса, не корневой .env бота.
+    Отдельный env-файл допускается для независимого локального клиента.
+    """
+
+    postgres_password: str = field(default="", repr=False)
+    postgres_host: str = "127.0.0.1"
+    postgres_port: int = 5432
+    postgres_db: str = "bot"
+    postgres_user: str = "bot"
+    schedule_file: str = field(default="data/schedule.json", repr=False)
+    schedule_timezone: str = "Europe/Moscow"
+    mcp_timeout_seconds: int = 15
+
+    @classmethod
+    def load(
+        cls,
+        env_file: Path | str | None = None,
+        *,
+        environ: Mapping[str, str] | None = None,
+    ) -> "MCPSettings":
+        values = {
+            **(dotenv_values(env_file, interpolate=False) if env_file is not None else {}),
+            **(os.environ if environ is None else environ),
+        }
+        path, zone = _schedule_values(values)
+        try:
+            port = int(values.get("POSTGRES_PORT") or "5432")
+            timeout = int(values.get("MCP_TIMEOUT_SECONDS") or "15")
+            if not 1 <= port <= 65535 or not 1 <= timeout <= 60:
+                raise ValueError
+        except ValueError:
+            raise ConfigError(
+                "POSTGRES_PORT/MCP_TIMEOUT_SECONDS: нужны порт 1–65535 и тайм-аут 1–60 секунд."
+            ) from None
+        return cls(
+            postgres_password=values.get("POSTGRES_PASSWORD") or "",
+            postgres_host=values.get("POSTGRES_HOST") or "127.0.0.1",
+            postgres_port=port,
+            postgres_db=values.get("POSTGRES_DB") or "bot",
+            postgres_user=values.get("POSTGRES_USER") or "bot",
+            schedule_file=path,
+            schedule_timezone=zone,
+            mcp_timeout_seconds=timeout,
+        )
+
+    def environment(self) -> dict[str, str]:
+        """Явный allowlist для дочернего процесса; произвольный env не копируется."""
+        return {
+            "POSTGRES_HOST": self.postgres_host,
+            "POSTGRES_PORT": str(self.postgres_port),
+            "POSTGRES_DB": self.postgres_db,
+            "POSTGRES_USER": self.postgres_user,
+            "POSTGRES_PASSWORD": self.postgres_password,
+            "SCHEDULE_FILE": self.schedule_file,
+            "SCHEDULE_TIMEZONE": self.schedule_timezone,
+            "MCP_TIMEOUT_SECONDS": str(self.mcp_timeout_seconds),
+        }
+
+
 @dataclass(frozen=True)
 class Settings:
     bot_token: str = field(repr=False)
@@ -114,42 +216,7 @@ class Settings:
         message_limit = number("HISTORY_MAX_MESSAGES", "20", 4, 200)
         if message_limit % 2:
             raise ConfigError("HISTORY_MAX_MESSAGES: нужно чётное число для целых пар диалога.")
-        schedule_file = values.get("SCHEDULE_FILE", "data/schedule.json")
-        try:
-            if (
-                not isinstance(schedule_file, str)
-                or not schedule_file.strip()
-                or any(ord(character) < 32 or ord(character) == 127 for character in schedule_file)
-            ):
-                raise ValueError
-            # На Windows буква диска не является схемой URI.
-            windows_drive = (
-                len(schedule_file) >= 3
-                and schedule_file[0].isascii()
-                and schedule_file[0].isalpha()
-                and schedule_file[1] == ":"
-                and schedule_file[2] in {"/", "\\"}
-            )
-            if urlsplit(schedule_file).scheme and not windows_drive:
-                raise ValueError
-        except ValueError:
-            raise ConfigError(
-                "SCHEDULE_FILE: нужен непустой локальный путь без URI и управляющих символов."
-            ) from None
-        schedule_timezone = values.get("SCHEDULE_TIMEZONE", "Europe/Moscow")
-        try:
-            if (
-                not isinstance(schedule_timezone, str)
-                or not schedule_timezone
-                or schedule_timezone in {"localtime", "posixrules"}
-                or schedule_timezone.startswith(("posix/", "right/"))
-            ):
-                raise ValueError
-            ZoneInfo(schedule_timezone)
-        except (ValueError, ZoneInfoNotFoundError):
-            raise ConfigError(
-                "SCHEDULE_TIMEZONE: укажите существующую IANA-зону, например Europe/Moscow."
-            ) from None
+        schedule_file, schedule_timezone = _schedule_values(values)
         llm_tool_mode = values.get("LLM_TOOL_MODE", "native")
         if llm_tool_mode not in {"native", "structured"}:
             raise ConfigError("LLM_TOOL_MODE: используйте native или structured.")

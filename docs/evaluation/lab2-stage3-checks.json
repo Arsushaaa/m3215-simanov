@@ -1,0 +1,101 @@
+{
+  "recorded_at": "2026-10-18T12:24:13.558379+00:00",
+  "python_version": "3.12.15",
+  "dependency_versions": {
+    "mcp": "2.3.0",
+    "pydantic": "2.13.5",
+    "jsonschema": "4.26.0",
+    "tzdata": "2026.5",
+    "aiogram": "3.31.0"
+  },
+  "scope": "Stage 3 standalone MCP stdio server and adapters. PostgreSQL integration uses isolated test containers and identities. No production Telegram, OpenRouter or weather HTTP requests. Telegram agent and confirmation UI remain future stages.",
+  "checks": [
+    {
+      "command": "python -m pip check",
+      "exit_code": 0,
+      "stdout": "No broken requirements found.",
+      "stderr": ""
+    },
+    {
+      "command": "python -m ruff check .",
+      "exit_code": 0,
+      "stdout": "All checks passed!",
+      "stderr": ""
+    },
+    {
+      "command": "python -m ruff format --check .",
+      "exit_code": 0,
+      "stdout": "67 files already formatted",
+      "stderr": ""
+    },
+    {
+      "command": "RUN_INTEGRATION=1 python -m pytest -q -o faulthandler_timeout=30",
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 14%]\n........................................................................ [ 29%]\n........................................................................ [ 44%]\n........................................................................ [ 58%]\n........................................................................ [ 73%]\n........................................................................ [ 88%]\n..........................................................               [100%]\n490 passed in 29.32s",
+      "stderr": ""
+    }
+  ],
+  "independent_probe": "lab2-stage3-probe.json",
+  "postgres_stdio_acceptance": {
+    "test": "tests/test_integration.py::test_independent_stdio_client_commits_confirmed_reminder_in_real_postgres",
+    "transport": "stdio",
+    "cases": [
+      "discovery",
+      "unauthorized write rejected",
+      "approved capability write committed",
+      "repeat returns same reminder ID without duplicate",
+      "child database pool closes"
+    ]
+  },
+  "postgres_failure_cases": [
+    "concurrent confirmations produce one reminder",
+    "changed arguments/capability/epoch/timezone rejected",
+    "audit failure rolls back write",
+    "lost COMMIT acknowledgement gives OUTCOME_UNKNOWN and same-action replay recovers receipt"
+  ],
+  "docker_verification": {
+    "build_command": "docker build -t labbi-stage3-check:local .",
+    "build_exit_code": 0,
+    "container_uid": 10001,
+    "container_network": "none",
+    "installed_mcp": "2.3.0",
+    "packaged_migrations": 6,
+    "packaged_data": [
+      "data/schedule.json"
+    ],
+    "transport": "stdio",
+    "discovered_tools": [
+      "add_reminder",
+      "get_schedule",
+      "get_weather"
+    ],
+    "resource": "schedule://current-week",
+    "schedule_status": "ok",
+    "week_days": 7,
+    "write_without_context": "UNAUTHORIZED",
+    "smoke_exit_code": 0
+  },
+  "source_checks": {
+    "applied_migrations_001_to_006_unchanged": true,
+    "migration_sha256": {
+      "001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+      "002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+      "003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+      "004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+      "005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771",
+      "006_agent_state.sql": "70ff420027af200a9eba7c83f63ca46a17fb0e97c2ec5576972be5859f241212"
+    },
+    "lab1_tag_commit": "2d10cf0b9b750b5dc9ce67b849d1c774b1413ff9",
+    "configured_secret_values_scan": "passed",
+    "documentation_links": "passed",
+    "real_llm_api_calls": 0,
+    "real_telegram_requests": 0,
+    "real_weather_requests": 0,
+    "checked_local_document_links": 39
+  },
+  "known_boundaries": [
+    "Weather adapter uses mocked upstream HTTP; no live Open-Meteo smoke was performed.",
+    "Reminder authorizations are seeded only by isolated test fixtures; Telegram preparation/confirmation and capability issuance are not implemented in stage 3.",
+    "MCP server does not send notifications at reminder time (LR3)."
+  ]
+}

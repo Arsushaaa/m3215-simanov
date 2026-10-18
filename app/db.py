@@ -1,9 +1,9 @@
 import asyncpg
 
-from app.config import Settings
+from app.config import MCPSettings, Settings
 
 
-async def create_pool(settings: Settings) -> asyncpg.Pool:
+async def create_pool(settings: Settings | MCPSettings) -> asyncpg.Pool:
     # HTTP-вызов LLM не удерживает соединение с БД: пул нужен только для коротких запросов.
     pool = await asyncpg.create_pool(
         host=settings.postgres_host,
