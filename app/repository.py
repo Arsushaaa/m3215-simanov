@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 import asyncpg
 
+from app.agent_repository import revoke_actions
+
 
 @dataclass(frozen=True)
 class UserSettings:
@@ -104,20 +106,24 @@ class DialogRepository:
         async with self.pool.acquire() as connection, connection.transaction():
             await connection.execute(
                 "UPDATE labbi_users SET mode=$2, revision=revision+1, updated_at=now(), "
-                "quiz_topic=NULL, quiz_question=0, quiz_finished=false "
+                "quiz_topic=NULL, quiz_question=0, quiz_finished=false, "
+                "confirmation_epoch=confirmation_epoch+1 "
                 "WHERE user_id=$1",
                 user_id,
                 mode,
             )
+            await revoke_actions(connection, user_id, "Смена режима отозвала подтверждение.")
             await connection.execute("DELETE FROM labbi_messages WHERE user_id=$1", user_id)
 
     async def reset(self, user_id: int) -> None:
         async with self.pool.acquire() as connection, connection.transaction():
             await connection.execute(
                 "UPDATE labbi_users SET revision=revision+1, updated_at=now(), "
-                "quiz_topic=NULL, quiz_question=0, quiz_finished=false WHERE user_id=$1",
+                "quiz_topic=NULL, quiz_question=0, quiz_finished=false, "
+                "confirmation_epoch=confirmation_epoch+1 WHERE user_id=$1",
                 user_id,
             )
+            await revoke_actions(connection, user_id, "Сброс диалога отозвал подтверждение.")
             await connection.execute("DELETE FROM labbi_messages WHERE user_id=$1", user_id)
 
     async def set_temperature(self, user_id: int, temperature: float) -> None:

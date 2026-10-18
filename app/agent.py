@@ -124,6 +124,7 @@ class _Trace:
     error_code: str | None = None
     llm_calls: int = 0
     mcp_calls: int = 0
+    argument_summary: str = ""
 
 
 class AgentService:
@@ -210,6 +211,7 @@ class AgentService:
                         llm_calls=trace.llm_calls,
                         mcp_calls=trace.mcp_calls,
                         duration_ms=round((time.monotonic() - started) * 1000),
+                        argument_summary=trace.argument_summary,
                     )
             except Exception as error:
                 logger.error("Аудит решения недоступен: %s", type(error).__name__)
@@ -233,7 +235,8 @@ class AgentService:
             "Напоминания только сохраняются, не рассылаются. add_reminder — предложение "
             "подтверждения, не разрешение записи. Не обещай, что напоминание сохранено. "
             "Не угадывай часовой пояс напоминания: используй только reminder_timezone; "
-            "если он null или время/текст неясны, задай уточнение."
+            "если он null, попроси задать /timezone с IANA-именем. "
+            "Если время или текст неясны, задай уточнение."
         )
         structured = self.settings.llm_tool_mode == "structured"
         schema = AgentDecision.model_json_schema() if structured else tools
@@ -310,6 +313,17 @@ class AgentService:
             trace.error_code = "INVALID_RESULT"
             raise ModelError("Решение модели оборвалось. Уточни запрос и попробуй снова.")
         trace.target = decision.uri if isinstance(decision, ResourceDecision) else decision.name
+        if isinstance(decision, ResourceDecision):
+            trace.argument_summary = "Текущая неделя расписания."
+        elif isinstance(decision, ReminderDecision):
+            trace.argument_summary = (
+                f"Время: {decision.arguments.remind_at.isoformat()}; "
+                f"зона: {timezone or 'не задана'}"
+            )
+        elif decision.name == "get_weather":
+            trace.argument_summary = "Город: " + " ".join(decision.arguments.city.split())
+        else:
+            trace.argument_summary = f"Дата: {decision.arguments.date.isoformat()}"
         if not self.mcp.available:
             trace.error_code = "MCP_UNAVAILABLE"
             raise ModelError(MCP_UNAVAILABLE)
@@ -322,8 +336,8 @@ class AgentService:
             trace.reason = "Для напоминания нужно подтверждение; запись не выполнялась."
             if timezone is None:
                 return AgentReply(
-                    "Сначала нужно сохранить часовой пояс. "
-                    "Подтверждение напоминаний пока недоступно."
+                    "Сначала задай свой часовой пояс: /timezone Europe/Moscow "
+                    "(пример для Москвы и Санкт-Петербурга)."
                 )
             try:
                 normalized = validate_reminder_time(decision.arguments, now=now, timezone=timezone)
@@ -335,8 +349,8 @@ class AgentService:
             )
             return AgentReply(
                 f"Параметры напоминания:\n{proposal.arguments.text}\n"
-                f"{normalized:%d.%m.%Y %H:%M} ({timezone}, UTC{normalized:%z}).\n\n"
-                "Напоминание не сохранено: подтверждение пока недоступно.",
+                f"{normalized.isoformat()} ({timezone}).\n\n"
+                "Напоминание не сохранено: требуется подтверждение.",
                 reminder=proposal,
             )
         try:

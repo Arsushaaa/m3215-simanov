@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from weakref import WeakValueDictionary
 
 from app.config import Settings
+from app.confirmation_models import ConfirmationError
 from app.essay import ESSAY_TOPIC_QUESTION, needs_essay_topic
 from app.llm import ModelError, OpenRouterClient
 from app.output_limits import check_output_size
@@ -60,10 +61,17 @@ def build_context(
 
 class DialogService:
     def __init__(
-        self, repository: DialogRepository, llm: OpenRouterClient, settings: Settings, *, agent=None
+        self,
+        repository: DialogRepository,
+        llm: OpenRouterClient,
+        settings: Settings,
+        *,
+        agent=None,
+        confirmations=None,
     ):
         self.repository, self.llm, self.settings = repository, llm, settings
         self.agent = agent
+        self.confirmations = confirmations
         self.locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
 
     def lock(self, user_id: int) -> asyncio.Lock:
@@ -151,6 +159,13 @@ class DialogService:
             )
         else:
             result = await self.llm.complete(messages, user.temperature)
+        if getattr(result, "reminder", None) is not None and self.confirmations is not None:
+            try:
+                card = await self.confirmations.prepare(user, message_id, text, result.reminder)
+            except ConfirmationError as error:
+                raise ModelError(error.user_message) from None
+            # prepare saves the action and exact user/card pair in one transaction.
+            return card.card_text
         answer = result.text
         if quiz:
             prefix = "Тренировка завершена." if quiz["quiz_finished"] else f"Вопрос {number}/5"
@@ -167,6 +182,54 @@ class DialogService:
         ):
             raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
         return answer
+
+    async def confirmation_card(self, user_id: int, message_id: int):
+        if self.confirmations is None:
+            return None
+        return await self.confirmations.repository.lookup_card(user_id, message_id)
+
+    async def confirm(self, user_id: int, action_id: str) -> str:
+        if self.confirmations is None:
+            return "Подтверждение напоминаний сейчас недоступно."
+        return await self.confirmations.confirm(user_id, action_id)
+
+    async def cancel_confirmation(self, user_id: int, action_id: str) -> str:
+        if self.confirmations is None:
+            return "Подтверждение напоминаний сейчас недоступно."
+        return await self.confirmations.cancel(user_id, action_id)
+
+    async def invalidate_confirmations(self, user_id: int) -> bool:
+        if self.confirmations is None:
+            return False
+        return await self.confirmations.invalidate(user_id)
+
+    async def timezone(self, user_id: int, argument: str | None = None) -> str:
+        if self.confirmations is None:
+            return "Настройка часового пояса сейчас недоступна."
+        await self.repository.user(user_id)
+        return await self.confirmations.timezone(user_id, argument)
+
+    async def why(self, user_id: int) -> str:
+        if self.confirmations is None:
+            return "Решений для объяснения пока нет."
+        return await self.confirmations.why(user_id)
+
+    async def tools(self) -> str:
+        mcp = self.agent.mcp if self.agent is not None else None
+        if mcp is None or not mcp.available:
+            return "Инструменты сейчас недоступны. Обычные вопросы по-прежнему доступны."
+        lines = ["Возможности режима /study:"]
+        for name, metadata in mcp.tools.items():
+            kind = (
+                "чтение"
+                if metadata.get("annotations", {}).get("readOnlyHint") is True
+                else "изменение после подтверждения"
+            )
+            lines.append(f"{name} ({kind}) — {metadata['description']}")
+        for uri, metadata in mcp.resources.items():
+            lines.append(f"{uri} (чтение) — {metadata['description']}")
+        lines.append("Напоминания сохраняются; отправка по времени пока не выполняется.")
+        return "\n".join(lines)
 
     async def mode(self, user_id: int, mode: str) -> str:
         await self.repository.user(user_id)

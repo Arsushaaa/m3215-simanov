@@ -5,8 +5,9 @@ import logging
 from aiogram import Dispatcher
 
 from app.agent import AgentService
-from app.agent_repository import AgentRepository
+from app.agent_repository import AgentRepository, ConfirmationRepository
 from app.config import ConfigError, Settings
+from app.confirmations import ConfirmationService
 from app.db import create_pool
 from app.dialog import DialogService
 from app.handlers.assistant import create_router
@@ -46,7 +47,10 @@ async def run(settings: Settings) -> None:
         mcp = MCPClient(settings)
         await mcp.start()
         agent = AgentService(llm, mcp, AgentRepository(state.pool), settings)
-        dialog = DialogService(DialogRepository(state.pool), llm, settings, agent=agent)
+        confirmations = ConfirmationService(ConfirmationRepository(state.pool), mcp)
+        dialog = DialogService(
+            DialogRepository(state.pool), llm, settings, agent=agent, confirmations=confirmations
+        )
         dispatcher = Dispatcher()
         dispatcher.include_router(create_router())
         runner = await start_health_server(state, settings.health_port)

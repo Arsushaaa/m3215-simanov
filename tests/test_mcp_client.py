@@ -23,6 +23,18 @@ DAY = {
     "lessons": [],
     "source": "local_schedule",
 }
+REMINDER_ARGUMENTS = {"text": "Отправить отчёт", "remind_at": "2030-01-01T10:00:00+03:00"}
+ACTION_CONTEXT = {
+    "action_id": "a1cf8b47-b6fb-4e95-9931-b21dd239b782",
+    "capability": "a" * 43,
+}
+REMINDER_RECEIPT = {
+    "status": "ok",
+    "reminder_id": "f4b780fd-4c99-42be-8cab-30ffb8502f5e",
+    "remind_at": REMINDER_ARGUMENTS["remind_at"],
+    "timezone": "Europe/Moscow",
+    "created": True,
+}
 
 
 def tool_result(value, *, is_error=False):
@@ -429,3 +441,145 @@ async def test_real_stdio_start_and_close_from_different_tasks(bot_settings):
         finally:
             await asyncio.create_task(client.close())
     assert not client.available
+
+
+async def test_confirmed_write_sends_capability_only_in_trusted_metadata(setup_client):
+    client, sdk, _ = setup_client
+    sdk.call_tool.return_value = tool_result(REMINDER_RECEIPT)
+    await client.start()
+    try:
+        assert (
+            await client.call_tool(
+                "add_reminder", REMINDER_ARGUMENTS, action_context=ACTION_CONTEXT
+            )
+            == REMINDER_RECEIPT
+        )
+        sdk.call_tool.assert_awaited_once_with(
+            "add_reminder",
+            REMINDER_ARGUMENTS,
+            meta={"labbi/action-capability": ACTION_CONTEXT},
+            allow_input_required=True,
+        )
+        assert set(sdk.call_tool.call_args.args[1]) == {"text", "remind_at"}
+        assert "capability" not in json.dumps(REMINDER_RECEIPT)
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        None,
+        {},
+        {**ACTION_CONTEXT, "user_id": 42},
+        {**ACTION_CONTEXT, "action_id": "invalid"},
+        {**ACTION_CONTEXT, "capability": "a" * 42},
+        {**ACTION_CONTEXT, "capability": "я" * 43},
+    ],
+)
+async def test_invalid_write_context_is_refused_before_sdk(setup_client, context):
+    client, sdk, _ = setup_client
+    await client.start()
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool("add_reminder", REMINDER_ARGUMENTS, action_context=context)
+        assert error.value.code == "UNAUTHORIZED"
+        sdk.call_tool.assert_not_awaited()
+    finally:
+        await client.close()
+
+
+async def test_owner_in_model_arguments_or_metadata_on_read_is_not_permitted(setup_client):
+    client, sdk, _ = setup_client
+    await client.start()
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool(
+                "add_reminder", {**REMINDER_ARGUMENTS, "user_id": 42}, action_context=ACTION_CONTEXT
+            )
+        assert error.value.code == "INVALID_ARGUMENTS"
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool(
+                "get_schedule", {"date": "2026-10-18"}, action_context=ACTION_CONTEXT
+            )
+        assert error.value.code == "INVALID_ARGUMENTS"
+        sdk.call_tool.assert_not_awaited()
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        MCPError(types.REQUEST_TIMEOUT, "SECRET"),
+        MCPError(types.HEADER_MISMATCH, "SECRET"),
+        RuntimeError("SECRET protocol failure"),
+    ],
+)
+async def test_write_transport_failure_reports_unknown_outcome_without_retry(
+    setup_client, failure, caplog
+):
+    client, sdk, _ = setup_client
+    sdk.call_tool.side_effect = failure
+    await client.start()
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool(
+                "add_reminder", REMINDER_ARGUMENTS, action_context=ACTION_CONTEXT
+            )
+        assert error.value.code == "OUTCOME_UNKNOWN"
+        assert "SECRET" not in error.value.user_message
+        assert ACTION_CONTEXT["capability"] not in caplog.text
+        sdk.call_tool.assert_awaited_once()
+        sdk.list_tools.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+async def test_write_outer_timeout_is_unknown_and_does_not_retry(setup_client):
+    client, sdk, _ = setup_client
+    await client.start()
+    client.settings = replace(client.settings, mcp_timeout_seconds=0.02)
+
+    async def waiting(*_args, **_kwargs):
+        await asyncio.Event().wait()
+
+    sdk.call_tool.side_effect = waiting
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool(
+                "add_reminder", REMINDER_ARGUMENTS, action_context=ACTION_CONTEXT
+            )
+        assert error.value.code == "OUTCOME_UNKNOWN"
+        assert client.available
+        sdk.call_tool.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+async def test_malformed_write_receipt_is_unknown_not_false_rollback(setup_client):
+    client, sdk, _ = setup_client
+    sdk.call_tool.return_value = tool_result({"status": "ok", "untrusted": "SECRET"})
+    await client.start()
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool(
+                "add_reminder", REMINDER_ARGUMENTS, action_context=ACTION_CONTEXT
+            )
+        assert error.value.code == "OUTCOME_UNKNOWN"
+        assert "SECRET" not in error.value.user_message
+        sdk.call_tool.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+async def test_operation_repr_cannot_expose_authorization_or_reminder_text():
+    operation = module._Operation(
+        "tools/call",
+        "add_reminder",
+        {"text": "SECRET reminder"},
+        asyncio.get_running_loop().create_future(),
+        action_context=ACTION_CONTEXT,
+    )
+    assert "SECRET" not in repr(operation)
+    assert ACTION_CONTEXT["capability"] not in repr(operation)

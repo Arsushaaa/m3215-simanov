@@ -9,7 +9,7 @@ import json
 import logging
 import sys
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -18,6 +18,7 @@ from mcp import Client, StdioServerParameters, types
 from mcp.shared.exceptions import MCPError
 from pydantic import ValidationError
 
+from app.agent_repository import valid_capability_context
 from app.config import MCPSettings, Settings
 from app.mcp.contracts import (
     ReminderArguments,
@@ -98,9 +99,14 @@ def _unique_keys(pairs):
 class _Operation:
     method: str
     target: str
-    arguments: dict | None
-    future: asyncio.Future
-    task: asyncio.Task | None = None
+    arguments: dict | None = field(repr=False)
+    future: asyncio.Future = field(repr=False)
+    task: asyncio.Task | None = field(default=None, repr=False)
+    action_context: dict | None = field(default=None, repr=False)
+
+    @property
+    def writing(self) -> bool:
+        return self.method == "tools/call" and self.target == "add_reminder"
 
 
 class MCPClient:
@@ -282,8 +288,16 @@ class MCPClient:
     async def _execute(self, sdk, operation: _Operation) -> None:
         try:
             if operation.method == "tools/call":
+                metadata = (
+                    {"meta": {"labbi/action-capability": operation.action_context}}
+                    if operation.action_context is not None
+                    else {}
+                )
                 result = await sdk.session.call_tool(
-                    operation.target, operation.arguments, allow_input_required=True
+                    operation.target,
+                    operation.arguments,
+                    allow_input_required=True,
+                    **metadata,
                 )
                 value = self._tool_value(operation.target, result)
             else:
@@ -293,7 +307,9 @@ class MCPClient:
                 value = self._resource_value(result)
         except asyncio.CancelledError:
             if not operation.future.done():
-                operation.future.set_exception(MCPClientError("MCP_UNAVAILABLE"))
+                operation.future.set_exception(
+                    MCPClientError("OUTCOME_UNKNOWN" if operation.writing else "MCP_UNAVAILABLE")
+                )
             raise
         except MCPClientError as exc:
             if not operation.future.done():
@@ -306,19 +322,27 @@ class MCPClient:
                 -32002: "SOURCE_UNAVAILABLE",
             }
             code = codes.get(exc.code, "MCP_UNAVAILABLE")
-            if code == "MCP_UNAVAILABLE":
+            if operation.writing and code in {"TIMEOUT", "MCP_UNAVAILABLE"}:
+                code = "OUTCOME_UNKNOWN"
+            if code == "MCP_UNAVAILABLE" or (
+                code == "OUTCOME_UNKNOWN" and exc.code != types.REQUEST_TIMEOUT
+            ):
                 self._invalidate()
                 self._queue.put_nowait(None)
             if not operation.future.done():
                 operation.future.set_exception(MCPClientError(code))
         except (ValidationError, SchemaError, ValueError, TypeError, RuntimeError, RecursionError):
             if not operation.future.done():
-                operation.future.set_exception(MCPClientError("INVALID_RESULT"))
+                operation.future.set_exception(
+                    MCPClientError("OUTCOME_UNKNOWN" if operation.writing else "INVALID_RESULT")
+                )
         except Exception:
             self._invalidate()
             self._queue.put_nowait(None)
             if not operation.future.done():
-                operation.future.set_exception(MCPClientError("MCP_UNAVAILABLE"))
+                operation.future.set_exception(
+                    MCPClientError("OUTCOME_UNKNOWN" if operation.writing else "MCP_UNAVAILABLE")
+                )
         else:
             if not operation.future.done():
                 operation.future.set_result(value)
@@ -354,24 +378,36 @@ class MCPClient:
             raise MCPClientError(value["error"]["code"])
         return value
 
-    async def _request(self, method: str, target: str, arguments: dict | None = None) -> dict:
+    async def _request(
+        self,
+        method: str,
+        target: str,
+        arguments: dict | None = None,
+        *,
+        action_context: dict | None = None,
+    ) -> dict:
         if not self.available or self._closing:
             raise MCPClientError("MCP_UNAVAILABLE")
         future = asyncio.get_running_loop().create_future()
-        operation = _Operation(method, target, arguments, future)
+        operation = _Operation(method, target, arguments, future, action_context=action_context)
         self._queue.put_nowait(operation)
         try:
             async with asyncio.timeout(self.settings.mcp_timeout_seconds):
                 return await future
         except TimeoutError:
-            raise MCPClientError("TIMEOUT") from None
+            raise MCPClientError("OUTCOME_UNKNOWN" if operation.writing else "TIMEOUT") from None
         finally:
             if future.cancelled() and operation.task is not None:
                 operation.task.cancel()
 
-    async def call_tool(self, name: str, args: dict) -> dict:
+    async def call_tool(self, name: str, args: dict, *, action_context: dict | None = None) -> dict:
         if name not in MODELS:
             raise MCPClientError("UNKNOWN_TOOL")
+        if name == "add_reminder":
+            if not valid_capability_context(action_context):
+                raise MCPClientError("UNAUTHORIZED")
+        elif action_context is not None:
+            raise MCPClientError("INVALID_ARGUMENTS")
         if not self.available:
             raise MCPClientError("MCP_UNAVAILABLE")
         try:
@@ -380,7 +416,9 @@ class MCPClient:
             self._validators[name][0].validate(arguments)
         except (ValidationError, SchemaError, ValueError, TypeError, RecursionError):
             raise MCPClientError("INVALID_ARGUMENTS") from None
-        return await self._request("tools/call", name, arguments)
+        return await self._request(
+            "tools/call", name, arguments, action_context=deepcopy(action_context)
+        )
 
     async def read_resource(self, uri: str) -> dict:
         if uri != WEEK_URI:

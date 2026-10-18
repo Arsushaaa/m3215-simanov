@@ -125,6 +125,9 @@ async def test_read_uses_two_models_one_mcp_and_final_disables_tools(setup_agent
         assert "tools" not in llm.complete.call_args.kwargs
     assert repo.record.call_args.kwargs["llm_calls"] == 2
     assert repo.record.call_args.kwargs["mcp_calls"] == 1
+    assert repo.record.call_args.kwargs["argument_summary"] == (
+        "Текущая неделя расписания." if resource else "Дата: 2026-10-12"
+    )
 
 
 async def test_clarification_needs_no_tool_or_final_model(setup_agent):
@@ -208,7 +211,7 @@ async def test_reminder_is_only_a_proposal_without_mcp_or_second_model(setup_age
     )
     reply = await ask(agent)
     assert reply.reminder is not None if timezone else reply.reminder is None
-    assert "пока недоступно" in reply.text
+    assert "требуется подтверждение" in reply.text if timezone else "/timezone" in reply.text
     mcp.call_tool.assert_not_awaited()
     llm.complete.assert_not_awaited()
     assert repo.record.call_args.kwargs["mcp_calls"] == 0

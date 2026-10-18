@@ -25,8 +25,10 @@ import pytest
 from mcp import Client, StdioServerParameters
 
 from app.agent import AgentService
-from app.agent_repository import AgentRepository, ReminderRepository
+from app.agent_repository import AgentRepository, ConfirmationRepository, ReminderRepository
 from app.config import MCPSettings, Settings
+from app.confirmation_models import Authorization, ConfirmationError, Outcome
+from app.confirmations import ConfirmationService
 from app.db import create_pool
 from app.dialog import DialogService
 from app.health import HealthState, health_result
@@ -338,7 +340,7 @@ async def test_agent_migration_upgrades_lab1_and_preserves_history_and_registry(
             "UPDATE labbi_users SET timezone='Europe/Moscow', confirmation_epoch=1 "
             "WHERE user_id=202"
         )
-        # LR1 reset/mode SQL deletes only history. Ledger and settings survive it.
+        # Reset/mode preserve the ledger and zone while revoking the confirmation epoch.
         await repository.reset(202)
         await repository.change_mode(202, "translate")
         await pool.close()
@@ -356,7 +358,11 @@ async def test_agent_migration_upgrades_lab1_and_preserves_history_and_registry(
             await pool.fetchrow(
                 "SELECT timezone, confirmation_epoch FROM labbi_users WHERE user_id=202"
             )
-        ) == {"timezone": "Europe/Moscow", "confirmation_epoch": 1}
+        ) == {"timezone": "Europe/Moscow", "confirmation_epoch": 3}
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_actions WHERE id=$1", action["id"])
+            == "cancelled"
+        )
     finally:
         await pool.close()
 
@@ -459,7 +465,7 @@ async def test_agent_database_ownership_concurrent_uniqueness_and_atomic_receipt
         )
         await repository.reset(101)
         assert await pool.fetchval("SELECT count(*) FROM labbi_reminders WHERE user_id=101") == 1
-        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE user_id=101") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE user_id=101") == 2
         assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE user_id=202") == 0
     finally:
         await pool.close()
@@ -1137,5 +1143,445 @@ async def test_reminder_repository_rolls_back_write_when_audit_fails(database):
         )
         assert dict(row) == {"state": "approved", "receipt_reminder_id": None}
         assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 0
+    finally:
+        await pool.close()
+
+
+async def _prepare_confirmation(pool, user_id, message_id=1, *, timezone="Europe/Moscow"):
+    dialog = DialogRepository(pool)
+    confirmations = ConfirmationRepository(pool)
+    await dialog.user(user_id)
+    await confirmations.set_timezone(user_id, timezone)
+    user = await dialog.user(user_id)
+    now = await confirmations.now()
+    arguments = ReminderArguments(
+        text="Отправить личный отчёт",
+        remind_at=(now + timedelta(days=1)).astimezone(ZoneInfo(timezone)),
+    )
+    return await confirmations.prepare(
+        user, message_id, "Напомни отправить личный отчёт", arguments, timezone=timezone
+    )
+
+
+async def _age_confirmation(pool, action_id):
+    # Advance the same persisted card past its TTL without waiting five minutes.
+    # All relative timestamps move together to retain actual schema constraints.
+    await pool.execute(
+        "UPDATE labbi_actions SET prepared_at=prepared_at-INTERVAL '1 hour', "
+        "expires_at=expires_at-INTERVAL '1 hour', approved_at=approved_at-INTERVAL '1 hour', "
+        "capability_issued_at=capability_issued_at-INTERVAL '1 hour' WHERE id=$1",
+        action_id,
+    )
+
+
+async def test_confirmation_prepare_is_concurrent_atomic_and_separate_from_dialog_revision(
+    database,
+):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        dialog = DialogRepository(pool)
+        confirmations = ConfirmationRepository(pool)
+        await dialog.user(101)
+        await confirmations.set_timezone(101, "Europe/Moscow")
+        user = await dialog.user(101)
+        arguments = ReminderArguments(
+            text="Сдать отчёт",
+            remind_at=(await confirmations.now() + timedelta(days=1)).astimezone(
+                ZoneInfo("Europe/Moscow")
+            ),
+        )
+        cards = await asyncio.gather(
+            *(confirmations.prepare(user, 10, "Напомни сдать отчёт", arguments) for _ in range(8))
+        )
+        assert len({card.action_id for card in cards}) == 1
+        assert sum(not card.replayed for card in cards) == 1
+        card = cards[0]
+        row = await pool.fetchrow("SELECT * FROM labbi_actions WHERE id=$1", card.action_id)
+        assert row["expires_at"] - row["prepared_at"] == timedelta(minutes=5)
+        assert row["state"] == "pending" and row["capability_hash"] is None
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 1
+        assert await dialog.history(101, 20) == [
+            {"role": "user", "content": "Напомни сдать отчёт"},
+            {"role": "assistant", "content": card.card_text},
+        ]
+        assert (await dialog.user(101)).revision == user.revision + 1
+        restored = await confirmations.lookup_card(101, 10)
+        assert restored.action_id == card.action_id and restored.replayed
+        assert restored.card_text == card.card_text
+        assert await confirmations.lookup_card(202, 10) is None
+        assert (await confirmations.approve(202, card.action_id)).code == "UNAUTHORIZED"
+        assert (await confirmations.cancel(202, card.action_id)).code == "UNAUTHORIZED"
+        with pytest.raises(ConfirmationError) as conflict:
+            await confirmations.prepare(
+                user,
+                10,
+                "Подмена исходного запроса",
+                ReminderArguments(text="Подменённый отчёт", remind_at=arguments.remind_at),
+            )
+        assert conflict.value.code == "ACTION_CONFLICT"
+
+        epoch = await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+        current = await dialog.user(101)
+        assert await dialog.save_exchange(current, 11, "Привет", "Привет!")
+        assert (await dialog.user(101)).revision == current.revision + 1
+        assert (
+            await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+            == epoch
+        )
+        assert (await confirmations.lookup_card(101, 10)).action_id == card.action_id
+        assert isinstance(await confirmations.approve(101, card.action_id), Authorization)
+        with pytest.raises(ConfirmationError) as stale:
+            await confirmations.prepare(current, 12, "Устаревший запрос", arguments)
+        assert stale.value.code == "ACTION_CANCELLED"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
+    finally:
+        await pool.close()
+
+
+async def test_confirmation_preparation_checks_saved_zone_db_time_and_dst(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        dialog = DialogRepository(pool)
+        confirmations = ConfirmationRepository(pool)
+        user = await dialog.user(101)
+        now = await confirmations.now()
+        future = ReminderArguments(
+            text="Отчёт", remind_at=(now + timedelta(days=1)).astimezone(ZoneInfo("Europe/Moscow"))
+        )
+        with pytest.raises(ConfirmationError) as missing:
+            await confirmations.prepare(user, 1, "Напомни об отчёте", future)
+        assert missing.value.code == "TIMEZONE_REQUIRED"
+        await confirmations.set_timezone(101, "Europe/Moscow")
+        user = await dialog.user(101)
+        cases = [
+            (
+                ReminderArguments(
+                    text="Отчёт", remind_at=now.astimezone(ZoneInfo("Europe/Moscow"))
+                ),
+                None,
+                "INVALID_ARGUMENTS",
+            ),
+            (
+                ReminderArguments(text="Отчёт", remind_at=future.remind_at.astimezone(UTC)),
+                None,
+                "INVALID_ARGUMENTS",
+            ),
+            (future, "Asia/Tokyo", "ACTION_CONFLICT"),
+        ]
+        for message_id, (arguments, zone, code) in enumerate(cases, start=2):
+            with pytest.raises(ConfirmationError) as rejected:
+                await confirmations.prepare(
+                    user, message_id, "Напомни об отчёте", arguments, timezone=zone
+                )
+            assert rejected.value.code == code
+
+        await confirmations.set_timezone(101, "Europe/Berlin")
+        user = await dialog.user(101)
+        # The last Sunday in March/October next year is always in the future.
+        for message_id, month in [(10, 3), (11, 10)]:
+            last_day = datetime(now.year + 1, month, 31, 2, 30)
+            sunday = last_day - timedelta(days=(last_day.weekday() + 1) % 7)
+            arguments = ReminderArguments(
+                text="Перевод часов", remind_at=sunday.replace(tzinfo=ZoneInfo("Europe/Berlin"))
+            )
+            with pytest.raises(ConfirmationError) as ambiguous:
+                await confirmations.prepare(user, message_id, "Напомни", arguments)
+            assert ambiguous.value.code == "AMBIGUOUS_TIME"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 0
+        assert await dialog.history(101, 20) == []
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 0
+    finally:
+        await pool.close()
+
+
+async def test_confirmation_capability_rotates_after_restart_and_receipt_survives_expiry(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        card = await _prepare_confirmation(pool, 101)
+        confirmations = ConfirmationRepository(pool)
+        first = await confirmations.approve(101, card.action_id)
+        assert isinstance(first, Authorization)
+        token = first.context["capability"]
+        # 32 random bytes are encoded without padding; only the SHA-256 digest persists.
+        assert len(token) == 43
+        first_row = await pool.fetchrow("SELECT * FROM labbi_actions WHERE id=$1", card.action_id)
+        assert first_row["capability_hash"] == hashlib.sha256(token.encode("ascii")).digest()
+        assert token not in str(dict(first_row)) and token not in card.card_text
+        assert (await confirmations.reconcile(202, card.action_id)).code == "UNAUTHORIZED"
+        unknown = await confirmations.reconcile(101, card.action_id)
+        assert unknown.status == "unknown" and unknown.code == "OUTCOME_UNKNOWN"
+        event = await confirmations.latest_event(101)
+        assert event.status == "OUTCOME_UNKNOWN" and event.error_code == "OUTCOME_UNKNOWN"
+        assert await confirmations.latest_event(202) is None
+        explanations = ConfirmationService(confirmations, SimpleNamespace())
+        why = await explanations.why(101)
+        assert "результат пока неизвестен" in why and "add_reminder" in why
+        assert "Europe/Moscow" in why and card.arguments.text not in why and token not in why
+        assert await explanations.why(202) == "Пока нет запросов с решением агента."
+
+        await pool.close()
+        pool = await create_pool(settings)
+        confirmations = ConfirmationRepository(pool)
+        resumed = await confirmations.lookup_card(101, 1)
+        assert resumed.action_id == card.action_id and resumed.state == "approved"
+        second = await confirmations.approve(101, card.action_id)
+        assert isinstance(second, Authorization)
+        assert second.context["capability"] != token
+        second_row = await pool.fetchrow("SELECT * FROM labbi_actions WHERE id=$1", card.action_id)
+        assert second_row["expires_at"] == first_row["expires_at"]
+        assert second_row["approved_at"] == first_row["approved_at"]
+        assert second_row["capability_issued_at"] >= first_row["capability_issued_at"]
+        stale = await ReminderRepository(pool).add_reminder(first.arguments, first.context)
+        assert stale.root.error.code == "UNAUTHORIZED"
+        results = await asyncio.gather(
+            *(
+                ReminderRepository(pool).add_reminder(second.arguments, second.context)
+                for _ in range(6)
+            )
+        )
+        assert all(result.root.status == "ok" for result in results)
+        assert sum(result.root.created for result in results) == 1
+        receipt = results[0].root.reminder_id
+        assert {result.root.reminder_id for result in results} == {receipt}
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        await _age_confirmation(pool, card.action_id)
+        await confirmations.set_timezone(101, "Asia/Tokyo")
+        await DialogRepository(pool).reset(101)
+        for method in (confirmations.approve, confirmations.reconcile, confirmations.cancel):
+            outcome = await method(101, card.action_id)
+            assert isinstance(outcome, Outcome) and outcome.status == "committed"
+            assert outcome.reminder_id == receipt and outcome.timezone == "Europe/Moscow"
+        assert await confirmations.lookup_card(101, 1) is None
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        audit = await pool.fetch("SELECT reason, argument_summary FROM labbi_agent_events")
+        assert all(token not in str(dict(row)) for row in audit)
+        assert all(second.context["capability"] not in str(dict(row)) for row in audit)
+        assert all(card.arguments.text not in str(dict(row)) for row in audit)
+    finally:
+        await pool.close()
+
+
+async def test_confirmation_revocation_covers_pending_and_approved_cards_and_expiry(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        confirmations = ConfirmationRepository(pool)
+        dialog = DialogRepository(pool)
+        user_id = 1000
+        for approved in (False, True):
+            for operation in ("cancel", "stop", "reset", "mode", "zone", "new_card", "expiry"):
+                user_id += 1
+                card = await _prepare_confirmation(pool, user_id)
+                authorization = (
+                    await confirmations.approve(user_id, card.action_id) if approved else None
+                )
+                before = await pool.fetchrow(
+                    "SELECT revision, confirmation_epoch FROM labbi_users WHERE user_id=$1", user_id
+                )
+                if operation == "cancel":
+                    assert (
+                        await confirmations.cancel(user_id, card.action_id)
+                    ).status == "cancelled"
+                elif operation == "stop":
+                    assert await confirmations.invalidate(user_id)
+                elif operation == "reset":
+                    await dialog.reset(user_id)
+                elif operation == "mode":
+                    await dialog.change_mode(user_id, "translate")
+                elif operation == "zone":
+                    await confirmations.set_timezone(user_id, "Asia/Tokyo")
+                elif operation == "new_card":
+                    replacement = await _prepare_confirmation(pool, user_id, 2)
+                    assert replacement.action_id != card.action_id
+                else:
+                    await _age_confirmation(pool, card.action_id)
+                outcome = await confirmations.approve(user_id, card.action_id)
+                assert outcome.code == (
+                    "ACTION_EXPIRED" if operation == "expiry" else "ACTION_CANCELLED"
+                )
+                assert await confirmations.lookup_card(user_id, 1) is None
+                after = await pool.fetchrow(
+                    "SELECT revision, confirmation_epoch FROM labbi_users WHERE user_id=$1", user_id
+                )
+                assert after["confirmation_epoch"] == before["confirmation_epoch"] + (
+                    operation != "expiry"
+                )
+                if authorization is not None:
+                    rejected = await ReminderRepository(pool).add_reminder(
+                        authorization.arguments, authorization.context
+                    )
+                    assert rejected.root.error.code == outcome.code
+                assert await pool.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM labbi_agent_events WHERE action_id=$1 "
+                    "AND status IN ('CANCELLED', 'REJECTED'))",
+                    card.action_id,
+                )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+    finally:
+        await pool.close()
+
+
+async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_model_calls(database):
+    settings, _, _, _ = database
+    settings = replace(
+        settings, schedule_file=str(ROOT / "data" / "schedule.json"), llm_tool_mode="structured"
+    )
+    pool = await create_pool(settings)
+    mcp = MCPClient(settings)
+    mcp.call_tool = AsyncMock(wraps=mcp.call_tool)
+    mcp.read_resource = AsyncMock(wraps=mcp.read_resource)
+    try:
+        await migrate(pool)
+        now = await pool.fetchval("SELECT clock_timestamp()")
+        moment = (now + timedelta(days=1)).astimezone(ZoneInfo("Europe/Moscow"))
+        private_reason = "private-reminder-model-reason-do-not-store"
+        private_text = "Личный отчёт для лабораторной"
+        decisions = [
+            {
+                "action": "call_tool",
+                "name": "add_reminder",
+                "arguments": {"text": private_text, "remind_at": moment.isoformat()},
+                "reason": private_reason,
+            },
+            {"action": "respond", "text": "Привет!", "reason": private_reason},
+        ]
+        llm = SimpleNamespace(
+            decide=AsyncMock(
+                side_effect=[
+                    RoutingCompletion(text=json.dumps(decision), tool_calls=[])
+                    for decision in decisions
+                ]
+            ),
+            complete=AsyncMock(
+                side_effect=AssertionError("No final LLM call for reminder or callback")
+            ),
+        )
+        await mcp.start()
+        assert mcp.available
+        repository = DialogRepository(pool)
+        confirmations = ConfirmationRepository(pool)
+        service = ConfirmationService(confirmations, mcp)
+        agent = AgentService(llm, mcp, AgentRepository(pool), settings, now=lambda: now)
+        dialog = DialogService(repository, llm, settings, agent=agent, confirmations=service)
+        assert "Europe/Moscow" in await dialog.timezone(101, "Europe/Moscow")
+        question = f"Напомни: {private_text} {moment.isoformat()}"
+        card_text = await dialog.respond(101, 1, question)
+        card = await dialog.confirmation_card(101, 1)
+        assert card is not None and card.state == "pending"
+        assert card.card_text == card_text
+        assert moment.isoformat() in card_text and private_text in card_text
+        assert "ещё не сохранено" in card_text and "Europe/Moscow" in card_text
+        assert await dialog.respond(101, 1, question) == card_text
+        assert (await dialog.confirmation_card(101, 1)).action_id == card.action_id
+        assert llm.decide.await_count == 1
+        llm.complete.assert_not_awaited()
+        mcp.call_tool.assert_not_awaited()
+        mcp.read_resource.assert_not_awaited()
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        epoch = await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+        assert await dialog.respond(101, 2, "Привет") == "Привет!"
+        assert (
+            await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+            == epoch
+        )
+        assert "недоступно" in await dialog.confirm(202, str(card.action_id))
+        mcp.call_tool.assert_not_awaited()
+
+        answer = await dialog.confirm(101, str(card.action_id))
+        assert "Напоминание сохранено." in answer
+        assert moment.isoformat() in answer and "Europe/Moscow" in answer
+        assert "пока не подключена" in answer
+        assert llm.decide.await_count == 2
+        llm.complete.assert_not_awaited()
+        mcp.call_tool.assert_awaited_once()
+        name, arguments = mcp.call_tool.await_args.args
+        context = mcp.call_tool.await_args.kwargs["action_context"]
+        assert name == "add_reminder" and arguments == {
+            "text": private_text,
+            "remind_at": moment.isoformat(),
+        }
+        assert set(context) == {"action_id", "capability"}
+        assert context["action_id"] == str(card.action_id) and len(context["capability"]) >= 43
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        assert await dialog.confirm(101, str(card.action_id)) == answer
+        mcp.call_tool.assert_awaited_once()
+        mcp.read_resource.assert_not_awaited()
+        assert await repository.history(101, 20) == [
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": card_text},
+            {"role": "user", "content": "Привет"},
+            {"role": "assistant", "content": "Привет!"},
+        ]
+        audit = await pool.fetch(
+            "SELECT decision, target, status, reason, argument_summary, llm_calls, mcp_calls "
+            "FROM labbi_agent_events WHERE user_id=101 ORDER BY id"
+        )
+        assert sum(row["llm_calls"] for row in audit) == 2
+        assert sum(row["mcp_calls"] for row in audit) == 1
+        assert all(private_reason not in str(dict(row)) for row in audit)
+        assert all(private_text not in str(dict(row)) for row in audit)
+        assert all(context["capability"] not in str(dict(row)) for row in audit)
+        why = await dialog.why(101)
+        assert "add_reminder" in why and "успешно" in why
+        assert private_reason not in why and private_text not in why
+        assert context["capability"] not in why
+        assert await dialog.why(202) == "Пока нет запросов с решением агента."
+
+        await _age_confirmation(pool, card.action_id)
+        await dialog.invalidate_confirmations(101)
+        await dialog.reset(101)
+        assert await dialog.confirm(101, str(card.action_id)) == answer
+        assert await dialog.confirmation_card(101, 1) is None
+        assert await repository.history(101, 20) == []
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        mcp.call_tool.assert_awaited_once()
+        assert llm.decide.await_count == 2
+        llm.complete.assert_not_awaited()
+    finally:
+        await mcp.close()
+        await pool.close()
+
+
+async def test_confirmation_prepare_rolls_back_history_action_and_revocation_together(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        first = await _prepare_confirmation(pool, 101)
+        dialog = DialogRepository(pool)
+        before_user = await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101")
+        before_history = await dialog.history(101, 20)
+        await pool.execute(
+            "CREATE FUNCTION reject_confirmation_history() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "BEGIN RAISE EXCEPTION 'injected failure after action preparation'; END $$; "
+            "CREATE TRIGGER reject_confirmation_history BEFORE INSERT ON labbi_messages "
+            "FOR EACH ROW WHEN (NEW.role = 'assistant') "
+            "EXECUTE FUNCTION reject_confirmation_history()"
+        )
+        with pytest.raises(asyncpg.RaiseError):
+            await _prepare_confirmation(pool, 101, 2)
+        assert await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101") == before_user
+        assert await dialog.history(101, 20) == before_history
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 1
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_actions WHERE id=$1", first.action_id)
+            == "pending"
+        )
+        await pool.execute("DROP TRIGGER reject_confirmation_history ON labbi_messages")
+        replacement = await _prepare_confirmation(pool, 101, 2)
+        assert replacement.action_id != first.action_id
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 2
+        assert len(await dialog.history(101, 20)) == 4
     finally:
         await pool.close()

@@ -43,6 +43,9 @@ from app.agent_repository import AgentRepository
         {"duration_ms": -1},
         {"duration_ms": False},
         {"duration_ms": 2**63},
+        {"argument_summary": "x" * 501},
+        {"argument_summary": "Первая строка\nВторая строка"},
+        {"argument_summary": {"raw": "model reason"}},
     ],
 )
 async def test_invalid_audit_is_rejected_before_database_access(changes):
