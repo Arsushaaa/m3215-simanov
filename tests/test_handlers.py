@@ -1,5 +1,7 @@
 import asyncio
+import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,7 +14,7 @@ from app.dialog import TRUNCATED_NOTICE
 from app.essay import ESSAY_TOPIC_QUESTION
 from app.formatting import format_reply
 from app.handlers.assistant import DATABASE_ERROR, START_TEXT, create_router, split_text
-from app.llm import Completion, ModelError
+from app.llm import Completion, ModelError, RoutingCompletion
 
 
 def update(text=None, *, user_id=1, message_id=1, chat_type="private", photo=None):
@@ -444,3 +446,66 @@ async def test_stop_interrupts_delivery_of_long_answer(dispatcher_setup, dialog_
     )
     await task
     assert sent_texts(bot) == ["я" * 4096, "Ответ и ожидающие запросы остановлены."]
+
+
+@pytest.mark.parametrize("command", ["/stop", "/reset", "/translate"])
+@pytest.mark.parametrize("phase", ["decision", "final"])
+async def test_commands_cancel_agent_without_a_late_reply(
+    dispatcher_setup, dialog_setup, command, phase
+):
+    from app.agent import AgentService
+    from app.mcp.contracts import tool_schemas
+
+    dispatcher, bot = dispatcher_setup
+    service, repository, llm = dialog_setup
+    entered = asyncio.Event()
+
+    async def waiting(*_args, **_kwargs):
+        entered.set()
+        await asyncio.Event().wait()
+
+    llm.decide.return_value = RoutingCompletion(
+        text=json.dumps(
+            {
+                "action": "call_tool",
+                "name": "get_schedule",
+                "arguments": {"date": "2026-10-12"},
+                "reason": "Чтение.",
+            }
+        ),
+        tool_calls=[],
+    )
+    if phase == "decision":
+        llm.decide.side_effect = waiting
+    else:
+        llm.complete.side_effect = waiting
+    mcp = SimpleNamespace(
+        available=True,
+        tools={
+            "get_schedule": {
+                "name": "get_schedule",
+                "description": "Расписание",
+                **tool_schemas("get_schedule"),
+            }
+        },
+        resources={},
+        call_tool=AsyncMock(return_value={"status": "ok", "source": "local_schedule"}),
+    )
+    audit = SimpleNamespace(
+        has_processed=AsyncMock(return_value=False),
+        timezone=AsyncMock(return_value=None),
+        record=AsyncMock(),
+    )
+    service.agent = AgentService(llm, mcp, audit, service.settings)
+    answering = asyncio.create_task(
+        dispatcher.feed_update(bot, update("Расписание", message_id=1), dialog=service)
+    )
+    await asyncio.wait_for(entered.wait(), 2)
+    await dispatcher.feed_update(bot, update(command, message_id=2), dialog=service)
+    await asyncio.wait_for(answering, 2)
+    assert len(sent_texts(bot)) == 1
+    assert await repository.history(1, 20) == []
+    assert audit.record.call_args.kwargs["status"] == "CANCELLED"
+    assert mcp.call_tool.await_count == (phase == "final")
+    assert llm.decide.await_count == 1
+    assert llm.complete.await_count == (phase == "final")

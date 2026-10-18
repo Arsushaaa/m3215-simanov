@@ -129,6 +129,19 @@ def load_checkpoint(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def _record_metadata(data: dict, metadata: dict) -> None:
+    metadata.update(
+        actual_model=data.get("model"),
+        response_id=data.get("id"),
+        usage=data.get("usage"),
+    )
+    choices = data.get("choices")
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        choice = choices[0]
+        metadata["finish_reason"] = choice.get("finish_reason")
+        metadata["native_finish_reason"] = choice.get("native_finish_reason")
+
+
 class RecordingResponse:
     def __init__(self, response, metadata: dict):
         self.response, self.metadata = response, metadata
@@ -137,18 +150,12 @@ class RecordingResponse:
     def status(self):
         return self.response.status
 
+    def __getattr__(self, name):
+        return getattr(self.response, name)
+
     async def json(self):
         data = await self.response.json()
-        self.metadata.update(
-            actual_model=data.get("model"),
-            response_id=data.get("id"),
-            usage=data.get("usage"),
-        )
-        choices = data.get("choices")
-        if isinstance(choices, list) and choices and isinstance(choices[0], dict):
-            choice = choices[0]
-            self.metadata["finish_reason"] = choice.get("finish_reason")
-            self.metadata["native_finish_reason"] = choice.get("native_finish_reason")
+        _record_metadata(data, self.metadata)
         return data
 
 
@@ -188,7 +195,11 @@ class RecordingClient(OpenRouterClient):
         await super().start()
         self.session = RecordingSession(self.session, self)
 
-    async def complete(self, messages, temperature):
+    def _observe_response(self, data):
+        if self.last is not None:
+            _record_metadata(data, self.last)
+
+    async def complete(self, messages, temperature, **kwargs):
         if self.system_override:
             messages = [
                 {
@@ -206,7 +217,7 @@ class RecordingClient(OpenRouterClient):
         }
         started = time.monotonic()
         try:
-            result = await super().complete(messages, temperature)
+            result = await super().complete(messages, temperature, **kwargs)
             self.last.update(raw_answer=result.text, truncated=result.truncated)
             return result
         finally:

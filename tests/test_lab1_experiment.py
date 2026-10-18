@@ -149,12 +149,19 @@ async def test_recording_client_uses_production_parser_and_parameters(bot_settin
     class Response:
         status = 200
 
-        async def json(self):
-            return {
-                "choices": [{"message": {"content": "Ответ"}, "finish_reason": "length"}],
-                "model": "provider/model",
-                "usage": {"completion_tokens": 5},
-            }
+        def __init__(self):
+            self.body = json.dumps(
+                {
+                    "choices": [{"message": {"content": "Ответ"}, "finish_reason": "length"}],
+                    "model": "provider/model",
+                    "usage": {"completion_tokens": 5},
+                }
+            ).encode()
+            self.content_length = len(self.body)
+            self.content = self
+
+        async def iter_chunked(self, _size):
+            yield self.body
 
     class Request:
         async def __aenter__(self):

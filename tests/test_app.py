@@ -39,7 +39,7 @@ def test_lab2_settings_defaults_do_not_require_a_schedule_file(settings):
     assert settings.schedule_timezone == "Europe/Moscow"
     assert settings.mcp_timeout_seconds == 15
     assert settings.agent_timeout_seconds == 135
-    assert settings.llm_tool_mode == "native"
+    assert settings.llm_tool_mode == "structured"
     assert "data/schedule.json" not in repr(settings)
 
 

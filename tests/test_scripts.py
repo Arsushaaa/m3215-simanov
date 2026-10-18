@@ -35,7 +35,7 @@ def test_first_setup_and_repeat_preserve_secrets(tmp_path):
         "SCHEDULE_TIMEZONE": "Europe/Moscow",
         "MCP_TIMEOUT_SECONDS": "15",
         "AGENT_TIMEOUT_SECONDS": "135",
-        "LLM_TOOL_MODE": "native",
+        "LLM_TOOL_MODE": "structured",
     }
 
 
@@ -59,7 +59,7 @@ def test_cloud_requires_proxy_and_has_separate_password(tmp_path):
     assert config["SCHEDULE_TIMEZONE"] == "Europe/Moscow"
     assert config["MCP_TIMEOUT_SECONDS"] == "15"
     assert config["AGENT_TIMEOUT_SECONDS"] == "135"
-    assert config["LLM_TOOL_MODE"] == "native"
+    assert config["LLM_TOOL_MODE"] == "structured"
 
 
 def test_cloud_empty_proxy_fails_before_creating_file(tmp_path):

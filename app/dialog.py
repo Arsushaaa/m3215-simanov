@@ -59,8 +59,11 @@ def build_context(
 
 
 class DialogService:
-    def __init__(self, repository: DialogRepository, llm: OpenRouterClient, settings: Settings):
+    def __init__(
+        self, repository: DialogRepository, llm: OpenRouterClient, settings: Settings, *, agent=None
+    ):
         self.repository, self.llm, self.settings = repository, llm, settings
+        self.agent = agent
         self.locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
 
     def lock(self, user_id: int) -> asyncio.Lock:
@@ -142,7 +145,12 @@ class DialogService:
         messages = build_context(
             prompt, history, text, self.settings, pinned=pinned, preserve_last=continuing
         )
-        result = await self.llm.complete(messages, user.temperature)
+        if user.mode == "study" and self.agent is not None:
+            result = await self.agent.respond(
+                user, message_id, text, prompt=prompt, history=history, continuing=continuing
+            )
+        else:
+            result = await self.llm.complete(messages, user.temperature)
         answer = result.text
         if quiz:
             prefix = "Тренировка завершена." if quiz["quiz_finished"] else f"Вопрос {number}/5"

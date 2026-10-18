@@ -4,6 +4,8 @@ import logging
 
 from aiogram import Dispatcher
 
+from app.agent import AgentService
+from app.agent_repository import AgentRepository
 from app.config import ConfigError, Settings
 from app.db import create_pool
 from app.dialog import DialogService
@@ -11,6 +13,7 @@ from app.handlers.assistant import create_router
 from app.health import HealthState, start_health_server
 from app.llm import OpenRouterClient
 from app.logging_setup import configure_logging
+from app.mcp.client import MCPClient
 from app.migration import migrate
 from app.repository import DialogRepository
 from app.telegram import create_bot
@@ -23,6 +26,7 @@ async def run(settings: Settings) -> None:
     bot = create_bot(settings)
     runner = None
     llm = None
+    mcp = None
     try:
         state.pool = await create_pool(settings)
         logger.info("PostgreSQL подключён: SELECT 1 выполнен.")
@@ -39,7 +43,10 @@ async def run(settings: Settings) -> None:
         logger.info("Telegram доступен. Бот @%s запускает polling.", me.username)
         llm = OpenRouterClient(settings)
         await llm.start()
-        dialog = DialogService(DialogRepository(state.pool), llm, settings)
+        mcp = MCPClient(settings)
+        await mcp.start()
+        agent = AgentService(llm, mcp, AgentRepository(state.pool), settings)
+        dialog = DialogService(DialogRepository(state.pool), llm, settings, agent=agent)
         dispatcher = Dispatcher()
         dispatcher.include_router(create_router())
         runner = await start_health_server(state, settings.health_port)
@@ -62,6 +69,8 @@ async def run(settings: Settings) -> None:
         if runner:
             await runner.cleanup()
         await bot.session.close()
+        if mcp:
+            await mcp.close()
         if llm:
             await llm.close()
         if state.pool:

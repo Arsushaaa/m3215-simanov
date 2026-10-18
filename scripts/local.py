@@ -46,7 +46,7 @@ def prepare_env(
         "SCHEDULE_TIMEZONE": "Europe/Moscow",
         "MCP_TIMEOUT_SECONDS": "15",
         "AGENT_TIMEOUT_SECONDS": "135",
-        "LLM_TOOL_MODE": "native",
+        "LLM_TOOL_MODE": "structured",
     }
     for key, default in defaults.items():
         if not values.get(key):

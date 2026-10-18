@@ -139,7 +139,7 @@ class Settings:
     schedule_timezone: str = "Europe/Moscow"
     mcp_timeout_seconds: int = 15
     agent_timeout_seconds: int = 135
-    llm_tool_mode: str = "native"
+    llm_tool_mode: str = "structured"
 
     @classmethod
     def load(
@@ -217,7 +217,7 @@ class Settings:
         if message_limit % 2:
             raise ConfigError("HISTORY_MAX_MESSAGES: нужно чётное число для целых пар диалога.")
         schedule_file, schedule_timezone = _schedule_values(values)
-        llm_tool_mode = values.get("LLM_TOOL_MODE", "native")
+        llm_tool_mode = values.get("LLM_TOOL_MODE", "structured")
         if llm_tool_mode not in {"native", "structured"}:
             raise ConfigError("LLM_TOOL_MODE: используйте native или structured.")
         return cls(

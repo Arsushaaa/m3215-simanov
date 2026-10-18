@@ -1,4 +1,4 @@
-"""Транзакционная запись уже подтверждённого действия MCP.
+"""Финальный аудит агента и транзакционная запись подтверждённого действия MCP.
 
 Подготовка карточки и Telegram callback относятся к отдельному слою. Здесь право —
 token_urlsafe(32) (либо более длинный URL-safe токен до 128 символов); в БД хранится
@@ -15,6 +15,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import asyncpg
+from pydantic import TypeAdapter, ValidationError
 
 from app.mcp.contracts import (
     ErrorCode,
@@ -24,9 +25,149 @@ from app.mcp.contracts import (
     ReminderOk,
     ReminderResult,
     ReminderTimeError,
+    TimezoneName,
     validate_local_datetime,
     validate_reminder_time,
 )
+
+_DECISIONS = frozenset({"respond", "clarify", "call_tool", "read_resource"})
+_TARGETS = frozenset({"get_weather", "get_schedule", "add_reminder", "schedule://current-week"})
+_STATUSES = frozenset({"OK", "CLARIFY", "REJECTED", "FAILED", "CANCELLED", "OUTCOME_UNKNOWN"})
+_TIMEZONE = TypeAdapter(TimezoneName)
+
+
+def _identifier(value: object) -> bool:
+    return type(value) is int and 0 < value <= 2**63 - 1
+
+
+class AgentRepository:
+    """Краткий финальный аудит отдельно от удаляемой истории диалога.
+
+    Оркестратор передаёт собственные фиксированные reason-строки, а не пояснения
+    модели. Сетевые вызовы выполняются до record, вне соединения и транзакции БД.
+    """
+
+    def __init__(self, pool: asyncpg.Pool):
+        self.pool = pool
+
+    async def has_processed(self, user_id: int, message_id: int) -> bool:
+        if not _identifier(user_id) or not _identifier(message_id):
+            raise ValueError("Некорректный идентификатор запроса.")
+        return (
+            await self.pool.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM labbi_agent_requests "
+                "WHERE user_id=$1 AND telegram_message_id=$2 AND status <> 'processing')",
+                user_id,
+                message_id,
+            )
+            is True
+        )
+
+    async def timezone(self, user_id: int) -> str | None:
+        if not _identifier(user_id):
+            raise ValueError("Некорректный владелец настройки.")
+        value = await self.pool.fetchval(
+            "SELECT timezone FROM labbi_users WHERE user_id=$1", user_id
+        )
+        if value is None:
+            return None
+        try:
+            return _TIMEZONE.validate_python(value, strict=True)
+        except ValidationError:
+            # A corrupted/manual setting must not become an assumed user timezone.
+            return None
+
+    async def record(
+        self,
+        user_id: int,
+        message_id: int,
+        *,
+        decision: str,
+        target: str | None,
+        status: str,
+        reason: str,
+        error_code: str | None = None,
+        llm_calls: int = 0,
+        mcp_calls: int = 0,
+        duration_ms: int = 0,
+    ) -> None:
+        if (
+            not _identifier(user_id)
+            or not _identifier(message_id)
+            or type(decision) is not str
+            or decision not in _DECISIONS
+            or (target is not None and (type(target) is not str or target not in _TARGETS))
+            or type(status) is not str
+            or status not in _STATUSES
+            or type(reason) is not str
+            or not reason.strip()
+            or len(reason) > 500
+            or any(ord(character) < 32 or ord(character) == 127 for character in reason)
+            or (
+                error_code is not None
+                and (
+                    type(error_code) is not str
+                    or not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", error_code)
+                )
+            )
+            or type(llm_calls) is not int
+            or not 0 <= llm_calls <= 2
+            or type(mcp_calls) is not int
+            or not 0 <= mcp_calls <= 1
+            or type(duration_ms) is not int
+            or not 0 <= duration_ms <= 2**63 - 1
+        ):
+            raise ValueError("Некорректные параметры аудита.")
+        request_status = (
+            "cancelled"
+            if status == "CANCELLED"
+            else "failed"
+            if status in {"FAILED", "OUTCOME_UNKNOWN"}
+            else "completed"
+        )
+        async with self.pool.acquire() as connection, connection.transaction():
+            await connection.execute(
+                "INSERT INTO labbi_users(user_id) VALUES ($1) ON CONFLICT DO NOTHING", user_id
+            )
+            await connection.fetchval(
+                "SELECT user_id FROM labbi_users WHERE user_id=$1 FOR UPDATE", user_id
+            )
+            await connection.execute(
+                "INSERT INTO labbi_agent_requests(user_id, telegram_message_id, telegram_chat_id) "
+                "VALUES ($1, $2, $1) ON CONFLICT (user_id, telegram_message_id) DO NOTHING",
+                user_id,
+                message_id,
+            )
+            request = await connection.fetchrow(
+                "SELECT id, status FROM labbi_agent_requests "
+                "WHERE user_id=$1 AND telegram_message_id=$2 FOR UPDATE",
+                user_id,
+                message_id,
+            )
+            if request["status"] != "processing":
+                return
+            await connection.execute(
+                "INSERT INTO labbi_agent_events(user_id, request_id, decision, target, status, "
+                "reason, error_code, llm_calls, mcp_calls, duration_ms) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                user_id,
+                request["id"],
+                decision,
+                target,
+                status,
+                reason,
+                error_code,
+                llm_calls,
+                mcp_calls,
+                duration_ms,
+            )
+            await connection.execute(
+                "UPDATE labbi_agent_requests SET status=$2, decision=$3, "
+                "finished_at=clock_timestamp() WHERE id=$1",
+                request["id"],
+                request_status,
+                decision,
+            )
 
 
 @dataclass(frozen=True)

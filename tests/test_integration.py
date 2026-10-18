@@ -15,6 +15,8 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -22,10 +24,14 @@ import asyncpg
 import pytest
 from mcp import Client, StdioServerParameters
 
-from app.agent_repository import ReminderRepository
+from app.agent import AgentService
+from app.agent_repository import AgentRepository, ReminderRepository
 from app.config import MCPSettings, Settings
 from app.db import create_pool
+from app.dialog import DialogService
 from app.health import HealthState, health_result
+from app.llm import Completion, ModelError, RoutingCompletion
+from app.mcp.client import MCPClient
 from app.mcp.contracts import ReminderArguments, ReminderResult
 from app.migration import migrate
 from app.repository import DialogRepository
@@ -835,6 +841,278 @@ async def test_independent_stdio_client_commits_confirmed_reminder_in_real_postg
         )
         assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE status='OK'") == 2
     finally:
+        await pool.close()
+
+
+async def test_agent_audit_is_concurrent_idempotent_isolated_and_survives_reset(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repository = AgentRepository(pool)
+        assert await repository.timezone(101) is None
+        assert not await repository.has_processed(101, 50)
+        dialog = DialogRepository(pool)
+        alice = await dialog.user(101)
+        assert await dialog.save_exchange(alice, 1, "История до сброса", "Сохранённый ответ")
+        await pool.execute("UPDATE labbi_users SET timezone='Europe/Moscow' WHERE user_id=101")
+        await asyncio.gather(
+            *(
+                repository.record(
+                    101,
+                    50,
+                    decision="call_tool",
+                    target="get_schedule",
+                    status="OK",
+                    reason="Расписание получено из источника.",
+                    llm_calls=2,
+                    mcp_calls=1,
+                    duration_ms=50,
+                )
+                for _ in range(10)
+            )
+        )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 1
+        assert await repository.has_processed(101, 50)
+        assert not await repository.has_processed(202, 50)
+        first_event = dict(
+            await pool.fetchrow("SELECT * FROM labbi_agent_events WHERE user_id=101")
+        )
+        assert first_event["target"] == "get_schedule"
+        assert first_event["llm_calls"] == 2 and first_event["mcp_calls"] == 1
+        assert first_event["duration_ms"] == 50
+        assert first_event["argument_summary"] == ""
+        # A repeated final record cannot replace the first result or its counters.
+        await repository.record(
+            101,
+            50,
+            decision="respond",
+            target=None,
+            status="FAILED",
+            reason="Повторное завершение отклонено.",
+        )
+        assert (
+            dict(await pool.fetchrow("SELECT * FROM labbi_agent_events WHERE user_id=101"))
+            == first_event
+        )
+        # Identical Telegram message numbers belong to separate private users.
+        await repository.record(
+            202,
+            50,
+            decision="clarify",
+            target=None,
+            status="CLARIFY",
+            reason="Запрошено уточнение.",
+        )
+        await dialog.reset(101)
+        await dialog.change_mode(101, "translate")
+        assert await dialog.history(101, 20) == []
+        await pool.close()
+        pool = await create_pool(settings)
+        repository = AgentRepository(pool)
+        assert await repository.timezone(101) == "Europe/Moscow"
+        assert await repository.timezone(202) is None
+        assert await repository.has_processed(101, 50)
+        assert await repository.has_processed(202, 50)
+        rows = await pool.fetch(
+            "SELECT user_id, telegram_message_id, status FROM labbi_agent_requests ORDER BY user_id"
+        )
+        assert [tuple(row) for row in rows] == [(101, 50, "completed"), (202, 50, "completed")]
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE user_id=101") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events WHERE user_id=202") == 1
+        assert (
+            dict(await pool.fetchrow("SELECT * FROM labbi_agent_events WHERE user_id=101"))
+            == first_event
+        )
+    finally:
+        await pool.close()
+
+
+async def test_agent_audit_records_terminal_status_without_overwriting_prior_result(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repository = AgentRepository(pool)
+        for message_id, (status, expected_state) in enumerate(
+            [
+                ("OK", "completed"),
+                ("CLARIFY", "completed"),
+                ("REJECTED", "completed"),
+                ("FAILED", "failed"),
+                ("CANCELLED", "cancelled"),
+                ("OUTCOME_UNKNOWN", "failed"),
+            ],
+            start=1,
+        ):
+            await repository.record(
+                101,
+                message_id,
+                decision="respond",
+                target=None,
+                status=status,
+                reason="Обработка запроса завершена.",
+                error_code="TIMEOUT" if status == "FAILED" else None,
+            )
+            row = await pool.fetchrow(
+                "SELECT status, decision, finished_at FROM labbi_agent_requests "
+                "WHERE user_id=101 AND telegram_message_id=$1",
+                message_id,
+            )
+            assert row["status"] == expected_state
+            assert row["decision"] == "respond" and row["finished_at"] is not None
+            await repository.record(
+                101,
+                message_id,
+                decision="clarify",
+                target=None,
+                status="CLARIFY",
+                reason="Поздний повтор не заменяет результат.",
+            )
+            assert (
+                await pool.fetchval(
+                    "SELECT status FROM labbi_agent_requests "
+                    "WHERE user_id=101 AND telegram_message_id=$1",
+                    message_id,
+                )
+                == expected_state
+            )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 6
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 6
+        await DialogRepository(pool).user(202)
+        await _insert_agent_request(pool, 202, 1)
+        assert not await repository.has_processed(202, 1)
+    finally:
+        await pool.close()
+
+
+async def test_agent_audit_database_failure_rolls_back_request_and_event(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        await pool.execute(
+            "CREATE FUNCTION reject_agent_audit() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "BEGIN RAISE EXCEPTION 'injected database failure'; END $$; "
+            "CREATE TRIGGER reject_agent_audit BEFORE INSERT ON labbi_agent_events "
+            "FOR EACH ROW EXECUTE FUNCTION reject_agent_audit()"
+        )
+        repository = AgentRepository(pool)
+        with pytest.raises(asyncpg.RaiseError):
+            await repository.record(
+                101,
+                1,
+                decision="respond",
+                target=None,
+                status="OK",
+                reason="Подготовлен обычный ответ.",
+            )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 0
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 0
+        await pool.execute("DROP TRIGGER reject_agent_audit ON labbi_agent_events")
+        await repository.record(
+            101,
+            1,
+            decision="respond",
+            target=None,
+            status="OK",
+            reason="Подготовлен обычный ответ.",
+        )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 1
+    finally:
+        await pool.close()
+
+
+async def test_agent_dialog_real_stdio_and_postgres_keep_bounded_calls_and_plain_history(database):
+    settings, _, _, _ = database
+    settings = replace(
+        settings, schedule_file=str(ROOT / "data" / "schedule.json"), llm_tool_mode="structured"
+    )
+    pool = await create_pool(settings)
+    mcp = MCPClient(settings)
+    mcp.call_tool = AsyncMock(wraps=mcp.call_tool)
+    mcp.read_resource = AsyncMock(wraps=mcp.read_resource)
+    decisions = [
+        {
+            "action": "call_tool",
+            "name": "get_schedule",
+            "arguments": {"date": "2026-10-12"},
+            "reason": "private-model-reason-do-not-store",
+        },
+        {
+            "action": "read_resource",
+            "uri": "schedule://current-week",
+            "reason": "private-model-reason-do-not-store",
+        },
+    ]
+
+    async def compose(messages, _temperature, *, disable_tools):
+        assert disable_tools is True
+        value = json.loads(messages[-1]["content"])["untrusted_mcp_result"]
+        assert value["source"] == "local_schedule"
+        assert value["timezone"] == "Europe/Moscow"
+        if "date" in value:
+            assert value["status"] == "ok" and value["lessons"]
+            return Completion(f"Занятия на {value['date']}. Источник: учебное расписание.")
+        assert len(value["days"]) == 7
+        return Completion(
+            f"Неделя с {value['week_start']} по {value['week_end']}. Источник: учебное расписание."
+        )
+
+    llm = SimpleNamespace(
+        decide=AsyncMock(
+            side_effect=[
+                RoutingCompletion(text=json.dumps(decision), tool_calls=[])
+                for decision in decisions
+            ]
+        ),
+        complete=AsyncMock(side_effect=compose),
+    )
+    try:
+        await migrate(pool)
+        await mcp.start()
+        assert mcp.available
+        repository = DialogRepository(pool)
+        audit = AgentRepository(pool)
+        agent = AgentService(
+            llm, mcp, audit, settings, now=lambda: datetime(2026, 10, 18, 9, tzinfo=UTC)
+        )
+        dialog = DialogService(repository, llm, settings, agent=agent)
+        first = await dialog.respond(101, 1, "Покажи занятия 12 октября")
+        assert first.startswith("Занятия на 2026-10-12.")
+        assert await dialog.respond(101, 1, "Покажи занятия 12 октября") == first
+        assert llm.decide.await_count == llm.complete.await_count == 1
+        second = await dialog.respond(101, 2, "Покажи расписание текущей недели")
+        assert second.startswith("Неделя с ")
+        assert llm.decide.await_count == llm.complete.await_count == 2
+        mcp.call_tool.assert_awaited_once_with("get_schedule", {"date": "2026-10-12"})
+        mcp.read_resource.assert_awaited_once_with("schedule://current-week")
+        history = await repository.history(101, 20)
+        assert history == [
+            {"role": "user", "content": "Покажи занятия 12 октября"},
+            {"role": "assistant", "content": first},
+            {"role": "user", "content": "Покажи расписание текущей недели"},
+            {"role": "assistant", "content": second},
+        ]
+        events = await pool.fetch(
+            "SELECT target, llm_calls, mcp_calls, reason FROM labbi_agent_events "
+            "WHERE user_id=101 ORDER BY id"
+        )
+        assert [(row["target"], row["llm_calls"], row["mcp_calls"]) for row in events] == [
+            ("get_schedule", 2, 1),
+            ("schedule://current-week", 2, 1),
+        ]
+        assert all("private-model-reason" not in row["reason"] for row in events)
+        await repository.reset(101)
+        with pytest.raises(ModelError, match="уже обработан"):
+            await dialog.respond(101, 1, "Покажи занятия 12 октября")
+        assert llm.decide.await_count == llm.complete.await_count == 2
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 2
+        assert await repository.history(101, 20) == []
+    finally:
+        await mcp.close()
         await pool.close()
 
 
