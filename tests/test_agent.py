@@ -212,6 +212,9 @@ async def test_reminder_is_only_a_proposal_without_mcp_or_second_model(setup_age
     reply = await ask(agent, "Напомни завтра в 18:30 сдать отчёт")
     assert reply.reminder is not None if timezone else reply.reminder is None
     assert "требуется подтверждение" in reply.text if timezone else "/timezone" in reply.text
+    if timezone:
+        assert "Когда: 19 октября 2026, 18:30 (UTC+03:00)" in reply.text
+        assert reply.reminder.arguments.remind_at.isoformat() == "2026-10-19T18:30:00+03:00"
     mcp.call_tool.assert_not_awaited()
     llm.complete.assert_not_awaited()
     assert repo.record.call_args.kwargs["mcp_calls"] == 0

@@ -69,15 +69,29 @@ async def test_invalid_timezone_never_changes_database(iana):
 
 
 @pytest.mark.parametrize(
-    "moment", ["2030-01-01T18:30:00+03:00", "2030-01-01T18:30:45.123456+03:00"]
+    "moment, expected",
+    [
+        ("2030-01-01T18:30:00+03:00", "1 января 2030, 18:30 (UTC+03:00)"),
+        (
+            "2030-01-01T18:30:45.123456+03:00",
+            "1 января 2030, 18:30:45.123456 (UTC+03:00)",
+        ),
+    ],
 )
-def test_card_preserves_exact_time_offset_and_text(moment):
+def test_card_preserves_exact_time_offset_and_text(moment, expected):
     arguments = ReminderArguments(text="Отправить отчёт", remind_at=moment)
     card = format_card(arguments, "Europe/Moscow", datetime(2030, 1, 1, tzinfo=UTC))
-    assert moment in card
+    assert "Когда: " + expected in card
     assert arguments.text in card and "Europe/Moscow" in card
     assert "5 минут с подготовки" in card
     assert "ещё не сохранено" in card
+
+
+def test_card_converts_utc_arguments_to_the_selected_zone_before_display():
+    arguments = ReminderArguments(text="Отправить отчёт", remind_at="2030-01-01T15:30:00Z")
+    card = format_card(arguments, "Europe/Moscow", datetime(2030, 1, 1, tzinfo=UTC))
+    assert "Когда: 1 января 2030, 18:30 (UTC+03:00)" in card
+    assert arguments.remind_at.isoformat() == "2030-01-01T15:30:00+00:00"
 
 
 def test_authorization_repr_hides_capability_and_reminder_text():

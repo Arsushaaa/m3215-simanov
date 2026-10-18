@@ -1,9 +1,9 @@
 """Подтверждения и команды настроек: детерминированные ответы без вызова модели."""
 
 import asyncio
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -11,6 +11,7 @@ from app.confirmation_models import Authorization, ConfirmationError, Outcome, P
 from app.mcp.client import MCPClient, MCPClientError
 from app.mcp.contracts import ReminderArguments, TimezoneName
 from app.reminder_intent import BUTTON_REQUIRED
+from app.time_display import format_date, format_datetime
 
 if TYPE_CHECKING:
     from app.agent import ReminderProposal
@@ -22,6 +23,22 @@ UNKNOWN_OUTCOME = (
     "Результат записи пока неизвестен. Нажми ту же кнопку подтверждения ещё раз: "
     "сначала я проверю состояние этого действия. Новое напоминание создавать не нужно."
 )
+
+
+def _display_arguments(summary: str) -> str:
+    """Render known audit summaries; do not rewrite the stored historical record."""
+    try:
+        if summary.startswith("Время: "):
+            raw, separator, zone = summary.removeprefix("Время: ").partition("; зона: ")
+            if separator:
+                timezone = _TIMEZONE.validate_python(zone)
+                moment = format_datetime(datetime.fromisoformat(raw), timezone)
+                return f"Время: {moment}; зона: {timezone}"
+        elif summary.startswith("Дата: "):
+            return "Дата: " + format_date(date.fromisoformat(summary.removeprefix("Дата: ")))
+    except (ValidationError, ValueError, TypeError):
+        pass
+    return summary
 
 
 class ConfirmationService:
@@ -78,7 +95,7 @@ class ConfirmationService:
             timezone = _TIMEZONE.validate_python(outcome.timezone)
             if outcome.remind_at.tzinfo is None or outcome.remind_at.utcoffset() is None:
                 return UNKNOWN_OUTCOME
-            moment = outcome.remind_at.astimezone(ZoneInfo(timezone)).isoformat()
+            moment = format_datetime(outcome.remind_at, timezone)
         except (ValidationError, ValueError, AttributeError):
             return UNKNOWN_OUTCOME
         return (
@@ -153,7 +170,7 @@ class ConfirmationService:
         now = await self.repository.now()
         if now.tzinfo is None or now.utcoffset() is None:
             raise ConfirmationError("SOURCE_UNAVAILABLE", "Не удалось получить текущее время.")
-        moment = now.astimezone(ZoneInfo(timezone)).isoformat(timespec="seconds")
+        moment = format_datetime(now, timezone)
         result = f"Часовой пояс: {timezone}.\nТекущее время: {moment}."
         if argument is not None:
             result += "\nПри смене часового пояса прежнее неподтверждённое действие отменяется."
@@ -164,7 +181,7 @@ class ConfirmationService:
         if event is None:
             return "Пока нет запросов с решением агента."
         timezone = await self.repository.timezone(user_id) or "UTC"
-        moment = event.created_at.astimezone(ZoneInfo(timezone)).isoformat(timespec="seconds")
+        moment = format_datetime(event.created_at, timezone)
         actions = {
             "respond": "ответ без инструмента",
             "clarify": "уточнение",
@@ -203,7 +220,7 @@ class ConfirmationService:
         return (
             f"Последний запрос: {moment} ({timezone})\n"
             f"Действие: {actions.get(event.decision, 'обработка запроса')}{target}\n"
-            f"Аргументы: {event.argument_summary or 'нет'}\n"
+            f"Аргументы: {_display_arguments(event.argument_summary) or 'нет'}\n"
             f"Проверка: {validation}\n"
             f"Выполнение: {statuses.get(event.status, 'не завершено')}\n"
             f"Причина: {event.reason}"

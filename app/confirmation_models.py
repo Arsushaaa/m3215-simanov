@@ -6,6 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from app.mcp.contracts import ErrorCode, ReminderArguments
+from app.time_display import format_datetime
 
 
 class ConfirmationError(Exception):
@@ -57,12 +58,10 @@ class SafeAgentEvent:
 
 
 def format_card(arguments: ReminderArguments, timezone: str, expires_at: datetime) -> str:
-    """Display the exact canonical timestamp, including seconds and UTC offset."""
+    """Display the exact moment in the saved zone without exposing wire-format ISO."""
     if expires_at.tzinfo is None or expires_at.utcoffset() is None:
         raise ValueError("Срок подтверждения должен содержать часовой пояс.")
-    moment = arguments.remind_at.isoformat(
-        timespec="microseconds" if arguments.remind_at.microsecond else "seconds"
-    )
+    moment = format_datetime(arguments.remind_at, timezone)
     return (
         f"Сохранить напоминание?\n\nТекст: {arguments.text}\nКогда: {moment}\n"
         f"Часовой пояс: {timezone}\n\n"

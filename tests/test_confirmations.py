@@ -72,7 +72,7 @@ async def test_prepare_delegates_atomic_pair_and_card_without_mcp(setup_service)
     service, repository, mcp = setup_service
     prepared = await service.prepare(USER, 20, "Напомни отправить отчёт", PROPOSAL)
     assert prepared.action_id == ACTION_ID
-    assert "2026-10-20T18:30:12.123456+03:00" in prepared.card_text
+    assert "Когда: 20 октября 2026, 18:30:12.123456 (UTC+03:00)" in prepared.card_text
     assert "5 минут" in prepared.card_text
     assert "ещё не сохранено" in prepared.card_text
     repository.prepare.assert_awaited_once_with(
@@ -94,7 +94,7 @@ async def test_confirm_uses_one_trusted_metadata_call_and_database_receipt(setup
     result = await service.confirm(USER.user_id, ACTION_ID)
     assert "Напоминание сохранено" in result
     assert str(REMINDER_ID) in result
-    assert "2026-10-20T18:30:12.123456+03:00" in result
+    assert "Когда: 20 октября 2026, 18:30:12.123456 (UTC+03:00)" in result
     assert "Europe/Moscow" in result
     assert CONTEXT["capability"] not in result
     repository.approve.assert_awaited_once_with(USER.user_id, ACTION_ID)
@@ -242,7 +242,7 @@ async def test_timezones_use_explicit_iana_and_database_clock(setup_service):
     result = await service.timezone(USER.user_id, " Europe/Moscow ")
     repository.set_timezone.assert_awaited_once_with(USER.user_id, "Europe/Moscow")
     repository.now.assert_awaited_once()
-    assert "2026-10-19T09:00:00+03:00" in result
+    assert "19 октября 2026, 09:00 (UTC+03:00)" in result
     assert "При смене часового пояса" in result
     mcp.call_tool.assert_not_awaited()
 
@@ -259,7 +259,7 @@ async def test_timezone_show_and_missing_zone_do_not_require_llm(setup_service):
     service, repository, _ = setup_service
     result = await service.timezone(USER.user_id)
     assert "Часовой пояс: Europe/Moscow." in result
-    assert "2026-10-19T09:00:00+03:00" in result
+    assert "19 октября 2026, 09:00 (UTC+03:00)" in result
     repository.now.assert_awaited_once()
     repository.timezone.return_value = None
     assert "/timezone Europe/Moscow" in await service.timezone(USER.user_id)
@@ -281,13 +281,46 @@ async def test_why_shows_owner_event_safe_arguments_and_fixed_reason(setup_servi
         duration_ms=10,
     )
     result = await service.why(USER.user_id)
-    assert "2026-10-19T09:00:00+03:00" in result
+    assert "19 октября 2026, 09:00 (UTC+03:00)" in result
     assert "get_weather" in result and "Город: Казань" in result
     assert "Проверка: пройдена" in result and "Выполнение: успешно" in result
     assert "Нужны актуальные погодные данные" in result
     assert str(USER.user_id) not in result and "capability" not in result
     repository.latest_event.assert_awaited_once_with(USER.user_id)
     mcp.call_tool.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "summary, expected",
+    [
+        (
+            "Время: 2026-10-20T15:30:12.123456+00:00; зона: Europe/Moscow",
+            "Время: 20 октября 2026, 18:30:12.123456 (UTC+03:00); зона: Europe/Moscow",
+        ),
+        ("Дата: 2026-10-20", "Дата: 20 октября 2026"),
+        ("Город: Казань", "Город: Казань"),
+        ("Время: не дата; зона: Europe/Moscow", "Время: не дата; зона: Europe/Moscow"),
+    ],
+)
+async def test_why_renders_existing_audit_dates_without_modifying_the_record(
+    setup_service, summary, expected
+):
+    service, repository, _ = setup_service
+    event = SafeAgentEvent(
+        created_at=NOW,
+        decision="call_tool",
+        target="add_reminder",
+        status="CLARIFY",
+        reason="Нужно подтверждение.",
+        argument_summary=summary,
+        error_code=None,
+        llm_calls=1,
+        mcp_calls=0,
+        duration_ms=10,
+    )
+    repository.latest_event.return_value = event
+    assert "Аргументы: " + expected in await service.why(USER.user_id)
+    assert event.argument_summary == summary
 
 
 async def test_why_without_decisions_is_explicit(setup_service):

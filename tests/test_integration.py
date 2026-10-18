@@ -37,6 +37,7 @@ from app.mcp.client import MCPClient
 from app.mcp.contracts import ReminderArguments, ReminderResult
 from app.migration import migrate
 from app.repository import DialogRepository
+from app.time_display import format_datetime
 from scripts.common import CommandError, run_command
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1478,7 +1479,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         card = await dialog.confirmation_card(101, 1)
         assert card is not None and card.state == "pending"
         assert card.card_text == card_text
-        assert moment.isoformat() in card_text and private_text in card_text
+        assert format_datetime(moment, "Europe/Moscow") in card_text and private_text in card_text
         assert "ещё не сохранено" in card_text and "Europe/Moscow" in card_text
         assert await dialog.respond(101, 1, question) == card_text
         assert (await dialog.confirmation_card(101, 1)).action_id == card.action_id
@@ -1508,7 +1509,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
 
         answer = await dialog.confirm(101, str(card.action_id))
         assert "Напоминание сохранено." in answer
-        assert moment.isoformat() in answer and "Europe/Moscow" in answer
+        assert format_datetime(moment, "Europe/Moscow") in answer and "Europe/Moscow" in answer
         assert "пока не подключена" in answer
         assert llm.decide.await_count == 2
         llm.complete.assert_not_awaited()
