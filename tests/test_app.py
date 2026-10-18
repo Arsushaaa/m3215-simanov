@@ -34,6 +34,85 @@ def test_settings_environment_overrides_file(tmp_path):
     assert TOKEN not in repr(config)
 
 
+def test_lab2_settings_defaults_do_not_require_a_schedule_file(settings):
+    assert settings.schedule_file == "data/schedule.json"
+    assert settings.schedule_timezone == "Europe/Moscow"
+    assert settings.mcp_timeout_seconds == 15
+    assert settings.agent_timeout_seconds == 135
+    assert settings.llm_tool_mode == "native"
+    assert "data/schedule.json" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    "schedule_file",
+    [
+        ".tools/private schedule.json",
+        "/private directory/schedule.json",
+        "C:\\Private Files\\schedule.json",
+    ],
+)
+def test_lab2_settings_preserve_local_paths_and_environment_override(tmp_path, schedule_file):
+    path = tmp_path / ".env"
+    path.write_text(
+        f"BOT_TOKEN={TOKEN}\nPOSTGRES_PASSWORD=fake\nSCHEDULE_FILE=data/schedule.json\n"
+        "SCHEDULE_TIMEZONE=Europe/Moscow\nLLM_TOOL_MODE=native\n",
+        encoding="utf-8",
+    )
+    config = Settings.load(
+        path,
+        environ={
+            "SCHEDULE_FILE": schedule_file,
+            "SCHEDULE_TIMEZONE": "America/New_York",
+            "MCP_TIMEOUT_SECONDS": "60",
+            "AGENT_TIMEOUT_SECONDS": "300",
+            "LLM_TOOL_MODE": "structured",
+        },
+    )
+    assert config.schedule_file == schedule_file
+    assert schedule_file not in repr(config)
+    assert config.schedule_timezone == "America/New_York"
+    assert config.mcp_timeout_seconds == 60
+    assert config.agent_timeout_seconds == 300
+    assert config.llm_tool_mode == "structured"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("SCHEDULE_FILE", ""),
+        ("SCHEDULE_FILE", "   "),
+        ("SCHEDULE_FILE", "private\x00.json"),
+        ("SCHEDULE_FILE", "private\n.json"),
+        ("SCHEDULE_FILE", "private\r.json"),
+        ("SCHEDULE_FILE", "https://private-user:private-key@example.test/schedule.json"),
+        ("SCHEDULE_FILE", "file:///private-key/schedule.json"),
+        ("SCHEDULE_TIMEZONE", "+03:00"),
+        ("SCHEDULE_TIMEZONE", "unknown/private-key"),
+        ("SCHEDULE_TIMEZONE", ""),
+        ("SCHEDULE_TIMEZONE", "localtime"),
+        ("SCHEDULE_TIMEZONE", "posixrules"),
+        ("SCHEDULE_TIMEZONE", "posix/Europe/Moscow"),
+        ("SCHEDULE_TIMEZONE", "right/Europe/Moscow"),
+        ("MCP_TIMEOUT_SECONDS", "0"),
+        ("MCP_TIMEOUT_SECONDS", "61"),
+        ("MCP_TIMEOUT_SECONDS", "private-key"),
+        ("AGENT_TIMEOUT_SECONDS", "0"),
+        ("AGENT_TIMEOUT_SECONDS", "301"),
+        ("AGENT_TIMEOUT_SECONDS", "private-key"),
+        ("LLM_TOOL_MODE", "private-key"),
+        ("LLM_TOOL_MODE", ""),
+    ],
+)
+def test_invalid_lab2_settings_have_safe_errors(tmp_path, field, value):
+    with pytest.raises(ConfigError) as exc:
+        Settings.load(
+            tmp_path / ".env",
+            environ={"BOT_TOKEN": TOKEN, "POSTGRES_PASSWORD": "fake", field: value},
+        )
+    assert field in str(exc.value)
+    assert "private-key" not in str(exc.value)
+
+
 @pytest.mark.parametrize("value", ["abc", "0", "65536"])
 def test_invalid_port_has_safe_error(tmp_path, value):
     # Arrange

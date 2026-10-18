@@ -19,13 +19,17 @@ def test_local_and_cloud_compose_ports_credentials_and_healthchecks(tmp_path):
     password = "p$a#s's\\\\tail"
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "BOT_TOKEN=test\nPOSTGRES_PORT=55432\nPOSTGRES_PASSWORD=" + compose_quote(password) + "\n",
+        "BOT_TOKEN=test\nPOSTGRES_PORT=55432\nPOSTGRES_PASSWORD=" + compose_quote(password) + "\n"
+        "SCHEDULE_FILE=data/schedule.json\nSCHEDULE_TIMEZONE=Europe/Moscow\n"
+        "MCP_TIMEOUT_SECONDS=12\nAGENT_TIMEOUT_SECONDS=90\nLLM_TOOL_MODE=structured\n",
         encoding="utf-8",
     )
     environ = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith(("POSTGRES_", "BOT_TOKEN", "COMPOSE_"))
+        if not key.startswith(
+            ("POSTGRES_", "BOT_TOKEN", "COMPOSE_", "SCHEDULE_", "MCP_", "AGENT_", "LLM_TOOL_")
+        )
     }
     command = compose_command(root)
     command[command.index("--env-file") + 1] = str(env_file)
@@ -64,6 +68,22 @@ def test_local_and_cloud_compose_ports_credentials_and_healthchecks(tmp_path):
     assert all(not service.get("ports") for service in cloud.values())
     assert cloud["bot"]["environment"]["POSTGRES_HOST"] == "db"
     assert cloud["bot"]["environment"]["POSTGRES_PORT"] == "5432"
+    assert {
+        key: cloud["bot"]["environment"][key]
+        for key in (
+            "SCHEDULE_FILE",
+            "SCHEDULE_TIMEZONE",
+            "MCP_TIMEOUT_SECONDS",
+            "AGENT_TIMEOUT_SECONDS",
+            "LLM_TOOL_MODE",
+        )
+    } == {
+        "SCHEDULE_FILE": "data/schedule.json",
+        "SCHEDULE_TIMEZONE": "Europe/Moscow",
+        "MCP_TIMEOUT_SECONDS": "12",
+        "AGENT_TIMEOUT_SECONDS": "90",
+        "LLM_TOOL_MODE": "structured",
+    }
     assert "app.healthcheck" in cloud["bot"]["healthcheck"]["test"]
     assert cloud["bot"]["healthcheck"]["timeout"] == "20s"
     assert cloud["bot"]["depends_on"]["db"]["condition"] == "service_healthy"

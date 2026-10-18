@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiogram.utils.token import TokenValidationError, validate_token
 from dotenv import dotenv_values
@@ -32,6 +33,11 @@ class Settings:
     llm_max_output_tokens: int = 2048
     history_max_messages: int = 20
     history_max_tokens: int = 6000
+    schedule_file: str = field(default="data/schedule.json", repr=False)
+    schedule_timezone: str = "Europe/Moscow"
+    mcp_timeout_seconds: int = 15
+    agent_timeout_seconds: int = 135
+    llm_tool_mode: str = "native"
 
     @classmethod
     def load(
@@ -108,6 +114,45 @@ class Settings:
         message_limit = number("HISTORY_MAX_MESSAGES", "20", 4, 200)
         if message_limit % 2:
             raise ConfigError("HISTORY_MAX_MESSAGES: нужно чётное число для целых пар диалога.")
+        schedule_file = values.get("SCHEDULE_FILE", "data/schedule.json")
+        try:
+            if (
+                not isinstance(schedule_file, str)
+                or not schedule_file.strip()
+                or any(ord(character) < 32 or ord(character) == 127 for character in schedule_file)
+            ):
+                raise ValueError
+            # На Windows буква диска не является схемой URI.
+            windows_drive = (
+                len(schedule_file) >= 3
+                and schedule_file[0].isascii()
+                and schedule_file[0].isalpha()
+                and schedule_file[1] == ":"
+                and schedule_file[2] in {"/", "\\"}
+            )
+            if urlsplit(schedule_file).scheme and not windows_drive:
+                raise ValueError
+        except ValueError:
+            raise ConfigError(
+                "SCHEDULE_FILE: нужен непустой локальный путь без URI и управляющих символов."
+            ) from None
+        schedule_timezone = values.get("SCHEDULE_TIMEZONE", "Europe/Moscow")
+        try:
+            if (
+                not isinstance(schedule_timezone, str)
+                or not schedule_timezone
+                or schedule_timezone in {"localtime", "posixrules"}
+                or schedule_timezone.startswith(("posix/", "right/"))
+            ):
+                raise ValueError
+            ZoneInfo(schedule_timezone)
+        except (ValueError, ZoneInfoNotFoundError):
+            raise ConfigError(
+                "SCHEDULE_TIMEZONE: укажите существующую IANA-зону, например Europe/Moscow."
+            ) from None
+        llm_tool_mode = values.get("LLM_TOOL_MODE", "native")
+        if llm_tool_mode not in {"native", "structured"}:
+            raise ConfigError("LLM_TOOL_MODE: используйте native или structured.")
         return cls(
             bot_token=token,
             postgres_password=password,
@@ -125,4 +170,9 @@ class Settings:
             llm_max_output_tokens=number("LLM_MAX_OUTPUT_TOKENS", "2048", 64, 8192),
             history_max_messages=message_limit,
             history_max_tokens=number("HISTORY_MAX_TOKENS", "6000", 1024, 100000),
+            schedule_file=schedule_file,
+            schedule_timezone=schedule_timezone,
+            mcp_timeout_seconds=number("MCP_TIMEOUT_SECONDS", "15", 1, 60),
+            agent_timeout_seconds=number("AGENT_TIMEOUT_SECONDS", "135", 1, 300),
+            llm_tool_mode=llm_tool_mode,
         )

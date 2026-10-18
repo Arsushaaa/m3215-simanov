@@ -14,7 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 from urllib.request import urlopen
 
-from app.config import Settings
+from app.config import ConfigError, Settings
 from scripts.common import CommandError, compose_quote, private_write, run_command
 from scripts.local import prepare_env
 
@@ -82,11 +82,20 @@ def source_archive(root: Path) -> Path:
     ]
     candidates.extend((root / "app").rglob("*.py"))
     candidates.extend((root / "app" / "migrations").glob("*.sql"))
+    candidates.append(root / "data" / "schedule.json")
     with tarfile.open(archive_path, "w:gz") as archive:
         for path in sorted(candidates):
             if path.is_file() and "__pycache__" not in path.parts and not path.is_symlink():
                 archive.add(path, arcname=path.relative_to(root).as_posix(), recursive=False)
     return archive_path
+
+
+def validate_cloud_schedule(settings: Settings) -> None:
+    if settings.schedule_file != "data/schedule.json":
+        raise ConfigError(
+            "SCHEDULE_FILE: автоматический деплой поддерживает только data/schedule.json. "
+            "Личные файлы расписания автоматически не передаются; используйте их локально."
+        )
 
 
 class Cloud:
@@ -413,6 +422,7 @@ class Cloud:
         raise CommandError("SSH не стал доступен за 10 минут; проверьте --ssh-cidr и сеть.")
 
     def deploy(self, instance: dict, settings: Settings) -> None:
+        validate_cloud_schedule(settings)
         self.wait_ssh(instance)
         print("Ждём установки Docker на ВМ…", flush=True)
         self.ssh(
@@ -496,6 +506,7 @@ def cloud_main(root: Path, args) -> int:
     settings = None
     if args.action == "up":
         settings = Settings.load(prepare_env(root, cloud=True, require_llm=True), require_llm=True)
+        validate_cloud_schedule(settings)
     if args.action != "up" and not (root / ".deploy" / "state.json").exists():
         raise CommandError("Нет состояния деплоя. Сначала выполните deploy up.")
     yc_path = install_yc()

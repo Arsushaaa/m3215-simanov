@@ -21,6 +21,22 @@ def test_first_setup_and_repeat_preserve_secrets(tmp_path):
     assert path.read_bytes() == first
     assert len(dotenv_values(path)["POSTGRES_PASSWORD"]) >= 24
     assert dotenv_values(path)["POSTGRES_HOST"] == "127.0.0.1"
+    assert {
+        key: dotenv_values(path)[key]
+        for key in (
+            "SCHEDULE_FILE",
+            "SCHEDULE_TIMEZONE",
+            "MCP_TIMEOUT_SECONDS",
+            "AGENT_TIMEOUT_SECONDS",
+            "LLM_TOOL_MODE",
+        )
+    } == {
+        "SCHEDULE_FILE": "data/schedule.json",
+        "SCHEDULE_TIMEZONE": "Europe/Moscow",
+        "MCP_TIMEOUT_SECONDS": "15",
+        "AGENT_TIMEOUT_SECONDS": "135",
+        "LLM_TOOL_MODE": "native",
+    }
 
 
 def test_cloud_requires_proxy_and_has_separate_password(tmp_path):
@@ -39,6 +55,11 @@ def test_cloud_requires_proxy_and_has_separate_password(tmp_path):
     assert config["POSTGRES_HOST"] == "db"
     assert config["POSTGRES_PASSWORD"] != dotenv_values(tmp_path / ".env")["POSTGRES_PASSWORD"]
     assert config["TELEGRAM_PROXY_URL"] == "socks5://user:p%40ss@proxy:1080"
+    assert config["SCHEDULE_FILE"] == "data/schedule.json"
+    assert config["SCHEDULE_TIMEZONE"] == "Europe/Moscow"
+    assert config["MCP_TIMEOUT_SECONDS"] == "15"
+    assert config["AGENT_TIMEOUT_SECONDS"] == "135"
+    assert config["LLM_TOOL_MODE"] == "native"
 
 
 def test_cloud_empty_proxy_fails_before_creating_file(tmp_path):
@@ -256,6 +277,16 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
     migrations = tmp_path / "app" / "migrations"
     migrations.mkdir()
     (migrations / "001_test.sql").write_text("SELECT 1;", encoding="utf-8")
+    (migrations / "006_test.sql").write_text("SELECT 2;", encoding="utf-8")
+    mcp = tmp_path / "app" / "mcp"
+    mcp.mkdir()
+    (mcp / "server.py").write_text("", encoding="utf-8")
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "schedule.json").write_text('{"lessons": []}', encoding="utf-8")
+    (data / "private.json").write_text("PRIVATE", encoding="utf-8")
+    (tmp_path / ".tools").mkdir()
+    (tmp_path / ".tools" / "schedule.json").write_text("PRIVATE", encoding="utf-8")
     (tmp_path / "app" / ".env").write_text("SECRET=yes", encoding="utf-8")
     (tmp_path / ".env.cloud").write_text("SECRET=yes", encoding="utf-8")
     (tmp_path / ".deploy").mkdir()
@@ -267,7 +298,28 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
     # Assert
     assert "app/__init__.py" in names
     assert "app/migrations/001_test.sql" in names
+    assert "app/migrations/006_test.sql" in names
+    assert "app/mcp/server.py" in names
+    assert "data/schedule.json" in names
+    assert "data/private.json" not in names
+    assert ".tools/schedule.json" not in names
     assert all(".env" not in n and "id_ed25519" not in n for n in names)
+
+
+def test_deploy_archive_excludes_symlinked_schedule(tmp_path):
+    import tarfile
+
+    from scripts.cloud import source_archive
+
+    (tmp_path / "data").mkdir()
+    private = tmp_path / "private.json"
+    private.write_text("PRIVATE", encoding="utf-8")
+    try:
+        (tmp_path / "data" / "schedule.json").symlink_to(private)
+    except (OSError, NotImplementedError):
+        pytest.skip("Создание symlink недоступно")
+    with tarfile.open(source_archive(tmp_path)) as archive:
+        assert "data/schedule.json" not in archive.getnames()
 
 
 def test_missing_cloud_key_is_not_replaced(tmp_path):
@@ -337,6 +389,9 @@ def test_deploy_uploads_secrets_only_over_ssh_stdin(tmp_path, monkeypatch):
         bot_token="secret-token",
         postgres_password="p$a#s's",
         telegram_proxy_url="http://user:password@proxy:3128",
+        mcp_timeout_seconds=12,
+        agent_timeout_seconds=90,
+        llm_tool_mode="structured",
     )
     # Act
     deployment.deploy({}, settings)
@@ -353,6 +408,11 @@ def test_deploy_uploads_secrets_only_over_ssh_stdin(tmp_path, monkeypatch):
     assert values["BOT_TOKEN"] == "secret-token"
     assert values["POSTGRES_PASSWORD"] == "p$a#s's"
     assert values["POSTGRES_HOST"] == "db"
+    assert values["SCHEDULE_FILE"] == "data/schedule.json"
+    assert values["SCHEDULE_TIMEZONE"] == "Europe/Moscow"
+    assert values["MCP_TIMEOUT_SECONDS"] == "12"
+    assert values["AGENT_TIMEOUT_SECONDS"] == "90"
+    assert values["LLM_TOOL_MODE"] == "structured"
     cloud_init = next(kwargs for cmd, kwargs in calls if "cloud-init status" in cmd)
     deployment = next(kwargs for cmd, kwargs in calls if "--wait --wait-timeout 180" in cmd)
     assert cloud_init["stream_output"] is True
@@ -363,6 +423,48 @@ def test_deploy_uploads_secrets_only_over_ssh_stdin(tmp_path, monkeypatch):
         if "base64 -d" in command
     )
     assert not (tmp_path / ".deploy" / "source.tar.gz").exists()
+
+
+def test_cloud_deploy_rejects_private_schedule_before_ssh(tmp_path, monkeypatch):
+    from app.config import ConfigError, Settings
+
+    deployment = cloud(tmp_path, FakeYC())
+    ssh = Mock(side_effect=AssertionError)
+    wait_ssh = Mock(side_effect=AssertionError)
+    monkeypatch.setattr(deployment, "ssh", ssh)
+    monkeypatch.setattr(deployment, "wait_ssh", wait_ssh)
+    config = Settings(
+        bot_token="fake-token",
+        postgres_password="fake-db",
+        schedule_file=".tools/private schedule.json",
+    )
+    with pytest.raises(ConfigError, match="SCHEDULE_FILE") as exc:
+        deployment.deploy({}, config)
+    assert "private schedule.json" not in str(exc.value)
+    ssh.assert_not_called()
+    wait_ssh.assert_not_called()
+
+
+def test_cloud_up_rejects_private_schedule_before_remote_operations(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.config import ConfigError
+    from scripts import cloud as cloud_script
+
+    path = tmp_path / ".env.cloud"
+    path.write_text(
+        "BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk\n"
+        "POSTGRES_PASSWORD=fake-db\nOPENROUTER_API_KEY=fake-key\n"
+        "SCHEDULE_FILE='.tools/private schedule.json'\n",
+        encoding="utf-8",
+    )
+    install = Mock(side_effect=AssertionError)
+    monkeypatch.setattr(cloud_script.shutil, "which", Mock(return_value="/fake/ssh"))
+    monkeypatch.setattr(cloud_script, "prepare_env", Mock(return_value=path))
+    monkeypatch.setattr(cloud_script, "install_yc", install)
+    with pytest.raises(ConfigError, match="SCHEDULE_FILE"):
+        cloud_script.cloud_main(tmp_path, SimpleNamespace(action="up"))
+    install.assert_not_called()
 
 
 def test_cloud_help_renders(capsys):

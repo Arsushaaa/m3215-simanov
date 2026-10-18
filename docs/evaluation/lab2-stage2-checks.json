@@ -1,0 +1,67 @@
+{
+  "recorded_at": "2026-10-18T11:50:41.081054+00:00",
+  "python_version": "3.12.15",
+  "dependency_versions": {
+    "mcp": "2.3.0",
+    "pydantic": "2.13.5",
+    "jsonschema": "4.26.0",
+    "tzdata": "2026.5",
+    "aiogram": "3.31.0"
+  },
+  "scope": "Stage 2 data contracts, configuration and migration; no production Telegram/LLM/weather requests. Integration tests use isolated PostgreSQL containers.",
+  "checks": [
+    {
+      "command": "python -m pip check",
+      "exit_code": 0,
+      "stdout": "No broken requirements found.",
+      "stderr": ""
+    },
+    {
+      "command": "python -m ruff check .",
+      "exit_code": 0,
+      "stdout": "All checks passed!",
+      "stderr": ""
+    },
+    {
+      "command": "python -m ruff format --check .",
+      "exit_code": 0,
+      "stdout": "58 files already formatted",
+      "stderr": ""
+    },
+    {
+      "command": "RUN_INTEGRATION=1 python -m pytest -q -o faulthandler_timeout=30",
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 20%]\n........................................................................ [ 40%]\n........................................................................ [ 60%]\n........................................................................ [ 81%]\n...................................................................      [100%]\n355 passed in 11.98s",
+      "stderr": ""
+    }
+  ],
+  "docker_verification": {
+    "build_command": "docker build -t labbi-stage2-check:local .",
+    "build_exit_code": 0,
+    "container_network": "none",
+    "container_uid": 10001,
+    "installed_mcp": "2.3.0",
+    "packaged_migrations": 6,
+    "packaged_data": [
+      "data/schedule.json"
+    ],
+    "fixture_week_start": "2026-10-12",
+    "fixture_week_days": 7,
+    "smoke_exit_code": 0
+  },
+  "source_checks": {
+    "legacy_migrations_unchanged_from_lab1": true,
+    "legacy_migration_sha256": {
+      "001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+      "002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+      "003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+      "004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+      "005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771"
+    },
+    "configured_secret_values_scan": "passed",
+    "documentation_links": "passed",
+    "real_llm_api_calls": 0,
+    "real_telegram_requests": 0,
+    "real_weather_requests": 0
+  }
+}
