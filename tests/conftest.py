@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
@@ -5,7 +6,7 @@ import pytest
 
 from app.config import Settings
 from app.dialog import DialogService
-from app.llm import Completion
+from app.llm import Completion, RoutingCompletion
 from app.repository import UserSettings
 
 
@@ -81,4 +82,11 @@ def dialog_setup(bot_settings):
     repo = FakeRepository()
     llm = AsyncMock()
     llm.complete.return_value = Completion("Ответ модели.")
+    llm.decide.return_value = RoutingCompletion(
+        json.dumps(
+            {"kind": "question", "feedback": "", "text": "Что такое переменная в Python?"},
+            ensure_ascii=False,
+        ),
+        [],
+    )
     return DialogService(repo, llm, bot_settings), repo, llm

@@ -1,10 +1,19 @@
+import json
 from dataclasses import replace
 
 import pytest
 
 from app.dialog import TRUNCATED_NOTICE, DialogService, build_context, estimate_tokens
-from app.llm import Completion, ModelError
+from app.llm import Completion, ModelError, RoutingCompletion
 from app.prompts import PROMPTS
+
+
+def quiz_reply(text, *, kind="question", truncated=False):
+    return RoutingCompletion(
+        json.dumps({"kind": kind, "feedback": "", "text": text}, ensure_ascii=False),
+        [],
+        truncated=truncated,
+    )
 
 
 async def test_history_roles_order_and_user_isolation(dialog_setup):
@@ -191,16 +200,16 @@ async def test_continuation_preserves_tail_when_partial_answer_exceeds_context(d
 async def test_incomplete_quiz_question_does_not_advance_and_continuation_keeps_topic(dialog_setup):
     service, repo, llm = dialog_setup
     await service.mode(1, "quiz")
-    llm.complete.return_value = Completion("Незаконченный вопрос о циклах", truncated=True)
+    llm.decide.return_value = quiz_reply("Незаконченный вопрос о циклах", truncated=True)
     reply = await service.respond(1, 1, "Тема: циклы Python")
     assert reply.startswith(TRUNCATED_NOTICE)
     user = await repo.user(1)
     assert user.quiz_question == 0 and user.quiz_topic == "Тема: циклы Python"
-    llm.complete.return_value = Completion("Какие значения выдаёт range(3)?")
+    llm.decide.return_value = quiz_reply("Какие значения выдаёт range(3)?")
     await service.respond(1, 2, "Продолжи")
     user = await repo.user(1)
     assert user.quiz_question == 1 and user.quiz_topic == "Тема: циклы Python"
-    assert "Не считай слово «Продолжи» ответом" in llm.complete.call_args.args[0][0]["content"]
+    assert "Не считай слово «Продолжи» ответом" in llm.decide.call_args.args[0][0]["content"]
 
 
 async def test_model_failure_does_not_store_a_partial_exchange(dialog_setup):
@@ -220,7 +229,7 @@ async def test_service_recreation_restores_settings_and_history(dialog_setup):
     await service.respond(1, 1, "Тема Python")
     recreated = DialogService(repo, llm, service.settings)
     await recreated.respond(1, 2, "Мой ответ")
-    messages, temperature = llm.complete.call_args.args
+    messages, temperature = llm.decide.call_args.args
     assert messages[0]["content"].startswith(PROMPTS["quiz"])
     assert "Сейчас пользователь отвечает на вопрос 1 из пяти" in messages[0]["content"]
     assert "вопрос 2 из пяти" in messages[0]["content"]
@@ -283,21 +292,24 @@ async def test_quiz_has_five_questions_hint_keeps_progress_and_restart_restores_
     await service.mode(1, "quiz")
     answer = await service.respond(1, 1, "Тема: Python")
     assert answer.startswith("Вопрос 1/5\n\n")
+    llm.decide.return_value = quiz_reply("Вспомни изменяемость типов.", kind="hint")
     hint = await service.respond(1, 2, "Дай подсказку")
     assert hint.startswith("Подсказка к вопросу 1/5\n\n")
     assert (await repo.user(1)).quiz_question == 1
-    assert "не задавая новый вопрос" in llm.complete.call_args.args[0][0]["content"]
+    assert "не задавая новый вопрос" in llm.decide.call_args.args[0][0]["content"]
     service = DialogService(repo, llm, service.settings)
+    llm.decide.return_value = quiz_reply("Чем отличаются список и кортеж?")
     for number in range(2, 6):
         answer = await service.respond(1, number + 1, "Ответ на предыдущий вопрос")
         assert answer.startswith(f"Вопрос {number}/5\n\n")
+    llm.decide.return_value = quiz_reply("Повтори изменяемость типов.", kind="finished")
     finished = await service.respond(1, 7, "Ответ на пятый вопрос")
     assert finished.startswith("Тренировка завершена.\n\n")
     assert (await repo.user(1)).quiz_finished is True
-    calls = llm.complete.await_count
+    calls = llm.decide.await_count
     with pytest.raises(ModelError, match="Для новой тренировки"):
         await service.respond(1, 8, "Дальше")
-    assert llm.complete.await_count == calls
+    assert llm.decide.await_count == calls
     await service.reset(1)
     user = await repo.user(1)
     assert (user.mode, user.quiz_question, user.quiz_topic, user.quiz_finished) == (
@@ -315,7 +327,7 @@ async def test_quiz_topic_remains_in_context_after_history_trimming(dialog_setup
     await service.respond(1, 1, "Тема: циклы Python")
     await service.respond(1, 2, "Первый ответ")
     await service.respond(1, 3, "Второй ответ")
-    messages = llm.complete.call_args.args[0]
+    messages = llm.decide.call_args.args[0]
     assert messages[1] == {"role": "user", "content": "Тема: циклы Python"}
     assert messages[2]["content"] == "Первый ответ"
     assert messages[3]["role"] == "assistant"

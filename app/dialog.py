@@ -1,6 +1,7 @@
 """Сервис диалога: порядок запросов, лимиты контекста и настройки пользователя."""
 
 import asyncio
+import json
 import re
 from decimal import Decimal, InvalidOperation
 from weakref import WeakValueDictionary
@@ -11,6 +12,7 @@ from app.essay import ESSAY_TOPIC_QUESTION, needs_essay_topic
 from app.llm import ModelError, OpenRouterClient
 from app.output_limits import check_output_size
 from app.prompts import MODE_NAMES, PROMPTS
+from app.quiz import INVALID_QUIZ, QuizState
 from app.reminder_intent import is_confirmation_reply
 from app.repository import DialogRepository
 
@@ -36,16 +38,21 @@ def build_context(
     *,
     pinned: list[dict[str, str]] | None = None,
     preserve_last: bool = False,
+    schema: dict | None = None,
 ) -> list[dict[str, str]]:
     system, current = {"role": "system", "content": prompt}, {"role": "user", "content": text}
     pinned = pinned or []
-    if estimate_tokens([system, *pinned, current]) > settings.history_max_tokens:
+    schema_tokens = (
+        (len(json.dumps(schema, ensure_ascii=False).encode("utf-8")) + 2) // 3 + 4 if schema else 0
+    )
+    if estimate_tokens([system, *pinned, current]) + schema_tokens > settings.history_max_tokens:
         raise ModelError("Сообщение слишком длинное для контекста. Сократи его и попробуй снова.")
     # Удаляем самые старые полные пары. В БД архив остаётся до /reset или смены режима.
     recent = list(history)
     while recent and (
         len(pinned) + len(recent) + 1 > settings.history_max_messages
-        or estimate_tokens([system, *pinned, *recent, current]) > settings.history_max_tokens
+        or estimate_tokens([system, *pinned, *recent, current]) + schema_tokens
+        > settings.history_max_tokens
     ):
         if preserve_last and len(recent) == 2:
             # Для продолжения большого ответа сохраняем его конец, даже если вся пара не влезает.
@@ -118,40 +125,16 @@ class DialogService:
             user_id
         )
         prompt, pinned, quiz = PROMPTS[user.mode], [], {}
+        quiz_state, schema = None, None
         if user.mode == "quiz":
             if user.quiz_finished:
                 raise ModelError("Тренировка завершена. Для новой тренировки отправь /quiz.")
-            hint = user.quiz_question > 0 and text.strip().casefold().startswith(
-                ("подсказ", "дай подсказ", "нужна подсказ", "можно подсказ", "подскажи")
-            )
-            finished = user.quiz_question == 5 and not hint
-            number = user.quiz_question if hint else min(user.quiz_question + 1, 5)
-            quiz = {
-                "quiz_question": number,
-                "quiz_topic": user.quiz_topic or text,
-                "quiz_finished": finished,
-            }
+            quiz_state = QuizState(user.quiz_topic, user.quiz_question, text, continuing, previous)
+            schema = quiz_state.schema()
+            prompt += quiz_state.instruction()
             if user.quiz_topic:
                 # Тема является данными пользователя, поэтому не вставляется в system.
                 pinned = [{"role": "user", "content": user.quiz_topic}]
-            if hint:
-                prompt += (
-                    f"\nПользователь просит подсказку к вопросу {number} из пяти. "
-                    "Дай только подсказку, не раскрывая ответа и не задавая новый вопрос."
-                )
-            elif finished:
-                prompt += (
-                    "\nСейчас пользователь отвечает на пятый вопрос. Оцени ответ и подведи "
-                    "итог тренировки по доступной истории. Новых вопросов не задавай. "
-                    "Если часть истории отсутствует, не выдумывай результаты старых ответов."
-                )
-            elif user.quiz_question == 0:
-                prompt += "\nСейчас пользователь задаёт тему. Сформулируй первый вопрос из пяти."
-            else:
-                prompt += (
-                    f"\nСейчас пользователь отвечает на вопрос {user.quiz_question} из пяти. "
-                    f"Дай обратную связь и сформулируй только вопрос {number} из пяти. "
-                )
         prompt += (
             f"\nБюджет текущего ответа — {self.settings.llm_max_output_tokens} токенов. "
             "Выдай законченную часть, уложившись в этот бюджет; не обещай неограниченный объём."
@@ -163,12 +146,22 @@ class DialogService:
                 "блок кода. Не считай слово «Продолжи» ответом на вопрос тренировки."
             )
         messages = build_context(
-            prompt, history, text, self.settings, pinned=pinned, preserve_last=continuing
+            prompt,
+            history,
+            text,
+            self.settings,
+            pinned=pinned,
+            preserve_last=continuing,
+            schema=schema,
         )
         if user.mode == "study" and self.agent is not None:
             result = await self.agent.respond(
                 user, message_id, text, prompt=prompt, history=history, continuing=continuing
             )
+        elif quiz_state is not None:
+            result = await self.llm.decide(messages, user.temperature, decision_schema=schema)
+            if result.tool_calls:
+                raise ModelError(INVALID_QUIZ)
         else:
             result = await self.llm.complete(messages, user.temperature)
         if getattr(result, "reminder", None) is not None and self.confirmations is not None:
@@ -179,16 +172,10 @@ class DialogService:
             # prepare saves the action and exact user/card pair in one transaction.
             return card.card_text
         answer = result.text
-        if quiz:
-            prefix = "Тренировка завершена." if quiz["quiz_finished"] else f"Вопрос {number}/5"
-            if hint:
-                prefix = f"Подсказка к вопросу {number}/5"
-            answer = prefix + "\n\n" + answer
+        if quiz_state is not None:
+            answer, quiz = quiz_state.render(result.text, truncated=result.truncated)
         if result.truncated:
             answer = TRUNCATED_NOTICE + "\n\n" + answer
-            if quiz:
-                # Неполный вопрос/итог не должен продвигать тренировку.
-                quiz.update(quiz_question=user.quiz_question, quiz_finished=user.quiz_finished)
         if not await self.repository.save_exchange(
             user, message_id, text, answer, is_complete=not result.truncated, **quiz
         ):

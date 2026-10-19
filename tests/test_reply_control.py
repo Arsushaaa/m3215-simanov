@@ -2,7 +2,7 @@ import pytest
 
 from app.dialog import DialogService
 from app.essay import ESSAY_TOPIC_QUESTION
-from app.llm import ModelError
+from app.llm import ModelError, RoutingCompletion
 
 
 async def test_bare_10000_word_essay_asks_topic_without_calling_model(dialog_setup):
@@ -23,8 +23,13 @@ async def test_essay_topic_guard_does_not_interfere_with_translation_or_quiz(dia
     await service.mode(1, "translate")
     await service.respond(1, 1, "На английский: напиши эссе")
     await service.mode(1, "quiz")
-    await service.respond(1, 2, "Тема: как написать эссе")
-    assert llm.complete.await_count == 2
+    llm.decide.return_value = RoutingCompletion(
+        '{"kind":"clarify","feedback":"","text":"Назови тему по программированию."}', []
+    )
+    reply = await service.respond(1, 2, "Тема: как написать эссе")
+    assert reply == "Уточнение для тренировки\n\nНазови тему по программированию."
+    llm.complete.assert_awaited_once()
+    llm.decide.assert_awaited_once()
 
 
 async def test_huge_volume_after_topic_clarification_is_checked_without_model(dialog_setup):

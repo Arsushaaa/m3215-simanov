@@ -358,5 +358,10 @@ async def test_other_modes_keep_legacy_model_path(dialog_setup, setup_agent, mod
     service.agent = setup_agent[0]
     await service.mode(1, mode)
     await service.respond(1, 1, "Python")
-    legacy_llm.complete.assert_awaited_once()
+    if mode == "quiz":
+        legacy_llm.decide.assert_awaited_once()
+        legacy_llm.complete.assert_not_awaited()
+    else:
+        legacy_llm.complete.assert_awaited_once()
+        legacy_llm.decide.assert_not_awaited()
     setup_agent[1].decide.assert_not_awaited()

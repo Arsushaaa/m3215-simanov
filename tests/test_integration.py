@@ -1866,3 +1866,86 @@ async def test_confirmation_database_restart_preserves_zone_actions_receipts_and
         assert await pool.fetchval("SELECT count(*) FROM labbi_messages") == 6
     finally:
         await pool.close()
+
+
+async def test_quiz_structured_transitions_persist_across_pools_and_isolate_users(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    llm = SimpleNamespace(decide=AsyncMock(), complete=AsyncMock())
+
+    def turn(kind, text, *, feedback=""):
+        return RoutingCompletion(
+            json.dumps({"kind": kind, "feedback": feedback, "text": text}, ensure_ascii=False),
+            [],
+        )
+
+    try:
+        await migrate(pool)
+        repository = DialogRepository(pool)
+        dialog = DialogService(repository, llm, settings)
+        await dialog.mode(101, "quiz")
+        await dialog.mode(202, "quiz")
+
+        llm.decide.return_value = turn("clarify", "Назови тему по программированию.")
+        personal = await dialog.respond(101, 1, "мое имя")
+        assert personal == "Уточнение для тренировки\n\nНазови тему по программированию."
+        alice = await repository.user(101)
+        assert (alice.quiz_question, alice.quiz_topic, alice.quiz_finished) == (0, None, False)
+
+        llm.decide.return_value = turn("question", "Что делает SELECT?")
+        await dialog.respond(202, 1, "SQL")
+        bob = await repository.user(202)
+        bob_history = await repository.history(202, 20)
+        await pool.close()
+        pool = await create_pool(settings)
+        repository = DialogRepository(pool)
+        dialog = DialogService(repository, llm, settings)
+        assert await repository.user(101) == alice
+        assert await repository.answer(101, 1) == personal
+
+        llm.decide.return_value = turn("question", "Вопрос 1/5\n\nЧто делает len?")
+        first = await dialog.respond(101, 2, "Python")
+        assert first == "Вопрос 1/5\n\nЧто делает len?"
+        alice = await repository.user(101)
+        assert (alice.quiz_question, alice.quiz_topic, alice.quiz_finished) == (1, "Python", False)
+        calls = llm.decide.await_count
+        assert await dialog.respond(101, 2, "Python") == first
+        assert llm.decide.await_count == calls
+        assert await repository.user(101) == alice
+
+        for message_id, kind, request in (
+            (3, "clarify", "А что за объект?"),
+            (4, "hint", "Подскажи"),
+        ):
+            llm.decide.return_value = turn(kind, "Вспомни последовательности.")
+            await dialog.respond(101, message_id, request)
+            alice = await repository.user(101)
+            assert (alice.quiz_question, alice.quiz_topic, alice.quiz_finished) == (
+                1,
+                "Python",
+                False,
+            )
+
+        history = await repository.history(101, 20)
+        before = await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101")
+        for message_id, result in (
+            (5, turn("finished", "Этот итог пока недопустим.")),
+            (6, RoutingCompletion('{"kind":"question","feedback":"","text":"Обрыв', [])),
+        ):
+            llm.decide.return_value = result
+            with pytest.raises(ModelError):
+                await dialog.respond(101, message_id, "Ответ")
+            assert await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101") == before
+            assert await repository.history(101, 20) == history
+            assert await repository.answer(101, message_id) is None
+
+        assert await repository.user(202) == bob
+        assert await repository.history(202, 20) == bob_history
+        assert await pool.fetchval("SELECT count(*) FROM labbi_messages WHERE user_id=101") == 8
+        assert await pool.fetchval("SELECT count(*) FROM labbi_messages WHERE user_id=202") == 2
+        assert llm.decide.await_count == 7
+        llm.complete.assert_not_awaited()
+        for call in llm.decide.call_args_list:
+            assert call.kwargs["decision_schema"]["additionalProperties"] is False
+    finally:
+        await pool.close()
