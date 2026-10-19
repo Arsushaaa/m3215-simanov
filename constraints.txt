@@ -54,5 +54,6 @@ sse-starlette==3.5.0
 starlette==1.8.0
 truststore==0.10.5
 tzdata==2026.5
+Babel==2.18.0
 uvicorn==0.54.0
 pywin32==312; sys_platform == "win32"

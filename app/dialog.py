@@ -69,10 +69,12 @@ class DialogService:
         *,
         agent=None,
         confirmations=None,
+        timezone_ui=None,
     ):
         self.repository, self.llm, self.settings = repository, llm, settings
         self.agent = agent
         self.confirmations = confirmations
+        self.timezone_ui = timezone_ui
         self.locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
 
     def lock(self, user_id: int) -> asyncio.Lock:
@@ -209,6 +211,8 @@ class DialogService:
         return await self.confirmations.cancel(user_id, action_id)
 
     async def invalidate_confirmations(self, user_id: int) -> bool:
+        if self.timezone_ui is not None:
+            self.timezone_ui.clear(user_id)
         if self.confirmations is None:
             return False
         return await self.confirmations.invalidate(user_id)
@@ -217,7 +221,37 @@ class DialogService:
         if self.confirmations is None:
             return "Настройка часового пояса сейчас недоступна."
         await self.repository.user(user_id)
+        if argument is not None and self.timezone_ui is not None:
+            self.timezone_ui.clear(user_id)
         return await self.confirmations.timezone(user_id, argument)
+
+    @staticmethod
+    def timezone_is_direct(argument: str | None) -> bool:
+        from app.timezone_ui import TimezoneUI
+
+        return TimezoneUI.direct_timezone(argument) is not None
+
+    async def timezone_menu(self, user_id: int, argument: str | None = None):
+        if self.timezone_ui is None:
+            return await self.timezone(user_id, argument)
+        await self.repository.user(user_id)
+        return await self.timezone_ui.open(user_id, argument)
+
+    async def timezone_callback(self, user_id: int, data: str):
+        if self.timezone_ui is None:
+            return "Меню недоступно. Используй /timezone Europe/Moscow."
+        return await self.timezone_ui.handle(user_id, data)
+
+    def timezone_callback_is_apply(self, user_id: int, data: str) -> bool:
+        return self.timezone_ui is not None and self.timezone_ui.is_apply(user_id, data)
+
+    def timezone_search_active(self, user_id: int) -> bool:
+        return self.timezone_ui is not None and self.timezone_ui.accepts_input(user_id)
+
+    async def timezone_input(self, user_id: int, text: str):
+        if self.timezone_ui is None:
+            return None
+        return await self.timezone_ui.search_input(user_id, text)
 
     async def why(self, user_id: int) -> str:
         if self.confirmations is None:

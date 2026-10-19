@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from contextlib import nullcontext, suppress
 from uuid import UUID
 
@@ -9,10 +10,11 @@ from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from app.confirmation_models import ConfirmationError, PreparedAction
+from app.confirmation_models import ConfirmationError, ConfirmationText, PreparedAction
 from app.dialog import DialogService
 from app.formatting import FormattedText, format_reply, split_formatted
 from app.llm import ModelError
+from app.timezone_ui import TimezoneView
 
 logger = logging.getLogger(__name__)
 START_TEXT = (
@@ -100,6 +102,10 @@ def create_router() -> Router:
         generating=False,
         user_id: int | None = None,
         serialized=True,
+        literal=False,
+        check_confirmation=True,
+        edit_view=False,
+        dismiss_confirmation=False,
     ):
         if closing:
             return
@@ -107,13 +113,34 @@ def create_router() -> Router:
 
         async def work():
             async with dialog.lock(owner) if serialized else nullcontext():
-                formatted = generating
+                formatted = generating and not literal
                 markup = None
+                dismiss_previous = False
+                view = False
                 indicator = asyncio.create_task(typing(message)) if generating else None
                 try:
                     try:
                         answer = await action()
-                        if generating:
+                        if isinstance(answer, TimezoneView):
+                            view = True
+                            dismiss_previous = answer.dismiss_previous
+                            if answer.rows:
+                                markup = InlineKeyboardMarkup(
+                                    inline_keyboard=[
+                                        [
+                                            InlineKeyboardButton(
+                                                text=button.text, callback_data=button.callback_data
+                                            )
+                                            for button in row
+                                        ]
+                                        for row in answer.rows
+                                    ]
+                                )
+                            answer = answer.text
+                            formatted = False
+                        elif dismiss_confirmation and isinstance(answer, ConfirmationText):
+                            dismiss_previous = answer.dismiss_card
+                        if generating and check_confirmation and not view:
                             card = await dialog.confirmation_card(owner, message.message_id)
                             if isinstance(card, PreparedAction) and card.state in {
                                 "pending",
@@ -148,8 +175,26 @@ def create_router() -> Router:
                         if formatted
                         else split_formatted(FormattedText(answer))
                     )
+                    if edit_view and view and not dismiss_previous and len(parts) == 1:
+                        try:
+                            await message.edit_text(
+                                parts[0].text,
+                                entities=parts[0].entities,
+                                parse_mode=None,
+                                reply_markup=markup,
+                            )
+                            return
+                        except TelegramBadRequest as exc:
+                            if "message is not modified" in exc.message.casefold():
+                                return
+                            logger.warning("Меню: ошибка редактирования %s", type(exc).__name__)
+                        except Exception as exc:
+                            logger.warning("Меню: ошибка редактирования %s", type(exc).__name__)
                     for number, part in enumerate(parts):
                         await send_part(message, part, markup if number == len(parts) - 1 else None)
+                    # Сначала доставляем результат; сбой Telegram не отменяет запись в БД.
+                    if dismiss_previous:
+                        await dismiss_message(message)
                 finally:
                     if indicator:
                         indicator.cancel()
@@ -187,6 +232,17 @@ def create_router() -> Router:
         except Exception as exc:
             # Update уже получен; сбой ACK не отменяет подтверждённое действие.
             logger.warning("Callback ACK: ошибка %s", type(exc).__name__)
+
+    async def dismiss_message(message: Message):
+        try:
+            await message.delete()
+            return
+        except Exception as exc:
+            logger.warning("Карточка: ошибка удаления %s", type(exc).__name__)
+        try:
+            await message.edit_reply_markup(reply_markup=None)
+        except Exception as exc:
+            logger.warning("Карточка: ошибка удаления кнопок %s", type(exc).__name__)
 
     @router.message(CommandStart())
     async def start(message: Message, dialog: DialogService):
@@ -246,15 +302,61 @@ def create_router() -> Router:
 
     @router.message(Command("timezone"))
     async def timezone(message: Message, command: CommandObject, dialog: DialogService):
-        setting = command.args is not None
+        setting = dialog.timezone_is_direct(command.args)
         if setting:
             await cancel_answers(message.from_user.id)
         await execute(
             message,
             dialog,
-            lambda: dialog.timezone(message.from_user.id, command.args),
-            serialized=not setting,
+            lambda: dialog.timezone_menu(message.from_user.id, command.args),
+            generating=command.args is not None and not setting,
+            serialized=command.args is None,
+            literal=True,
+            check_confirmation=False,
         )
+
+    @router.callback_query(F.data.startswith("tz:"))
+    async def timezone_callback(query: CallbackQuery, dialog: DialogService):
+        message = query.message
+        if (
+            not isinstance(message, Message)
+            or message.chat.type != "private"
+            or message.chat.id != query.from_user.id
+        ):
+            await acknowledge(query, "Выбор пояса доступен только в личном чате владельца.")
+            return
+        data = query.data or ""
+        match = re.fullmatch(
+            r"tz:(pick|use|page|search|cancel):[A-Za-z0-9_-]{16}(?::([0-9]{1,2}))?", data
+        )
+        if (
+            len(data.encode("utf-8")) > 64
+            or match is None
+            or (match[1] in {"pick", "use", "page"}) != (match[2] is not None)
+        ):
+            await acknowledge(query, "Кнопка выбора пояса недействительна.")
+            return
+        if closing:
+            await acknowledge(query, "Бот останавливается. Попробуй позже.")
+            return
+        await acknowledge(query)
+        owner = query.from_user.id
+        if dialog.timezone_callback_is_apply(owner, data):
+            await cancel_answers(owner)
+        task = asyncio.current_task()
+        callbacks.add(task)
+        try:
+            await execute(
+                message,
+                dialog,
+                lambda: dialog.timezone_callback(owner, data),
+                user_id=owner,
+                serialized=False,
+                edit_view=True,
+                check_confirmation=False,
+            )
+        finally:
+            callbacks.discard(task)
 
     @router.callback_query(F.data.startswith("rem:"))
     async def reminder_callback(query: CallbackQuery, dialog: DialogService):
@@ -297,6 +399,7 @@ def create_router() -> Router:
                 lambda: action(owner, action_id),
                 user_id=owner,
                 serialized=operation == "confirm",
+                dismiss_confirmation=True,
             )
         finally:
             callbacks.discard(task)
@@ -307,6 +410,21 @@ def create_router() -> Router:
 
     @router.message()
     async def text(message: Message, dialog: DialogService):
+        if dialog.timezone_search_active(message.from_user.id):
+
+            async def search():
+                result = await dialog.timezone_input(message.from_user.id, message.text)
+                return result if result is not None else "Меню закрыто. Открой /timezone заново."
+
+            await execute(
+                message,
+                dialog,
+                search,
+                generating=True,
+                literal=True,
+                check_confirmation=False,
+            )
+            return
         await execute(
             message,
             dialog,

@@ -38,6 +38,8 @@ from app.mcp.contracts import ReminderArguments, ReminderResult
 from app.migration import migrate
 from app.repository import DialogRepository
 from app.time_display import format_datetime
+from app.timezone_lookup import TimezoneOption
+from app.timezone_ui import TimezoneUI, TimezoneView
 from scripts.common import CommandError, run_command
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1597,5 +1599,65 @@ async def test_confirmation_prepare_rolls_back_history_action_and_revocation_tog
         assert replacement.action_id != first.action_id
         assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 2
         assert len(await dialog.history(101, 20)) == 4
+    finally:
+        await pool.close()
+
+
+async def test_timezone_menu_only_applies_after_owner_confirmation_and_persists(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        card = await _prepare_confirmation(pool, 101)
+        repository = DialogRepository(pool)
+        confirmations = ConfirmationRepository(pool)
+        mcp = SimpleNamespace(call_tool=AsyncMock())
+        service = ConfirmationService(confirmations, mcp)
+        lookup = SimpleNamespace(
+            search=AsyncMock(return_value=[TimezoneOption("Япония — Токио", "Asia/Tokyo")])
+        )
+        llm = SimpleNamespace(complete=AsyncMock(), decide=AsyncMock())
+        ui = TimezoneUI(service, lookup)
+        dialog = DialogService(repository, llm, settings, confirmations=service, timezone_ui=ui)
+        original_user = await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101")
+        original_history = await repository.history(101, 20)
+
+        choices = await dialog.timezone_menu(101, "Япония")
+        assert isinstance(choices, TimezoneView)
+        pick = choices.rows[0][0].callback_data
+        preview = await dialog.timezone_callback(101, pick)
+        assert "Asia/Tokyo" in preview.text and "UTC+09:00" in preview.text
+        use = preview.rows[0][0].callback_data
+        assert dialog.timezone_callback_is_apply(101, use)
+        assert not dialog.timezone_callback_is_apply(202, use)
+        assert isinstance(await dialog.timezone_callback(202, use), str)
+        assert await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101") == original_user
+        assert (await confirmations.current_card(101)).action_id == card.action_id
+        assert await repository.history(101, 20) == original_history
+
+        receipt = await dialog.timezone_callback(101, use)
+        assert receipt.dismiss_previous and "Asia/Tokyo" in receipt.text
+        assert await ConfirmationRepository(pool).timezone(101) == "Asia/Tokyo"
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_actions WHERE id=$1", card.action_id)
+            == "cancelled"
+        )
+        assert await confirmations.current_card(101) is None
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        assert await repository.history(101, 20) == original_history
+        epoch = await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+        assert epoch == original_user["confirmation_epoch"] + 1
+        assert isinstance(await dialog.timezone_callback(101, use), str)
+        assert "Asia/Tokyo" in await dialog.timezone_menu(101, "Asia/Tokyo")
+        assert (
+            await pool.fetchval("SELECT confirmation_epoch FROM labbi_users WHERE user_id=101")
+            == epoch
+        )
+        await dialog.timezone_menu(101)
+        await dialog.invalidate_confirmations(101)
+        assert isinstance(await dialog.timezone_callback(101, pick), str)
+        llm.complete.assert_not_awaited()
+        llm.decide.assert_not_awaited()
+        mcp.call_tool.assert_not_awaited()
     finally:
         await pool.close()

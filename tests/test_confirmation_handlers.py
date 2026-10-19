@@ -9,10 +9,15 @@ from uuid import UUID
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
-from aiogram.methods import AnswerCallbackQuery, SendMessage
+from aiogram.methods import (
+    AnswerCallbackQuery,
+    DeleteMessage,
+    EditMessageReplyMarkup,
+    SendMessage,
+)
 from aiogram.types import CallbackQuery, Chat, InaccessibleMessage, Message, Update, User
 
-from app.confirmation_models import ConfirmationError, PreparedAction
+from app.confirmation_models import ConfirmationError, ConfirmationText, PreparedAction
 from app.handlers.assistant import create_router
 from app.mcp.contracts import ReminderArguments
 
@@ -80,6 +85,12 @@ class FakeDialog:
         self.tools = AsyncMock(return_value="Доступны get_weather, get_schedule и add_reminder.")
         self.why = AsyncMock(return_value="Последнее действие: чтение расписания.")
         self.timezone = AsyncMock(return_value="Часовой пояс: Europe/Moscow.")
+        self.timezone_menu = AsyncMock(return_value="Часовой пояс: Europe/Moscow.")
+        self.timezone_callback = AsyncMock(return_value="Меню закрыто.")
+        self.timezone_callback_is_apply = Mock(return_value=False)
+        self.timezone_is_direct = Mock(return_value=False)
+        self.timezone_search_active = Mock(return_value=False)
+        self.timezone_input = AsyncMock(return_value=None)
         self.reset = AsyncMock(return_value="История очищена.")
         self.mode = AsyncMock(return_value="Режим изменён.")
         self.llm = SimpleNamespace(complete=AsyncMock(), decide=AsyncMock())
@@ -246,6 +257,79 @@ async def test_failed_ack_is_not_repeated_and_confirmation_still_runs(setup_ui, 
     assert "private-key" not in caplog.text
 
 
+@pytest.mark.parametrize("operation", ["confirm", "cancel"])
+async def test_completed_confirmation_sends_receipt_before_removing_old_card(setup_ui, operation):
+    dispatcher, bot, dialog = setup_ui
+    service = dialog.confirm if operation == "confirm" else dialog.cancel_confirmation
+    service.return_value = ConfirmationText("Готово.", dismiss_card=True)
+    await dispatcher.feed_update(bot, callback_update(f"rem:{operation}:{ACTION}"), dialog=dialog)
+    methods = [call.args[1] for call in bot.session.call_args_list]
+    receipt = next(index for index, method in enumerate(methods) if isinstance(method, SendMessage))
+    deletion = next(
+        index for index, method in enumerate(methods) if isinstance(method, DeleteMessage)
+    )
+    assert receipt < deletion
+    deleted = methods[deletion]
+    assert deleted.chat_id == 1 and deleted.message_id == 20
+    assert not any(isinstance(method, EditMessageReplyMarkup) for method in methods)
+
+
+@pytest.mark.parametrize("dismiss", [False, None])
+async def test_unknown_outcome_or_plain_model_text_does_not_remove_card(setup_ui, dismiss):
+    dispatcher, bot, dialog = setup_ui
+    dialog.confirm.return_value = (
+        ConfirmationText("Исход пока неизвестен.", dismiss_card=False)
+        if dismiss is False
+        else "Напоминание сохранено — это лишь строка без доверенного результата."
+    )
+    await dispatcher.feed_update(bot, callback_update(), dialog=dialog)
+    assert len(sent(bot)) == 1
+    assert not any(
+        isinstance(call.args[1], (DeleteMessage, EditMessageReplyMarkup))
+        for call in bot.session.call_args_list
+    )
+
+
+async def test_delete_failure_removes_buttons_without_repeating_committed_action(setup_ui, caplog):
+    dispatcher, bot, dialog = setup_ui
+    dialog.confirm.return_value = ConfirmationText("Сохранено.", dismiss_card=True)
+
+    async def send(_bot, method, **_kwargs):
+        if isinstance(method, DeleteMessage):
+            raise TelegramBadRequest(method=method, message="private details cannot delete")
+
+    bot.session.side_effect = send
+    await dispatcher.feed_update(bot, callback_update(), dialog=dialog)
+    methods = [call.args[1] for call in bot.session.call_args_list]
+    assert [type(method) for method in methods] == [
+        AnswerCallbackQuery,
+        SendMessage,
+        DeleteMessage,
+        EditMessageReplyMarkup,
+    ]
+    assert methods[-1].reply_markup is None
+    dialog.confirm.assert_awaited_once_with(1, ACTION)
+    assert "private details" not in caplog.text
+
+
+async def test_receipt_delivery_failure_keeps_card_for_receipt_recovery(setup_ui):
+    dispatcher, bot, dialog = setup_ui
+    dialog.confirm.return_value = ConfirmationText("Сохранено.", dismiss_card=True)
+
+    async def send(_bot, method, **_kwargs):
+        if isinstance(method, SendMessage):
+            raise TelegramBadRequest(method=method, message="cannot send")
+
+    bot.session.side_effect = send
+    with pytest.raises(TelegramBadRequest):
+        await dispatcher.feed_update(bot, callback_update(), dialog=dialog)
+    assert not any(
+        isinstance(call.args[1], (DeleteMessage, EditMessageReplyMarkup))
+        for call in bot.session.call_args_list
+    )
+    dialog.confirm.assert_awaited_once_with(1, ACTION)
+
+
 @pytest.mark.parametrize("code", ["ACTION_EXPIRED", "ACTION_CANCELLED", "UNAUTHORIZED"])
 async def test_service_refusal_of_old_card_is_shown_without_llm(setup_ui, code):
     dispatcher, bot, dialog = setup_ui
@@ -327,7 +411,7 @@ async def test_idle_stop_revokes_confirmation_outside_user_lock(setup_ui):
     [
         ("/tools", "tools", ()),
         ("/why", "why", (1,)),
-        ("/timezone", "timezone", (1, None)),
+        ("/timezone", "timezone_menu", (1, None)),
     ],
 )
 async def test_new_read_commands_use_services_without_model_or_revocation(
@@ -344,7 +428,7 @@ async def test_new_read_commands_use_services_without_model_or_revocation(
 
 async def test_timezone_set_is_outside_lock_and_service_validates_before_revocation(setup_ui):
     dispatcher, bot, dialog = setup_ui
-    dialog.timezone.return_value = "Неизвестная IANA-зона."
+    dialog.timezone_menu.return_value = "Неизвестная IANA-зона."
     lock = dialog.lock(1)
     await lock.acquire()
     try:
@@ -353,7 +437,7 @@ async def test_timezone_set_is_outside_lock_and_service_validates_before_revocat
         )
     finally:
         lock.release()
-    dialog.timezone.assert_awaited_once_with(1, "wrong/zone")
+    dialog.timezone_menu.assert_awaited_once_with(1, "wrong/zone")
     dialog.invalidate_confirmations.assert_not_awaited()
     assert sent(bot)[0].text == "Неизвестная IANA-зона."
 

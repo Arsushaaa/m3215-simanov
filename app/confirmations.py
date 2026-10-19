@@ -7,7 +7,13 @@ from uuid import UUID
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.confirmation_models import Authorization, ConfirmationError, Outcome, PreparedAction
+from app.confirmation_models import (
+    Authorization,
+    ConfirmationError,
+    ConfirmationText,
+    Outcome,
+    PreparedAction,
+)
 from app.mcp.client import MCPClient, MCPClientError
 from app.mcp.contracts import ReminderArguments, TimezoneName
 from app.reminder_intent import BUTTON_REQUIRED
@@ -88,7 +94,10 @@ class ConfirmationService:
     @staticmethod
     def _outcome(outcome: Outcome) -> str:
         if outcome.status != "committed":
-            return UNKNOWN_OUTCOME if outcome.status == "unknown" else outcome.message
+            return ConfirmationText(
+                UNKNOWN_OUTCOME if outcome.status == "unknown" else outcome.message,
+                dismiss_card=outcome.status in {"cancelled", "expired"},
+            )
         if outcome.reminder_id is None or outcome.remind_at is None or outcome.timezone is None:
             return UNKNOWN_OUTCOME
         try:
@@ -98,10 +107,11 @@ class ConfirmationService:
             moment = format_datetime(outcome.remind_at, timezone)
         except (ValidationError, ValueError, AttributeError):
             return UNKNOWN_OUTCOME
-        return (
+        return ConfirmationText(
             f"Напоминание сохранено.\nID: {outcome.reminder_id}\n"
             f"Когда: {moment}\nЧасовой пояс: {timezone}\n"
-            "Отправка уведомлений по времени пока не подключена."
+            "Отправка уведомлений по времени пока не подключена.",
+            dismiss_card=True,
         )
 
     async def _reconcile(self, user_id: int, action_id: UUID | str) -> Outcome | None:
@@ -170,7 +180,7 @@ class ConfirmationService:
         now = await self.repository.now()
         if now.tzinfo is None or now.utcoffset() is None:
             raise ConfirmationError("SOURCE_UNAVAILABLE", "Не удалось получить текущее время.")
-        moment = format_datetime(now, timezone)
+        moment = format_datetime(now.replace(microsecond=0), timezone)
         result = f"Часовой пояс: {timezone}.\nТекущее время: {moment}."
         if argument is not None:
             result += "\nПри смене часового пояса прежнее неподтверждённое действие отменяется."
@@ -181,7 +191,7 @@ class ConfirmationService:
         if event is None:
             return "Пока нет запросов с решением агента."
         timezone = await self.repository.timezone(user_id) or "UTC"
-        moment = format_datetime(event.created_at, timezone)
+        moment = format_datetime(event.created_at.replace(microsecond=0), timezone)
         actions = {
             "respond": "ответ без инструмента",
             "clarify": "уточнение",

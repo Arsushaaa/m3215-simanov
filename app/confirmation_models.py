@@ -15,6 +15,19 @@ class ConfirmationError(Exception):
         super().__init__(user_message)
 
 
+class ConfirmationText(str):
+    """Совместимый строковый ответ с доверенным признаком закрытия карточки."""
+
+    def __new__(cls, text: str, *, dismiss_card: bool = False):
+        value = super().__new__(cls, text)
+        value._dismiss_card = dismiss_card
+        return value
+
+    @property
+    def dismiss_card(self) -> bool:
+        return self._dismiss_card
+
+
 @dataclass(frozen=True)
 class PreparedAction:
     action_id: UUID

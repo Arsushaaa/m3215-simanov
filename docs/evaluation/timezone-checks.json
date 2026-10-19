@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-19",
+  "changes": {
+    "readable_time": "Exact reminder time is displayed as Russian calendar date + local clock + UTC offset; nonzero seconds/microseconds are retained for the reminder. Live clocks and audit timestamps omit microseconds. Wire ISO and DB schema are unchanged.",
+    "timezone": "Owner-scoped menu, city/country search, local clock preview, explicit apply; direct full IANA input remains supported. Countries use tzdata and Babel/CLDR43 locales; cities use one bounded fixed geocoding request without retry.",
+    "card_dismissal": "Trusted committed/cancelled/expired outcome: deliver result then delete original card, falling back to removing buttons. Unknown/error or failed result delivery retains card."
+  },
+  "checks": {
+    "pip_check": {
+      "exit_code": 0
+    },
+    "ruff_check": {
+      "exit_code": 0
+    },
+    "ruff_format_check": {
+      "exit_code": 0
+    },
+    "git_diff_check": {
+      "exit_code": 0
+    },
+    "full_pytest": {
+      "command": "source scripts/env.sh; RUN_INTEGRATION=1 python -m pytest -q",
+      "exit_code": 0,
+      "stdout": "1039 passed in 62.54s (0:01:02)",
+      "passed": 1039,
+      "real_postgresql_integration_tests": 21
+    },
+    "first_formatting_verification": {
+      "focused_tests": 137,
+      "working_tree_full_pytest": "952 passed in 62.45s (included concurrent lookup tests)"
+    },
+    "live_lookup": "timezone-live-check.json",
+    "docker": {
+      "image": "labbi-timezone-check:local",
+      "image_id": "8ec04965c290",
+      "build_exit_code": 0,
+      "smoke_exit_code": 0,
+      "uid": 10001,
+      "network": "none",
+      "read_only": true,
+      "country_options": 26,
+      "japanese_country_zone": "Asia/Tokyo",
+      "menu_without_save": true,
+      "sql_migrations_packaged": 6
+    }
+  },
+  "acceptance": {
+    "ordinary_responses_regression": true,
+    "explicit_confirmation_only": true,
+    "search_does_not_change_timezone_or_revoke_reminder": true,
+    "stale_foreign_and_expired_callbacks_do_not_save_or_cancel_active_response": true,
+    "country_alias_tz_name_collision_requires_selection": true,
+    "pagination_up_to_50_options": true,
+    "stop_cancels_http_search": true,
+    "old_http_results_do_not_replace_new_menu": true,
+    "saved_timezone_persists_in_postgresql_and_revokes_old_card_atomically": true,
+    "terminal_receipt_delivered_before_card_dismissal": true,
+    "unknown_write_outcome_retains_confirmation": true
+  },
+  "dependencies": {
+    "Babel": "2.18.0",
+    "python": "3.12",
+    "country_locales": 43,
+    "reference": [
+      "https://pypi.org/project/babel/2.18.0/",
+      "https://babel.pocoo.org/en/stable/api/core.html#babel.core.Locale.territories",
+      "https://open-meteo.com/en/docs/geocoding-api"
+    ]
+  },
+  "source_checks": {
+    "existing_migrations_unchanged": true,
+    "migration_sha256": {
+      "001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+      "002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+      "003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+      "004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+      "005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771",
+      "006_agent_state.sql": "70ff420027af200a9eba7c83f63ca46a17fb0e97c2ec5576972be5859f241212"
+    },
+    "lab1_commit": "2d10cf0b9b750b5dc9ce67b849d1c774b1413ff9",
+    "new_settings": false,
+    "new_migrations": false,
+    "lab2_tag_created": false,
+    "packaging": "Docker copies app/; deployment source_archive includes all app Python modules and all SQL files, plus requirements/constraints."
+  },
+  "limits": {
+    "real_llm_calls": 0,
+    "real_telegram_calls": 0,
+    "public_geocoding_calls": 1,
+    "no_running_bot_restart": true
+  },
+  "lab2_stages_6_7": "unchanged, pending"
+}

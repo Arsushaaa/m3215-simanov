@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 
+import aiohttp
 from aiogram import Dispatcher
 
 from app.agent import AgentService
@@ -18,6 +19,8 @@ from app.mcp.client import MCPClient
 from app.migration import migrate
 from app.repository import DialogRepository
 from app.telegram import create_bot
+from app.timezone_lookup import TimezoneLookup
+from app.timezone_ui import TimezoneUI
 
 logger = logging.getLogger("app")
 
@@ -28,6 +31,7 @@ async def run(settings: Settings) -> None:
     runner = None
     llm = None
     mcp = None
+    timezone_session = None
     try:
         state.pool = await create_pool(settings)
         logger.info("PostgreSQL подключён: SELECT 1 выполнен.")
@@ -48,8 +52,15 @@ async def run(settings: Settings) -> None:
         await mcp.start()
         agent = AgentService(llm, mcp, AgentRepository(state.pool), settings)
         confirmations = ConfirmationService(ConfirmationRepository(state.pool), mcp)
+        timezone_session = aiohttp.ClientSession()
+        timezone_ui = TimezoneUI(confirmations, TimezoneLookup(timezone_session))
         dialog = DialogService(
-            DialogRepository(state.pool), llm, settings, agent=agent, confirmations=confirmations
+            DialogRepository(state.pool),
+            llm,
+            settings,
+            agent=agent,
+            confirmations=confirmations,
+            timezone_ui=timezone_ui,
         )
         dispatcher = Dispatcher()
         dispatcher.include_router(create_router())
@@ -73,6 +84,8 @@ async def run(settings: Settings) -> None:
         if runner:
             await runner.cleanup()
         await bot.session.close()
+        if timezone_session:
+            await timezone_session.close()
         if mcp:
             await mcp.close()
         if llm:

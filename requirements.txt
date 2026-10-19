@@ -8,3 +8,4 @@ mcp==2.3.0
 pydantic==2.13.5
 jsonschema==4.26.0
 tzdata==2026.5
+Babel==2.18.0

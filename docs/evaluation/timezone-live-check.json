@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-19",
+  "cases": [
+    {
+      "query": "Россия",
+      "status": "ok",
+      "options": 26,
+      "zones": [
+        "Europe/Kaliningrad",
+        "Europe/Moscow",
+        "Europe/Kirov",
+        "Europe/Volgograd",
+        "Europe/Astrakhan",
+        "Europe/Saratov",
+        "Europe/Ulyanovsk",
+        "Europe/Samara",
+        "Asia/Yekaterinburg",
+        "Asia/Omsk",
+        "Asia/Novosibirsk",
+        "Asia/Barnaul",
+        "Asia/Tomsk",
+        "Asia/Novokuznetsk",
+        "Asia/Krasnoyarsk",
+        "Asia/Irkutsk",
+        "Asia/Chita",
+        "Asia/Yakutsk",
+        "Asia/Khandyga",
+        "Asia/Vladivostok",
+        "Asia/Ust-Nera",
+        "Asia/Magadan",
+        "Asia/Sakhalin",
+        "Asia/Srednekolymsk",
+        "Asia/Kamchatka",
+        "Asia/Anadyr"
+      ],
+      "http_calls": 0
+    },
+    {
+      "query": "日本",
+      "status": "ok",
+      "options": 1,
+      "zones": [
+        "Asia/Tokyo"
+      ],
+      "http_calls": 0
+    },
+    {
+      "query": "Санкт-Петербург, Россия",
+      "status": "ok",
+      "options": 1,
+      "zones": [
+        "Europe/Moscow"
+      ],
+      "http_calls": 1
+    }
+  ],
+  "real_llm_calls": 0,
+  "real_telegram_calls": 0,
+  "database_calls": 0,
+  "automatic_retries": 0
+}
