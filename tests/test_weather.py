@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -91,6 +92,70 @@ def saint_petersburg_geocoding():
     # Публичный ответ Open-Meteo от 19.10.2026: у одноимённого места в MS нет country.
     path = Path(__file__).parent / "fixtures" / "open_meteo_saint_petersburg.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def kazan_geocoding():
+    # Публичный ответ Open-Meteo от 19.10.2026: три Казани в Кировской области
+    # имеют разные ID/координаты, но одинаковые доступные названия регионов.
+    path = Path(__file__).parent / "fixtures" / "open_meteo_kazan.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("query", ["Казань", "Казань, Россия", "Казань, RU"])
+async def test_real_kazan_geocoding_groups_labels_without_choosing_a_location(
+    kazan_geocoding, query
+):
+    session = FakeSession(FakeResponse(kazan_geocoding))
+    result = await WeatherService(session).get_weather(query)
+    assert result.root.status == "ambiguous"
+    assert [place.model_dump() for place in result.root.candidates] == [
+        {
+            "name": "Казань",
+            "country": "Россия",
+            "region": "Татарстан, Gorodskoy Okrug Kazan’",
+        },
+        {"name": "Казань", "country": "Россия", "region": "Кировская Область"},
+    ]
+    assert len(session.calls) == 1
+
+
+async def test_real_kazan_geocoding_explicit_tatarstan_uses_only_matching_coordinates(
+    kazan_geocoding,
+):
+    session = FakeSession(FakeResponse(kazan_geocoding), FakeResponse(weather()))
+    result = await WeatherService(session).get_weather("Казань, Татарстан")
+    assert result.root.status == "ok"
+    assert result.root.place.region == "Татарстан, Gorodskoy Okrug Kazan’"
+    assert session.calls[1][1]["params"]["latitude"] == 55.78874
+    assert session.calls[1][1]["params"]["longitude"] == 49.12214
+    assert session.calls[1][1]["params"]["timezone"] == "Europe/Moscow"
+    assert [url for url, _ in session.calls] == [GEOCODING_URL, WEATHER_URL]
+
+
+async def test_real_kazan_geocoding_group_does_not_become_a_unique_location(kazan_geocoding):
+    session = FakeSession(FakeResponse(kazan_geocoding))
+    result = await WeatherService(session).get_weather("Казань, Кировская область")
+    assert result.root.status == "error"
+    assert result.root.error.code == "AMBIGUOUS_PLACE"
+    assert "Уточни" in result.root.error.message
+    assert "выбрать точные координаты по этим данным нельзя" in result.root.error.message
+    assert result.root.error.retryable is False
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"latitude": 91}, {"longitude": "48.5103"}, {"timezone": "localtime"}, {"id": 551485}],
+)
+async def test_repeated_kazan_labels_do_not_hide_invalid_geocoder_data(kazan_geocoding, changes):
+    data = deepcopy(kazan_geocoding)
+    data["results"][2].update(changes)
+    session = FakeSession(FakeResponse(data))
+    result = await WeatherService(session).get_weather("Казань")
+    assert result.root.status == "error"
+    assert result.root.error.code == "INVALID_RESULT"
+    assert len(session.calls) == 1
 
 
 async def test_real_geocoding_without_country_preserves_city_ambiguity(
@@ -281,11 +346,21 @@ async def test_ambiguity_candidates_are_bounded_and_use_lower_administrative_lev
     assert len(session.calls) == 1
 
 
+async def test_repeated_labels_do_not_hide_other_regions_or_small_places():
+    places = [location(id=i + 1, population=99999999) for i in range(8)]
+    places.append(location(id=10, admin1="Другой регион", population=1))
+    session = session_for(places)
+    result = await WeatherService(session).get_weather("Казань")
+    assert result.root.status == "ambiguous"
+    assert [place.region for place in result.root.candidates] == ["Татарстан", "Другой регион"]
+    assert len(session.calls) == 1
+
+
 async def test_indistinguishable_places_are_not_silently_deduplicated():
     session = session_for([location(id=1), location(id=2, latitude=40.0)])
     result = await WeatherService(session).get_weather("Казань")
     assert result.root.status == "error"
-    assert result.root.error.code == "INVALID_ARGUMENTS"
+    assert result.root.error.code == "AMBIGUOUS_PLACE"
     assert "Уточни" in result.root.error.message
     assert len(session.calls) == 1
 
@@ -441,6 +516,82 @@ async def test_network_errors_hide_request_details_and_do_not_retry(error, code)
     assert result.root.error.code == code
     assert "SECRET" not in result.model_dump_json()
     assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize("phase", ["geocoding", "current"])
+@pytest.mark.parametrize(
+    "failure,code,status,error_type",
+    [
+        (
+            FakeResponse({"reason": "PRIVATE_BODY"}, status=403),
+            "UPSTREAM_ERROR",
+            403,
+            "_FetchError",
+        ),
+        (
+            FakeResponse({"reason": "PRIVATE_BODY"}, status=429),
+            "UPSTREAM_ERROR",
+            429,
+            "_FetchError",
+        ),
+        (
+            FakeResponse({"reason": "PRIVATE_BODY"}, status=503),
+            "UPSTREAM_ERROR",
+            503,
+            "_FetchError",
+        ),
+        (TimeoutError("PRIVATE_EXCEPTION"), "TIMEOUT", None, "TimeoutError"),
+        (
+            aiohttp.ClientConnectionError("PRIVATE_EXCEPTION"),
+            "UPSTREAM_ERROR",
+            None,
+            "ClientConnectionError",
+        ),
+        (FakeResponse(raw=b"PRIVATE_BODY"), "INVALID_RESULT", None, "JSONDecodeError"),
+    ],
+)
+async def test_failure_diagnostics_identify_phase_without_private_details(
+    caplog, phase, failure, code, status, error_type
+):
+    responses = (
+        [FakeResponse({"results": [location(name="PRIVATE_CITY")]})] if phase == "current" else []
+    )
+    session = FakeSession(*responses, failure)
+    result = await WeatherService(session).get_weather("PRIVATE_CITY")
+    assert result.root.error.code == code
+    assert len(session.calls) == (2 if phase == "current" else 1)
+    records = [record for record in caplog.records if record.name == "app.mcp.weather"]
+    assert len(records) == 1
+    assert records[0].getMessage() == (
+        f"weather phase={phase} code={code} http_status={status} error_type={error_type}"
+    )
+    assert records[0].exc_info is None
+    assert records[0].stack_info is None
+    assert "PRIVATE" not in caplog.text
+    assert "http://" not in caplog.text and "https://" not in caplog.text
+
+
+async def test_production_stdio_logging_preserves_safe_weather_diagnostics_only(capsys):
+    from app.mcp.server import _configure_logging
+
+    root = logging.getLogger()
+    previous_handlers, previous_level = root.handlers[:], root.level
+    try:
+        _configure_logging()
+        session = FakeSession(FakeResponse({"reason": "PRIVATE_BODY"}, status=503))
+        result = await WeatherService(session).get_weather("PRIVATE_CITY")
+        logging.getLogger("aiohttp").error("PRIVATE_SDK_PAYLOAD")
+        assert result.root.error.code == "UPSTREAM_ERROR"
+        rendered = capsys.readouterr()
+        assert rendered.out == ""  # stdout remains exclusively the MCP protocol.
+        assert rendered.err == (
+            "WARNING weather phase=geocoding code=UPSTREAM_ERROR "
+            "http_status=503 error_type=_FetchError\n"
+        )
+    finally:
+        for handler in root.handlers:
+            handler.close()
+        root.handlers, root.level = previous_handlers, previous_level
 
 
 async def test_task_cancellation_is_not_swallowed_as_weather_error():

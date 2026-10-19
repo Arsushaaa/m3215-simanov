@@ -215,13 +215,25 @@ def test_ambiguous_cities_are_distinguishable_and_bounded():
             WeatherResult.model_validate({**payload, "candidates": candidates})
 
 
-def test_error_result_is_safe_typed_and_shared_by_all_tools():
+@pytest.mark.parametrize(
+    "code,message,retryable",
+    [
+        ("TIMEOUT", "Сервис не ответил вовремя.", True),
+        ("AMBIGUOUS_PLACE", "Нужно уточнить одноимённый населённый пункт.", False),
+    ],
+)
+def test_error_result_is_safe_typed_and_shared_by_all_tools(code, message, retryable):
     payload = {
         "status": "error",
-        "error": {"code": "TIMEOUT", "message": "Сервис не ответил вовремя.", "retryable": True},
+        "error": {"code": code, "message": message, "retryable": retryable},
     }
-    for model in (WeatherResult, ScheduleResult, ReminderResult):
+    for model, name in (
+        (WeatherResult, "get_weather"),
+        (ScheduleResult, "get_schedule"),
+        (ReminderResult, "add_reminder"),
+    ):
         assert model.model_validate(payload).model_dump(mode="json") == payload
+        Draft202012Validator(tool_schemas(name)["outputSchema"]).validate(payload)
         malformed = deepcopy(payload)
         malformed["error"]["retryable"] = "true"
         with pytest.raises(ValidationError):

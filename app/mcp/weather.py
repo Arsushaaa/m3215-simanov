@@ -8,6 +8,7 @@
 
 import asyncio
 import json
+import logging
 import math
 import re
 import unicodedata
@@ -37,6 +38,7 @@ from app.mcp.contracts import (
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 MAX_HTTP_BYTES = 256 * 1024
+logger = logging.getLogger(__name__)
 
 # https://open-meteo.com/en/docs#weather_variable_documentation
 WMO_CONDITIONS = {
@@ -129,9 +131,28 @@ class _Weather(_ApiModel):
 
 
 class _FetchError(Exception):
-    def __init__(self, code: ErrorCode, message: str, *, retryable: bool = False):
+    def __init__(
+        self,
+        code: ErrorCode,
+        message: str,
+        *,
+        retryable: bool = False,
+        http_status: int | None = None,
+    ):
         self.code, self.message, self.retryable = code, message, retryable
+        self.http_status = http_status
         super().__init__(message)
+
+
+def _log_failure(phase: str, code: ErrorCode, error: Exception) -> None:
+    # Fixed fields only: URLs, HTTP bodies and exception messages contain input.
+    logger.warning(
+        "weather phase=%s code=%s http_status=%s error_type=%s",
+        phase,
+        code,
+        error.http_status if isinstance(error, _FetchError) else None,
+        type(error).__name__,
+    )
 
 
 def _normalized(value: str) -> str:
@@ -210,6 +231,7 @@ class WeatherService:
                     "UPSTREAM_ERROR",
                     "Погодный сервис сейчас недоступен.",
                     retryable=response.status == 429 or response.status >= 500,
+                    http_status=response.status,
                 )
             if response.content_length is not None and response.content_length > MAX_HTTP_BYTES:
                 raise _FetchError("INVALID_RESULT", "Погодный сервис вернул слишком большой ответ.")
@@ -237,6 +259,7 @@ class WeatherService:
             return self._error(
                 "INVALID_ARGUMENTS", "Укажи город, при необходимости страну и регион."
             )
+        phase = "geocoding"
         try:
             async with asyncio.timeout(self.timeout_seconds):
                 name, qualifiers = parts[0], parts[1:]
@@ -251,25 +274,35 @@ class WeatherService:
                         WeatherNotFound(status="not_found", query=query, source="Open-Meteo")
                     )
                 if len(locations) > 1:
-                    candidates = [location.place() for location in locations]
-                    keys = {
-                        (place.name.casefold(), place.country.casefold(), place.region.casefold())
-                        for place in candidates
-                    }
-                    if len(keys) != len(candidates):
+                    # Разные GeoNames ID могут иметь одинаковые доступные подписи.
+                    # Объединяем только подписи для уточнения, а не сами места:
+                    # выбор такого региона всё ещё обязан дать ровно одну локацию.
+                    candidates = {}
+                    for location in locations:
+                        place = location.place()
+                        key = (
+                            place.name.casefold(),
+                            place.country.casefold(),
+                            place.region.casefold(),
+                        )
+                        candidates.setdefault(key, place)
+                    if len(candidates) == 1:
                         return self._error(
-                            "INVALID_ARGUMENTS",
-                            "Есть несколько неразличимых мест. Уточни город, страну и район.",
+                            "AMBIGUOUS_PLACE",
+                            "Найдено несколько мест с одинаковыми названием, страной и регионом. "
+                            "Геокодер не сообщает различающие районы. Уточни место; "
+                            "выбрать точные координаты по этим данным нельзя.",
                         )
                     return WeatherResult(
                         WeatherAmbiguous(
                             status="ambiguous",
                             query=query,
-                            candidates=candidates[:5],
+                            candidates=list(candidates.values())[:5],
                             source="Open-Meteo",
                         )
                     )
                 location = locations[0]
+                phase = "current"
                 data = await self._json(
                     WEATHER_URL,
                     {
@@ -305,15 +338,19 @@ class WeatherService:
                         source="Open-Meteo",
                     )
                 )
-        except TimeoutError:
+        except TimeoutError as error:
+            _log_failure(phase, "TIMEOUT", error)
             return self._error("TIMEOUT", "Погодный сервис не ответил вовремя.", retryable=True)
-        except aiohttp.ClientError:
+        except aiohttp.ClientError as error:
+            _log_failure(phase, "UPSTREAM_ERROR", error)
             return self._error(
                 "UPSTREAM_ERROR", "Не удалось связаться с погодным сервисом.", retryable=True
             )
         except _FetchError as error:
+            _log_failure(phase, error.code, error)
             return self._error(error.code, error.message, retryable=error.retryable)
-        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as error:
+            _log_failure(phase, "INVALID_RESULT", error)
             return self._error("INVALID_RESULT", "Погодный сервис вернул некорректные данные.")
 
     @staticmethod

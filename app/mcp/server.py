@@ -310,7 +310,7 @@ def create_server(settings: MCPSettings, *, weather=None, schedule=None, reminde
 
 def _configure_logging():
     handler = logging.StreamHandler(sys.stderr)
-    handler.addFilter(lambda record: record.name == __name__)
+    handler.addFilter(lambda record: record.name in {__name__, "app.mcp.weather"})
     handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
 

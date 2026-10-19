@@ -108,6 +108,13 @@ Discovery не считается вызовом пользовательско�
 Open-Meteo может опускать пустое название страны: в этом случае `country`
 содержит проверенный `country_code` источника. Отсутствие названия у одного
 кандидата не отвергает весь поиск и не разрешает автоматически выбрать другой.
+Разные GeoNames ID могут иметь одинаковые доступные подписи. Для `ambiguous`
+объединяются только подписи кандидатов; сами места остаются разными. После
+уточнения страны/региона погодный запрос разрешён только при одной локации.
+Если у всех найденных мест одна подпись, возвращается `AMBIGUOUS_PLACE` с
+фиксированным уточнением клиента, а не `INVALID_ARGUMENTS` и не выбором первого ID.
+Отказы HTTP диагностируются по этапу `geocoding`/`current`, коду, HTTP-статусу
+и классу ошибки, без запросов пользователя, URL, HTTP-тел или traceback.
 
 ## 6. Инструмент `get_schedule(date)` — чтение
 
@@ -315,7 +322,7 @@ MCP SDK 2.3.0 и зависимости закреплены на этапе 2; 
 
 Безопасные коды ошибок: `INVALID_ARGUMENTS`, `UNKNOWN_TOOL`, `UNAUTHORIZED`,
 `CONFIRMATION_REQUIRED`, `ACTION_CANCELLED`, `ACTION_EXPIRED`, `ACTION_CONFLICT`,
-`TIMEZONE_REQUIRED`, `AMBIGUOUS_TIME`, `MCP_UNAVAILABLE`, `TIMEOUT`,
+`TIMEZONE_REQUIRED`, `AMBIGUOUS_TIME`, `AMBIGUOUS_PLACE`, `MCP_UNAVAILABLE`, `TIMEOUT`,
 `UPSTREAM_ERROR`, `INVALID_RESULT`, `SOURCE_UNAVAILABLE`, `CALL_LIMIT`, `OUTCOME_UNKNOWN`.
 При отказе итогового LLM после чтения — краткая детерминированная передача проверенных
 данных с источником или честная ошибка, без нового LLM-запроса. Частичный обычный

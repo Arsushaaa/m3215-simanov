@@ -1,0 +1,78 @@
+{
+  "results": [
+    {
+      "id": 551487,
+      "name": "Казань",
+      "latitude": 55.78874,
+      "longitude": 49.12214,
+      "elevation": 61.0,
+      "feature_code": "PPLA",
+      "country_code": "RU",
+      "admin1_id": 484048,
+      "admin2_id": 862913,
+      "timezone": "Europe/Moscow",
+      "population": 1243500,
+      "country_id": 2017370,
+      "country": "Россия",
+      "admin1": "Татарстан",
+      "admin2": "Gorodskoy Okrug Kazan’"
+    },
+    {
+      "id": 551485,
+      "name": "Казань",
+      "latitude": 59.16483,
+      "longitude": 49.93195,
+      "elevation": 168.0,
+      "feature_code": "PPL",
+      "country_code": "RU",
+      "admin1_id": 548389,
+      "timezone": "Europe/Kirov",
+      "country_id": 2017370,
+      "country": "Россия",
+      "admin1": "Кировская Область"
+    },
+    {
+      "id": 6422093,
+      "name": "Казань",
+      "latitude": 57.87662,
+      "longitude": 48.5103,
+      "elevation": 141.0,
+      "feature_code": "PPL",
+      "country_code": "RU",
+      "admin1_id": 548389,
+      "timezone": "Europe/Kirov",
+      "country_id": 2017370,
+      "country": "Россия",
+      "admin1": "Кировская Область"
+    },
+    {
+      "id": 7794320,
+      "name": "Казань",
+      "latitude": 57.9699,
+      "longitude": 48.991,
+      "elevation": 176.0,
+      "feature_code": "PPL",
+      "country_code": "RU",
+      "admin1_id": 548389,
+      "timezone": "Europe/Kirov",
+      "country_id": 2017370,
+      "country": "Россия",
+      "admin1": "Кировская Область"
+    },
+    {
+      "id": 551445,
+      "name": "Казань-Омга",
+      "latitude": 56.38159,
+      "longitude": 51.19569,
+      "elevation": 114.0,
+      "feature_code": "PPL",
+      "country_code": "RU",
+      "admin1_id": 548389,
+      "timezone": "Europe/Kirov",
+      "country_id": 2017370,
+      "country": "Россия",
+      "admin1": "Кировская Область"
+    }
+  ],
+  "generationtime_ms": 0.1411438
+}
