@@ -5,16 +5,21 @@ import json
 import sys
 from dataclasses import replace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 from mcp import types
 from mcp.shared.exceptions import MCPError
 
+from app.agent import AgentService
+from app.llm import Completion, ModelError, RoutingCompletion
 from app.mcp import client as module
 from app.mcp.client import MCPClient, MCPClientError
 from app.mcp.contracts import tool_schemas
 from app.mcp.schedule import ScheduleService
+from app.prompts import PROMPTS
+from app.repository import UserSettings
 
 DAY = {
     "status": "ok",
@@ -583,3 +588,101 @@ async def test_operation_repr_cannot_expose_authorization_or_reminder_text():
     )
     assert "SECRET" not in repr(operation)
     assert ACTION_CONTEXT["capability"] not in repr(operation)
+
+
+@pytest.mark.parametrize("status", ["ok", "outside_coverage"])
+async def test_well_formed_schedule_for_another_day_is_not_a_fact(setup_client, status):
+    client, sdk, _ = setup_client
+    value = (
+        DAY
+        if status == "ok"
+        else {
+            **{key: value for key, value in DAY.items() if key != "lessons"},
+            "status": "outside_coverage",
+            "coverage_start": "2026-10-12",
+            "coverage_end": "2026-10-17",
+        }
+    )
+    sdk.call_tool.return_value = tool_result(value)
+    await client.start()
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool("get_schedule", {"date": "2026-10-19"})
+        assert error.value.code == "INVALID_RESULT"
+        assert client.available
+        sdk.call_tool.assert_awaited_once()
+        sdk.list_tools.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+async def test_well_formed_receipt_for_another_moment_is_unknown(setup_client):
+    client, sdk, _ = setup_client
+    sdk.call_tool.return_value = tool_result(
+        {**REMINDER_RECEIPT, "remind_at": "2030-01-01T11:00:00+03:00"}
+    )
+    await client.start()
+    try:
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool(
+                "add_reminder", REMINDER_ARGUMENTS, action_context=ACTION_CONTEXT
+            )
+        assert error.value.code == "OUTCOME_UNKNOWN"
+        sdk.call_tool.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize("failure", ["startup", "catalog", "disconnect"])
+async def test_failed_real_client_preserves_plain_dialog_without_reconnect(setup_client, failure):
+    client, sdk, factory = setup_client
+    if failure == "startup":
+        factory.side_effect = OSError("PRIVATE startup diagnostics")
+    elif failure == "catalog":
+        sdk.list_tools.return_value.tools.pop()
+    await client.start()
+    calls_before = sdk.call_tool.await_count
+    if failure == "disconnect":
+        sdk.call_tool.side_effect = ConnectionResetError("PRIVATE disconnected transport")
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool("get_schedule", {"date": "2026-10-18"})
+        assert error.value.code == "MCP_UNAVAILABLE"
+        calls_before += 1
+    llm = SimpleNamespace(
+        decide=AsyncMock(
+            return_value=RoutingCompletion(
+                '{"action":"respond","text":"Tuple неизменяем.","reason":"Обычный вопрос."}', []
+            )
+        ),
+        complete=AsyncMock(return_value=Completion("Не должно отправиться")),
+    )
+    repo = SimpleNamespace(
+        timezone=AsyncMock(return_value=None),
+        has_processed=AsyncMock(return_value=False),
+        record=AsyncMock(),
+    )
+    agent = AgentService(llm, client, repo, client.settings)
+    user = UserSettings(42, "study", 0.3, 0)
+    try:
+        assert not client.available
+        reply = await agent.respond(
+            user, 1, "Что такое tuple?", prompt=PROMPTS["study"], history=[]
+        )
+        assert reply.text == "Tuple неизменяем."
+        llm.decide.return_value = RoutingCompletion(
+            '{"action":"call_tool","name":"get_schedule","arguments":{"date":"2026-10-19"},"reason":"Расписание."}',
+            [],
+        )
+        with pytest.raises(ModelError, match="недоступны") as error:
+            await agent.respond(user, 2, "Занятия завтра?", prompt=PROMPTS["study"], history=[])
+        assert "PRIVATE" not in error.value.user_message
+        assert repo.record.call_args.kwargs["error_code"] == "MCP_UNAVAILABLE"
+        assert repo.record.call_args.kwargs["mcp_calls"] == 0
+        assert sdk.call_tool.await_count == calls_before
+        assert llm.decide.await_count == 2
+        llm.complete.assert_not_awaited()
+        # Neither an ordinary question nor a later read silently reconnects MCP.
+        await client.start()
+        factory.assert_called_once()
+    finally:
+        await client.close()

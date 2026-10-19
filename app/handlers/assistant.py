@@ -73,12 +73,18 @@ def create_router() -> Router:
     router.message.filter(F.chat.type == "private", F.from_user, F.text)
     pending: dict[int, set[asyncio.Task]] = {}
     callbacks: set[asyncio.Task] = set()
+    commands: set[asyncio.Task] = set()
     closing = False
 
     async def shutdown():
         nonlocal closing
         closing = True
-        tasks = {task for tasks in pending.values() for task in tasks} | callbacks.copy()
+        tasks = (
+            {task for tasks in pending.values() for task in tasks}
+            | callbacks.copy()
+            | commands.copy()
+        )
+        tasks.discard(asyncio.current_task())
         for task in tasks:
             task.cancel()
         if tasks:
@@ -201,7 +207,12 @@ def create_router() -> Router:
                         await asyncio.gather(indicator, return_exceptions=True)
 
         if not generating:
-            await work()
+            task = asyncio.current_task()
+            commands.add(task)
+            try:
+                await work()
+            finally:
+                commands.discard(task)
             return
         task = asyncio.create_task(work())
         pending.setdefault(owner, set()).add(task)
@@ -219,12 +230,16 @@ def create_router() -> Router:
     async def invalidate(message: Message, dialog: DialogService) -> bool | None:
         if closing:
             return None
+        task = asyncio.current_task()
+        commands.add(task)
         try:
             return await dialog.invalidate_confirmations(message.from_user.id) is True
         except Exception as exc:
             logger.error("Подтверждение: ошибка %s", type(exc).__name__)
             await message.answer(DATABASE_ERROR, parse_mode=None)
             return None
+        finally:
+            commands.discard(task)
 
     async def acknowledge(query: CallbackQuery, text: str | None = None):
         try:

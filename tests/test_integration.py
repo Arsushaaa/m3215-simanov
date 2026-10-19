@@ -1661,3 +1661,208 @@ async def test_timezone_menu_only_applies_after_owner_confirmation_and_persists(
         mcp.call_tool.assert_not_awaited()
     finally:
         await pool.close()
+
+
+async def test_confirmation_services_race_across_pools_commits_once_and_replays_without_mcp(
+    database,
+):
+    settings, _, _, _ = database
+    pools = [await create_pool(settings), await create_pool(settings)]
+    try:
+        await migrate(pools[0])
+        card = await _prepare_confirmation(pools[0], 101)
+        barrier = asyncio.Barrier(6)
+        results = []
+
+        async def call_tool(pool, name, arguments, *, action_context):
+            assert name == "add_reminder"
+            # Every callback obtains its own capability before any server write.
+            # Independent pools model two app processes without a shared asyncio.Lock.
+            await barrier.wait()
+            result = await ReminderRepository(pool).add_reminder(
+                ReminderArguments.model_validate(arguments), action_context
+            )
+            results.append(result)
+            return result.model_dump(mode="json")
+
+        mcps = [SimpleNamespace(call_tool=AsyncMock()) for _ in pools]
+        for mcp, pool in zip(mcps, pools, strict=True):
+
+            async def invoke(name, arguments, *, action_context, pool=pool):
+                return await call_tool(pool, name, arguments, action_context=action_context)
+
+            mcp.call_tool.side_effect = invoke
+        services = [
+            ConfirmationService(ConfirmationRepository(pool), mcp)
+            for pool, mcp in zip(pools, mcps, strict=True)
+        ]
+        replies = await asyncio.wait_for(
+            asyncio.gather(
+                *(services[index % 2].confirm(101, card.action_id) for index in range(6))
+            ),
+            timeout=15,
+        )
+        assert len(results) == 6
+        assert sum(result.root.status == "ok" for result in results) == 1
+        assert sum(result.root.status == "error" for result in results) == 5
+        assert {result.root.error.code for result in results if result.root.status == "error"} == {
+            "UNAUTHORIZED"
+        }
+        assert sum(mcp.call_tool.await_count for mcp in mcps) == 6
+        assert await pools[0].fetchval("SELECT count(*) FROM labbi_actions") == 1
+        assert await pools[0].fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        receipt = await pools[0].fetchrow("SELECT * FROM labbi_reminders")
+        assert receipt["action_id"] == card.action_id and receipt["user_id"] == 101
+        assert all(
+            "Напоминание сохранено." in reply or "Результат записи пока неизвестен" in reply
+            for reply in replies
+        )
+        # Recover each callback from the same durable receipt; no new server call.
+        recovered = await asyncio.gather(
+            *(services[index % 2].confirm(101, card.action_id) for index in range(6))
+        )
+        assert len(set(recovered)) == 1
+        assert str(receipt["id"]) in recovered[0] and "Напоминание сохранено." in recovered[0]
+        assert sum(mcp.call_tool.await_count for mcp in mcps) == 6
+        assert await pools[1].fetchval("SELECT count(*) FROM labbi_reminders") == 1
+    finally:
+        await asyncio.gather(*(pool.close() for pool in pools))
+
+
+async def test_confirmation_database_failure_rolls_back_permission_and_every_revocation(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        confirmations = ConfirmationRepository(pool)
+        dialog = DialogRepository(pool)
+        cases = []
+        for approved in (False, True):
+            for operation in ("approve", "cancel", "stop", "reset", "mode", "zone"):
+                user_id = 1000 + len(cases)
+                card = await _prepare_confirmation(pool, user_id)
+                if approved:
+                    assert isinstance(
+                        await confirmations.approve(user_id, card.action_id), Authorization
+                    )
+                cases.append((user_id, card, operation))
+
+        async def snapshot(user_id, card):
+            return (
+                await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=$1", user_id),
+                await pool.fetchrow("SELECT * FROM labbi_actions WHERE id=$1", card.action_id),
+                await dialog.history(user_id, 20),
+                await pool.fetch(
+                    "SELECT * FROM labbi_agent_requests WHERE user_id=$1 ORDER BY id", user_id
+                ),
+                await pool.fetch(
+                    "SELECT * FROM labbi_agent_events WHERE user_id=$1 ORDER BY id", user_id
+                ),
+            )
+
+        async def apply(user_id, card, operation):
+            if operation == "approve":
+                return await confirmations.approve(user_id, card.action_id)
+            if operation == "cancel":
+                return await confirmations.cancel(user_id, card.action_id)
+            if operation == "stop":
+                return await confirmations.invalidate(user_id)
+            if operation == "reset":
+                return await dialog.reset(user_id)
+            if operation == "mode":
+                return await dialog.change_mode(user_id, "translate")
+            return await confirmations.set_timezone(user_id, "Asia/Tokyo")
+
+        await pool.execute(
+            "CREATE FUNCTION reject_stage6_confirmation_audit() RETURNS trigger "
+            "LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private injected storage failure'; "
+            "END $$; CREATE TRIGGER reject_stage6_confirmation_audit "
+            "BEFORE INSERT ON labbi_agent_events FOR EACH ROW "
+            "EXECUTE FUNCTION reject_stage6_confirmation_audit()"
+        )
+        for user_id, card, operation in cases:
+            before = await snapshot(user_id, card)
+            with pytest.raises(asyncpg.RaiseError):
+                await apply(user_id, card, operation)
+            assert await snapshot(user_id, card) == before
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        await pool.execute("DROP TRIGGER reject_stage6_confirmation_audit ON labbi_agent_events")
+        for user_id, card, operation in cases:
+            result = await apply(user_id, card, operation)
+            state = await pool.fetchval(
+                "SELECT state FROM labbi_actions WHERE id=$1", card.action_id
+            )
+            if operation == "approve":
+                assert isinstance(result, Authorization) and state == "approved"
+            else:
+                assert state == "cancelled"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+    finally:
+        await pool.close()
+
+
+async def test_confirmation_database_restart_preserves_zone_actions_receipts_and_private_audit(
+    database,
+):
+    settings, docker, wait_until_ready, name = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        confirmations = ConfirmationRepository(pool)
+        cards = {}
+        zones = {101: "Europe/Moscow", 202: "Asia/Tokyo", 303: "Europe/Berlin"}
+        for user_id, zone in zones.items():
+            cards[user_id] = await _prepare_confirmation(pool, user_id, timezone=zone)
+        old_authorization = await confirmations.approve(202, cards[202].action_id)
+        committed = await confirmations.approve(303, cards[303].action_id)
+        result = await ReminderRepository(pool).add_reminder(committed.arguments, committed.context)
+        assert result.root.status == "ok" and result.root.created
+        receipt = result.root.reminder_id
+        before_events = {user_id: await confirmations.latest_event(user_id) for user_id in zones}
+        before_why = {
+            user_id: await ConfirmationService(confirmations, SimpleNamespace()).why(user_id)
+            for user_id in zones
+        }
+        await pool.close()
+        await asyncio.to_thread(docker, "stop", name)
+        await asyncio.to_thread(docker, "start", name)
+        await asyncio.to_thread(wait_until_ready)
+        pool = await create_pool(settings)
+        confirmations = ConfirmationRepository(pool)
+        mcp = SimpleNamespace(call_tool=AsyncMock())
+        service = ConfirmationService(confirmations, mcp)
+        for user_id, zone in zones.items():
+            assert await confirmations.timezone(user_id) == zone
+            assert await confirmations.latest_event(user_id) == before_events[user_id]
+            assert await service.why(user_id) == before_why[user_id]
+            history = await DialogRepository(pool).history(user_id, 20)
+            assert len(history) == 2 and history[-1]["content"] == cards[user_id].card_text
+        for user_id, state in ((101, "pending"), (202, "approved")):
+            restored = await confirmations.current_card(user_id)
+            assert restored.action_id == cards[user_id].action_id and restored.state == state
+            assert restored.expires_at == cards[user_id].expires_at
+        assert await confirmations.current_card(303) is None
+        restored_authorization = await confirmations.approve(202, cards[202].action_id)
+        assert isinstance(restored_authorization, Authorization)
+        assert restored_authorization.context != old_authorization.context
+        rejected = await ReminderRepository(pool).add_reminder(
+            old_authorization.arguments, old_authorization.context
+        )
+        assert rejected.root.error.code == "UNAUTHORIZED"
+        repeated = await service.confirm(303, cards[303].action_id)
+        assert "Напоминание сохранено." in repeated and str(receipt) in repeated
+        mcp.call_tool.assert_not_awaited()
+        assert await confirmations.timezone(404) is None
+        assert await confirmations.current_card(404) is None
+        assert await confirmations.lookup_card(404, 1) is None
+        assert await confirmations.latest_event(404) is None
+        assert await service.why(404) == "Пока нет запросов с решением агента."
+        for method in (confirmations.approve, confirmations.cancel, confirmations.reconcile):
+            for card in cards.values():
+                assert (await method(404, card.action_id)).code == "UNAUTHORIZED"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 3
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 3
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_messages") == 6
+    finally:
+        await pool.close()

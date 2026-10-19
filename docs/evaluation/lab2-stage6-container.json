@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-19",
+  "image": "labbi-stage6-check:local",
+  "image_id": "281724b8f28f",
+  "build_exit_code": 0,
+  "smoke_exit_code": 0,
+  "uid": 10001,
+  "network": "none",
+  "read_only": true,
+  "real_stdio": true,
+  "discovered_tools": [
+    "add_reminder",
+    "get_schedule",
+    "get_weather"
+  ],
+  "schedule_status": "ok",
+  "schedule_date": "2026-10-20",
+  "privacy_filter": true,
+  "migrations_packaged": 6,
+  "llm_calls": 0,
+  "telegram_calls": 0,
+  "weather_http_calls": 0,
+  "postgres_calls": 0,
+  "note": "Container ran the packaged MCP subprocess and read the educational schedule; real PostgreSQL is verified separately by the full pytest protocol.",
+  "empty_exception_safe": true
+}

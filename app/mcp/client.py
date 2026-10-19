@@ -10,6 +10,7 @@ import logging
 import sys
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -299,7 +300,7 @@ class MCPClient:
                     allow_input_required=True,
                     **metadata,
                 )
-                value = self._tool_value(operation.target, result)
+                value = self._tool_value(operation.target, result, operation.arguments)
             else:
                 result = await sdk.session.read_resource(
                     operation.target, allow_input_required=True
@@ -347,7 +348,7 @@ class MCPClient:
             if not operation.future.done():
                 operation.future.set_result(value)
 
-    def _tool_value(self, name: str, result) -> dict:
+    def _tool_value(self, name: str, result, arguments: dict) -> dict:
         if not isinstance(result, types.CallToolResult):
             raise ValueError("Unsupported MCP result")
         _bounded(result.model_dump(mode="json", by_alias=True, exclude_none=True))
@@ -355,6 +356,16 @@ class MCPClient:
         self._validators[name][1].validate(value)
         if result.is_error is not (value["status"] == "error"):
             raise ValueError("Mismatched error flag")
+        # A valid schema does not prove that a response belongs to this request.
+        # Reject a different day before it can become a fact in the final answer;
+        # a mismatched write receipt has an unknown outcome and is reconciled in DB.
+        if value["status"] != "error":
+            if name == "get_schedule" and value["date"] != arguments["date"]:
+                raise ValueError("Mismatched schedule date")
+            if name == "add_reminder" and datetime.fromisoformat(
+                value["remind_at"]
+            ) != datetime.fromisoformat(arguments["remind_at"]):
+                raise ValueError("Mismatched reminder moment")
         return self._domain_result(value)
 
     def _resource_value(self, result) -> dict:

@@ -491,3 +491,49 @@ async def test_shutdown_waits_for_callback_cancellation_before_closing_resources
     await dispatcher.feed_update(bot, text_update("/reset", number=22), dialog=dialog)
     dialog.invalidate_confirmations.assert_not_awaited()
     assert sent(bot) == []
+
+
+async def test_shutdown_waits_for_non_generating_command_before_closing_resources(setup_ui):
+    dispatcher, bot, dialog = setup_ui
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+
+    async def why(_owner):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cancelled.set()
+
+    dialog.why.side_effect = why
+    task = asyncio.create_task(dispatcher.feed_update(bot, text_update("/why"), dialog=dialog))
+    await asyncio.wait_for(entered.wait(), 2)
+    await asyncio.wait_for(dispatcher.emit_shutdown(bot=bot), 2)
+    await asyncio.gather(task, return_exceptions=True)
+    assert task.done() and cancelled.is_set()
+    assert sent(bot) == []
+    dialog.llm.complete.assert_not_awaited()
+
+
+@pytest.mark.parametrize("command", ["/reset", "/translate"])
+async def test_shutdown_waits_for_in_flight_revocation_before_closing_resources(setup_ui, command):
+    dispatcher, bot, dialog = setup_ui
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+
+    async def invalidate(_owner):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cancelled.set()
+
+    dialog.invalidate_confirmations.side_effect = invalidate
+    task = asyncio.create_task(dispatcher.feed_update(bot, text_update(command), dialog=dialog))
+    await asyncio.wait_for(entered.wait(), 2)
+    await asyncio.wait_for(dispatcher.emit_shutdown(bot=bot), 2)
+    await asyncio.gather(task, return_exceptions=True)
+    assert task.done() and cancelled.is_set()
+    dialog.reset.assert_not_awaited()
+    dialog.mode.assert_not_awaited()
+    assert sent(bot) == []
