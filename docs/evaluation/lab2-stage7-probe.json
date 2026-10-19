@@ -1,0 +1,54 @@
+{
+  "checked_at": "2026-10-19T08:55:11.834113+00:00",
+  "command": "python -m scripts.mcp_probe --date 2026-10-12",
+  "external_api_calls": 0,
+  "database_writes": 0,
+  "result": {
+    "transport": "stdio",
+    "tools": [
+      {
+        "name": "get_weather",
+        "input_fields": [
+          "city"
+        ],
+        "output_schema": true,
+        "read_only": true
+      },
+      {
+        "name": "get_schedule",
+        "input_fields": [
+          "date"
+        ],
+        "output_schema": true,
+        "read_only": true
+      },
+      {
+        "name": "add_reminder",
+        "input_fields": [
+          "remind_at",
+          "text"
+        ],
+        "output_schema": true,
+        "read_only": false
+      }
+    ],
+    "resources": [
+      "schedule://current-week"
+    ],
+    "schedule": {
+      "date": "2026-10-12",
+      "status": "ok",
+      "lessons": 2
+    },
+    "week": {
+      "start": "2026-10-19",
+      "end": "2026-10-25",
+      "timezone": "Europe/Moscow",
+      "days": 7
+    },
+    "write_without_context": {
+      "is_error": true,
+      "code": "UNAUTHORIZED"
+    }
+  }
+}

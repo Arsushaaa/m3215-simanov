@@ -1,0 +1,39 @@
+{
+  "checked_at": "2026-10-19T08:53:57.343060+00:00",
+  "source": "https://openrouter.ai/api/v1/models/nvidia/nemotron-3-super-120b-a12b:free/endpoints",
+  "model": "nvidia/nemotron-3-super-120b-a12b:free",
+  "purpose": "Confirm zero pricing and structured-output support before the fixed lab2 experiment.",
+  "selected_tool_mode": "structured",
+  "endpoints": [
+    {
+      "name": "Nvidia | nvidia/nemotron-3-super-120b-a12b-20230311:free",
+      "provider_name": "Nvidia",
+      "context_length": 262144,
+      "pricing": {
+        "prompt": "0",
+        "completion": "0",
+        "discount": 0
+      },
+      "supported_parameters": [
+        "reasoning",
+        "include_reasoning",
+        "temperature",
+        "max_tokens",
+        "seed",
+        "top_p",
+        "tools",
+        "tool_choice",
+        "structured_outputs",
+        "response_format",
+        "reasoning_effort"
+      ],
+      "supports_tool_choice": {
+        "none": false,
+        "auto": true,
+        "required": true,
+        "function": true
+      },
+      "status": 0
+    }
+  ]
+}

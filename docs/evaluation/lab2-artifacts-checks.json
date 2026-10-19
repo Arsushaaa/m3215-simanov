@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-10-19T09:10:40.197254+00:00",
+  "publishable_files_scanned": 164,
+  "known_local_secrets_at_least_8_characters_found": 0,
+  "ignored_local_paths": [
+    ".env",
+    ".env.cloud",
+    ".venv/",
+    ".tools/",
+    ".deploy/"
+  ],
+  "env_files_in_git_history": false,
+  "local_markdown_links_checked": 127,
+  "local_markdown_links_valid": true,
+  "lab2_json_valid": true,
+  "dialog_json_valid": true,
+  "scope": "Compare known local secret values at least eight characters long against tracked and new publishable files; check local exclusions and env-file history. Not a detector for every possible historical secret."
+}

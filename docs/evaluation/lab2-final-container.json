@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-10-19T09:09:24.026329+00:00",
+  "image": "labbi-lab2:local",
+  "image_id": "sha256:a0d71d214cd21780db8a43e775af15d1c0f07fbf8576ba38045ee3d6a8957944",
+  "build_exit_code": 0,
+  "smoke_exit_code": 0,
+  "network": "none",
+  "read_only": true,
+  "uid": 10001,
+  "python_312": true,
+  "real_stdio": true,
+  "discovered_tools": [
+    "add_reminder",
+    "get_schedule",
+    "get_weather"
+  ],
+  "schedule_status": "ok",
+  "schedule_date": "2026-10-20",
+  "migrations_packaged": 6,
+  "agent_sha256": "63cc6dc5e0099053d6f7c33f80028f0ecd7d15cc43fd5e0b0cf2621e17b29b1b",
+  "llm_calls": 0,
+  "telegram_calls": 0,
+  "weather_http_calls": 0,
+  "database_calls": 0,
+  "note": "Final image contains the same agent source as the accepted real-model experiment. No .env or credentials supplied."
+}
