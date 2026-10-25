@@ -1,0 +1,198 @@
+{
+  "created_at": "2026-10-25T20:51:55.088503+00:00",
+  "protocol": {
+    "version": 1,
+    "query": "Покажи расписание на 13 октября 2026 года.",
+    "now": "2026-10-12T09:00:00+03:00",
+    "timezone": "Europe/Moscow",
+    "model": "dots-studio/dots-3-note-preview:free",
+    "temperature": 0.3,
+    "max_output_tokens": 2048,
+    "tool_mode": "structured",
+    "llm_timeout_seconds": 60,
+    "agent_timeout_seconds": 135,
+    "history_max_tokens": 6000,
+    "history_max_messages": 20,
+    "study_prompt_sha256": "7a1ed4989eab9854ef34baedf99518e4537260ce6c23c33924b4a9484622f37d",
+    "catalog_sha256": "e762e8ad524fe3d499036587b800766d4609296933eb3e474d17424b2f8999c6",
+    "source_sha256": {
+      "scripts/lab2_comparison_live.py": "b5b74a049e1c0d8cade471d730b31dc08efbf3a1d8962ab492b35643dcf20129",
+      "app/dialog.py": "a662f2332e657b03c3e846033d66414aea967860758d7bb8434c0f82e67c7b0f",
+      "app/agent.py": "235e7f414eaee56ee366088bf5ce436b641a9101e3dff7238afa77ed163fd046",
+      "app/llm.py": "7a1c6636d4ec3d5fdb049602845c28d62985be6e81705fc6f35b36055168f937",
+      "app/prompts.py": "c456f56d06bd39e973f0dafe7d3605f21729f0222440114c60ca60dd642ba68f",
+      "app/reminder_intent.py": "183fa6cd1a2c2e31db6c2ba097b567a5a101963fee81ea51679d45fa71901ad8",
+      "app/mcp/contracts.py": "a9148f576cf39da62f3bc60c5ff16ffbeda65d34309d254748812850b1922978"
+    },
+    "expected": {
+      "tool": "get_schedule",
+      "arguments": {
+        "date": "2026-10-13"
+      }
+    },
+    "limits": {
+      "llm_calls": 2,
+      "mcp_application_calls": 1
+    },
+    "storage": "isolated memory; no PostgreSQL or Telegram",
+    "expectations_in_model_context": false,
+    "automatic_retries": false
+  },
+  "status": "completed",
+  "raw_data": [
+    {
+      "phase": "decide",
+      "status": "ok",
+      "started_at": "2026-10-25T20:51:55.092425+00:00",
+      "input_sha256": "0de7f47055aebade1913bfd4b244f2249a0260cb2a8b0b9e8452df977760544f",
+      "request_sha256": "1ecc9130a2c471cf625ea338f748ceaee901bcb3910681fab75394009d546828",
+      "temperature": 0.3,
+      "message_roles": [
+        "system",
+        "user"
+      ],
+      "disable_tools": false,
+      "wire": {
+        "request_sha256": "47ff9156bb5ae40fcfc339ee3ccb10bacb66c6a30b5c414dc99c00e907bede47",
+        "model": "dots-studio/dots-3-note-preview:free",
+        "temperature": 0.3,
+        "max_tokens": 2048,
+        "tools_present": false,
+        "tools": null,
+        "tool_choice": null,
+        "reasoning": {
+          "enabled": false
+        },
+        "provider": {
+          "max_price": {
+            "prompt": 0,
+            "completion": 0
+          },
+          "require_parameters": true
+        }
+      },
+      "raw_content": "{\"action\": \"call_tool\", \"arguments\": {\"date\": \"2026-10-13\"}, \"name\": \"get_schedule\", \"reason\": \"Запрос на расписание конкретной даты — 13 октября 2026 года.\"}",
+      "raw_tool_calls": [],
+      "truncated": false,
+      "model": "dots-studio/dots-3-note-preview:free",
+      "id": "gen-1792961521-w0II1u9mkEg52lf53f3W",
+      "provider": "AtlasCloud",
+      "usage": {
+        "prompt_tokens": 1801,
+        "completion_tokens": 61,
+        "total_tokens": 1862,
+        "cost": 0
+      },
+      "finish_reason": "stop",
+      "duration_ms": 12377,
+      "finished_at": "2026-10-25T20:52:07.469795+00:00"
+    },
+    {
+      "phase": "complete",
+      "status": "ok",
+      "started_at": "2026-10-25T20:52:07.496305+00:00",
+      "input_sha256": "8b9946804ce92c45b1b1d9b67d0b99082a7213cd70c6cb99dbff7389f4b4d2ba",
+      "request_sha256": "5cda8fb1019be5872f761e69a68c60f23ae387f974a5d3205a3c00e5256dc730",
+      "temperature": 0.3,
+      "message_roles": [
+        "system",
+        "user",
+        "user"
+      ],
+      "disable_tools": true,
+      "wire": {
+        "request_sha256": "ba35c2bd678dfefbc9ee645b8692437418037b146fc2da046c2755a29d63863f",
+        "model": "dots-studio/dots-3-note-preview:free",
+        "temperature": 0.3,
+        "max_tokens": 2048,
+        "tools_present": true,
+        "tools": [],
+        "tool_choice": null,
+        "reasoning": {
+          "enabled": false
+        },
+        "provider": {
+          "max_price": {
+            "prompt": 0,
+            "completion": 0
+          }
+        }
+      },
+      "raw_content": "Вот расписание на **13 октября 2026 года** (по московскому времени, UTC+03:00):\n\n- **10:40–12:10** — Алгоритмы и структуры данных  \n  📍 Учебная аудитория 103\n\n- **12:40–14:10** — Иностранный язык  \n  📍 Учебная аудитария 104\n\nИсточник: локальное расписание. День не полностью свободен — есть два занятия с перерывом между ними.",
+      "raw_tool_calls": [],
+      "truncated": false,
+      "model": "dots-studio/dots-3-note-preview:free",
+      "id": "gen-1792961527-VPhpk1O3363lrE03mnto",
+      "provider": "AtlasCloud",
+      "usage": {
+        "prompt_tokens": 1060,
+        "completion_tokens": 147,
+        "total_tokens": 1207,
+        "cost": 0
+      },
+      "finish_reason": "stop",
+      "duration_ms": 2409,
+      "finished_at": "2026-10-25T20:52:09.905275+00:00"
+    }
+  ],
+  "mcp_calls": [
+    {
+      "operation": "tools/call",
+      "name": "get_schedule",
+      "arguments": {
+        "date": "2026-10-13"
+      },
+      "status": "ok",
+      "started_at": "2026-10-25T20:52:07.470401+00:00",
+      "result": {
+        "status": "ok",
+        "date": "2026-10-13",
+        "timezone": "Europe/Moscow",
+        "lessons": [
+          {
+            "start": "10:40",
+            "end": "12:10",
+            "title": "Алгоритмы и структуры данных",
+            "location": "Учебная аудитория 103"
+          },
+          {
+            "start": "12:40",
+            "end": "14:10",
+            "title": "Иностранный язык",
+            "location": "Учебная аудитория 104"
+          }
+        ],
+        "source": "local_schedule"
+      },
+      "finished_at": "2026-10-25T20:52:07.495920+00:00"
+    }
+  ],
+  "displayed_answer": "Вот расписание на **13 октября 2026 года** (по московскому времени, UTC+03:00):\n\n- **10:40–12:10** — Алгоритмы и структуры данных  \n  📍 Учебная аудитория 103\n\n- **12:40–14:10** — Иностранный язык  \n  📍 Учебная аудитария 104\n\nИсточник: локальное расписание. День не полностью свободен — есть два занятия с перерывом между ними.",
+  "audit": {
+    "decision": "call_tool",
+    "target": "get_schedule",
+    "status": "OK",
+    "reason": "Ответ составлен по проверенному результату MCP.",
+    "error_code": null,
+    "llm_calls": 2,
+    "mcp_calls": 1,
+    "duration_ms": 14816,
+    "argument_summary": "Дата: 2026-10-13"
+  },
+  "metrics": {
+    "criteria": {
+      "exact_read_action": true,
+      "result_matches_date_and_source": true,
+      "two_successful_llm_calls": true,
+      "final_http_tools_disabled": true,
+      "answer_saved": true
+    },
+    "acceptance": "passed",
+    "llm_calls": 2,
+    "mcp_application_calls": 1,
+    "api_cost": 0,
+    "database_writes": 0,
+    "telegram_calls": 0
+  },
+  "finished_at": "2026-10-25T20:52:09.906100+00:00"
+}

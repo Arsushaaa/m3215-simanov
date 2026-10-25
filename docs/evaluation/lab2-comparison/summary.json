@@ -1,0 +1,108 @@
+{
+  "manifest_sha256": "7ebb37ec4eb9e51032014b33eba3f81e582212fde453ca5f5861bba826d7953c",
+  "finished_at": "2026-10-25T20:52:09.914200+00:00",
+  "selected": {
+    "id": "dots-t03",
+    "model": "dots-studio/dots-3-note-preview:free",
+    "temperature": 0.3
+  },
+  "metrics": {
+    "xing-t03": {
+      "scope": "full_12_cases",
+      "completed": true,
+      "routing_accuracy": {
+        "correct": 4,
+        "total": 12,
+        "ratio": 0.3333333333333333
+      },
+      "argument_accuracy": {
+        "correct": 2,
+        "total": 9,
+        "ratio": 0.2222222222222222
+      },
+      "acceptance": "not_passed",
+      "llm_calls": 11,
+      "mcp_application_calls": 0,
+      "database_writes": 0
+    },
+    "dots-t03": {
+      "scope": "full_12_cases",
+      "completed": true,
+      "routing_accuracy": {
+        "correct": 12,
+        "total": 12,
+        "ratio": 1.0
+      },
+      "argument_accuracy": {
+        "correct": 8,
+        "total": 9,
+        "ratio": 0.8888888888888888
+      },
+      "acceptance": "passed",
+      "llm_calls": 11,
+      "mcp_application_calls": 0,
+      "database_writes": 0
+    },
+    "dots-t00": {
+      "scope": "full_12_cases",
+      "completed": true,
+      "routing_accuracy": {
+        "correct": 11,
+        "total": 12,
+        "ratio": 0.9166666666666666
+      },
+      "argument_accuracy": {
+        "correct": 7,
+        "total": 9,
+        "ratio": 0.7777777777777778
+      },
+      "acceptance": "not_passed",
+      "llm_calls": 11,
+      "mcp_application_calls": 0,
+      "database_writes": 0
+    },
+    "xing-t00": {
+      "scope": "full_12_cases",
+      "completed": true,
+      "routing_accuracy": {
+        "correct": 4,
+        "total": 12,
+        "ratio": 0.3333333333333333
+      },
+      "argument_accuracy": {
+        "correct": 1,
+        "total": 9,
+        "ratio": 0.1111111111111111
+      },
+      "acceptance": "not_passed",
+      "llm_calls": 11,
+      "mcp_application_calls": 0,
+      "database_writes": 0
+    }
+  },
+  "equal_input_hashes": {
+    "weather_1": "44c2e5822cbf0a77f667b78df63646f4e189814de40fbe50aaf0604fce5558e7",
+    "weather_2": "186e9a2170fbd74f05b8a0175de2e94c4319e32e1a1fb6c341583c0ca047fb5e",
+    "weather_3": "f63315b90eb9849b41e35ef7cbee04e6ce23d21a2c76340a892040d850d40dfa",
+    "schedule_1": "c7ff2d23c676cb347ca2eb5f56307129ea28d450e7c9f34c1f5ba9ef8f9b81e4",
+    "schedule_2": "bf18dad2afadfdd34bcd30f15b8360e58a27b7c58f3a612ee54f8c1267a11569",
+    "schedule_3": "539ee60221d60d67c95e3fe716632267d818b7ef19fb250361a2e02c7325d19a",
+    "reminder_1": "7f4aec82bfe5f019c5fdc31c2b9d4637c06794cc561e6be7c083e116eb86daa2",
+    "reminder_2": "5c42d0199f9f3858cc8162ed390373044e74aa2b55f79d90480868b7ad6cd492",
+    "reminder_3": "a8b64c576df517a7b1f98559ddbe43d967557f9b9e068b2df39c5c741de6616a",
+    "respond_1": "f36691b022e25c93d36eae7f59d21a7b3c2e5452979b40060abf8c7dc93e3961",
+    "respond_2": "8ff3d7dabaf2d43c40cfc079715fbbb977f41dcfb64530f64eb70ee702ab8782"
+  },
+  "extra": {
+    "status": "completed",
+    "actions": 4,
+    "arguments": 3,
+    "denominators": {
+      "actions": 4,
+      "arguments": 3
+    }
+  },
+  "live_status": "passed",
+  "routing_acceptance": "passed",
+  "status": "passed"
+}

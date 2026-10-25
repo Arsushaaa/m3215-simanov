@@ -1,0 +1,237 @@
+{
+  "source_freeze_matches": true,
+  "fixed_scores_recomputed": true,
+  "inputs_identical_for_11_llm_cases": true,
+  "selected_cell": "dots-t03",
+  "llm_attempts": 50,
+  "returned_response_ids": 34,
+  "usage_cost_records": 34,
+  "known_cost_sum": 0,
+  "missing_cost_records": 16,
+  "free_model_daily_requests_after": {
+    "used": 32,
+    "limit": 50,
+    "remaining": 18
+  },
+  "runs": {
+    "dots-t03": {
+      "metrics": {
+        "scope": "full_12_cases",
+        "completed": true,
+        "routing_accuracy": {
+          "correct": 12,
+          "total": 12,
+          "ratio": 1.0
+        },
+        "argument_accuracy": {
+          "correct": 8,
+          "total": 9,
+          "ratio": 0.8888888888888888
+        },
+        "acceptance": "passed",
+        "llm_calls": 11,
+        "mcp_application_calls": 0,
+        "database_writes": 0
+      },
+      "returned_responses": 11,
+      "errors": [],
+      "wrong_arguments": [
+        "reminder_2"
+      ]
+    },
+    "xing-t00": {
+      "metrics": {
+        "scope": "full_12_cases",
+        "completed": true,
+        "routing_accuracy": {
+          "correct": 4,
+          "total": 12,
+          "ratio": 0.3333333333333333
+        },
+        "argument_accuracy": {
+          "correct": 1,
+          "total": 9,
+          "ratio": 0.1111111111111111
+        },
+        "acceptance": "not_passed",
+        "llm_calls": 11,
+        "mcp_application_calls": 0,
+        "database_writes": 0
+      },
+      "returned_responses": 3,
+      "errors": [
+        [
+          "weather_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "weather_3",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "schedule_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "schedule_3",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "reminder_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "reminder_2",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "reminder_3",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "respond_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ]
+      ],
+      "wrong_arguments": [
+        "weather_2"
+      ]
+    },
+    "xing-t03": {
+      "metrics": {
+        "scope": "full_12_cases",
+        "completed": true,
+        "routing_accuracy": {
+          "correct": 4,
+          "total": 12,
+          "ratio": 0.3333333333333333
+        },
+        "argument_accuracy": {
+          "correct": 2,
+          "total": 9,
+          "ratio": 0.2222222222222222
+        },
+        "acceptance": "not_passed",
+        "llm_calls": 11,
+        "mcp_application_calls": 0,
+        "database_writes": 0
+      },
+      "returned_responses": 3,
+      "errors": [
+        [
+          "weather_2",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "weather_3",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "schedule_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "schedule_2",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "schedule_3",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "reminder_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "reminder_2",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ],
+        [
+          "respond_1",
+          {
+            "type": "ModelError",
+            "message": "Лимит запросов к модели исчерпан. Попробуй позже."
+          }
+        ]
+      ],
+      "wrong_arguments": []
+    },
+    "dots-t00": {
+      "metrics": {
+        "scope": "full_12_cases",
+        "completed": true,
+        "routing_accuracy": {
+          "correct": 11,
+          "total": 12,
+          "ratio": 0.9166666666666666
+        },
+        "argument_accuracy": {
+          "correct": 7,
+          "total": 9,
+          "ratio": 0.7777777777777778
+        },
+        "acceptance": "not_passed",
+        "llm_calls": 11,
+        "mcp_application_calls": 0,
+        "database_writes": 0
+      },
+      "returned_responses": 11,
+      "errors": [],
+      "wrong_arguments": [
+        "reminder_2"
+      ]
+    }
+  },
+  "live_criteria": {
+    "exact_read_action": true,
+    "result_matches_date_and_source": true,
+    "two_successful_llm_calls": true,
+    "final_http_tools_disabled": true,
+    "answer_saved": true
+  }
+}

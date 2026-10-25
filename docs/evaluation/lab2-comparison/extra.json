@@ -1,0 +1,212 @@
+{
+  "cases": [
+    {
+      "id": "new_weather",
+      "query": "Какая текущая температура в Лиссабоне, Португалия?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Лиссабон, Португалия"
+      },
+      "calls": [
+        {
+          "started_at": "2026-10-25T20:51:28.973521+00:00",
+          "request_sha256": "62573077af456e2c1d0400cc6334d35061ec384eaca4e7c34d3e9d1a261778a8",
+          "input_sha256": "7c8db9e7c5566ec1206a82dec78bc6a2376cd8e53ff72c124d723d2c73fec153",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4609,
+          "raw_content": "{\"action\": \"call_tool\", \"arguments\": {\"city\": \"Лиссабон, Португалия\"}, \"name\": \"get_weather\", \"reason\": \"Запрос на текущую температуру в конкретном городе\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1792961491-ADrMmraDU9zjCbln08dv",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1807,
+            "completion_tokens": 55,
+            "total_tokens": 1862,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "http_duration_ms": 2017,
+          "duration_ms": 4309,
+          "finished_at": "2026-10-25T20:51:33.282786+00:00"
+        }
+      ],
+      "status": "captured_before_mcp",
+      "actual": {
+        "action": "get_weather",
+        "arguments": {
+          "city": "Лиссабон, Португалия"
+        }
+      },
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-10-25T20:51:33.283439+00:00"
+    },
+    {
+      "id": "new_schedule",
+      "query": "Покажи расписание на послезавтра.",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-14"
+      },
+      "calls": [
+        {
+          "started_at": "2026-10-25T20:51:33.294393+00:00",
+          "request_sha256": "1d237e7ae07774a4d2ced911f5d1ce69388c1583e82fab4a7b5eeb527edbccef",
+          "input_sha256": "1384d53e0759dbef1a553d119f7ab3148f16170e192c487074f66fe30f18fb50",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4599,
+          "raw_content": "{\"action\": \"call_tool\", \"arguments\": {\"date\": \"2026-10-14\"}, \"name\": \"get_schedule\", \"reason\": \"Пользователь просит расписание на послезавтра (14.10.2026), что требует вызова get_schedule с этой датой.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1792961495-nf42iLlPKyL28pwK4EAA",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1795,
+            "completion_tokens": 75,
+            "total_tokens": 1870,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "http_duration_ms": 5692,
+          "duration_ms": 7766,
+          "finished_at": "2026-10-25T20:51:41.061459+00:00"
+        }
+      ],
+      "status": "captured_before_mcp",
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-14"
+        }
+      },
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-10-25T20:51:41.062224+00:00"
+    },
+    {
+      "id": "new_reminder",
+      "query": "Remind me tomorrow at 11:00 to submit the report",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "submit the report",
+        "remind_at": "2026-10-13T11:00:00+03:00"
+      },
+      "calls": [
+        {
+          "started_at": "2026-10-25T20:51:41.064312+00:00",
+          "request_sha256": "daa398760b21675d95b3719a1b968b75921d46b3b621ecd2438fb5e7939e2aa5",
+          "input_sha256": "2aa58b650c7c392a58a1007fd99d60f0e2fad000663f48719fcee59bacbacc86",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3357,
+          "raw_content": "{\"action\":\"call_tool\",\"arguments\":{\"remind_at\":\"2026-10-13T11:00:00+03:00\",\"text\":\"Submit the report\"},\"name\":\"add_reminder\",\"reason\":\"User requested a reminder tomorrow at 11:00 to submit the report. Using schedule_now and reminder_now (2026-10-12T09:00:00+03:00) with reminder_timezone Europe/Moscow to compute tomorrow's date and time.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1792961501-4ShCYybe0w1erJgDf9MO",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1600,
+            "completion_tokens": 119,
+            "total_tokens": 1719,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "http_duration_ms": 5815,
+          "duration_ms": 5816,
+          "finished_at": "2026-10-25T20:51:46.880353+00:00"
+        }
+      ],
+      "status": "ok",
+      "actual": {
+        "action": "add_reminder",
+        "arguments": {
+          "text": "Submit the report",
+          "remind_at": "2026-10-13T11:00:00+03:00"
+        }
+      },
+      "displayed_answer": "Параметры напоминания:\nSubmit the report\nКогда: 13 октября 2026, 11:00 (UTC+03:00)\nЧасовой пояс: Europe/Moscow.\n\nНапоминание не сохранено: требуется подтверждение.",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-10-25T20:51:46.881497+00:00"
+    },
+    {
+      "id": "new_respond",
+      "query": "Для чего нужен оператор break в цикле Python?",
+      "expected_action": "respond",
+      "expected_arguments": {},
+      "calls": [
+        {
+          "started_at": "2026-10-25T20:51:46.891902+00:00",
+          "request_sha256": "cd59f70adbb19e25ea5984b327002fc7be88dbdeb06ebe4fc44697c59a859e93",
+          "input_sha256": "ac505546298339d828f7d9f2df73819ddfb95734729c9ba37b6230ed1006a44c",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4602,
+          "raw_content": "{\"action\":\"respond\",\"reason\":\"Вопрос о синтаксисе Python не требует внешних данных, поэтому отвечаю напрямую.\" ,\"text\":\"Оператор break в цикле Python используется для **досрочного завершения цикла**, даже если условие продолжения (например, while True или for) ещё не стало ложным. Как только исполнение достигает break, цикл немедленно прервётся, и управление передастся на строку, следующую за циклом. Пример: for i in range(10): if i == 5: break; print(i) — напечатает числа от 0 до 4 и остановится, не дойдя до 5. Типичные ошибки: забыть, что break выходит только из одного цикла (вложенные циклы требуют отдельного break или флага); использовать break вместо continue, если нужно пропустить только текущую итерацию; или полагаться на break как на замену корректного условия цикла.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1792961506-bPeSXh7HEaPNC17O9Vwq",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1797,
+            "completion_tokens": 250,
+            "total_tokens": 2047,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "http_duration_ms": 8185,
+          "duration_ms": 8185,
+          "finished_at": "2026-10-25T20:51:55.078015+00:00"
+        }
+      ],
+      "status": "ok",
+      "actual": {
+        "action": "respond",
+        "arguments": {}
+      },
+      "displayed_answer": "Оператор break в цикле Python используется для **досрочного завершения цикла**, даже если условие продолжения (например, while True или for) ещё не стало ложным. Как только исполнение достигает break, цикл немедленно прервётся, и управление передастся на строку, следующую за циклом. Пример: for i in range(10): if i == 5: break; print(i) — напечатает числа от 0 до 4 и остановится, не дойдя до 5. Типичные ошибки: забыть, что break выходит только из одного цикла (вложенные циклы требуют отдельного break или флага); использовать break вместо continue, если нужно пропустить только текущую итерацию; или полагаться на break как на замену корректного условия цикла.",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null
+      },
+      "finished_at": "2026-10-25T20:51:55.078939+00:00"
+    }
+  ],
+  "started_at": "2026-10-25T20:51:28.971266+00:00",
+  "status": "completed",
+  "actions": 4,
+  "arguments": 3,
+  "denominators": {
+    "actions": 4,
+    "arguments": 3
+  }
+}
