@@ -1,0 +1,261 @@
+{
+  "checked_at": "2026-10-25T21:41:36.668354+00:00",
+  "purpose": "Local runtime recovery; separate from the frozen comparison experiment",
+  "active_local_model": "dots-studio/dots-3-note-preview:free",
+  "selection": "temporary explicit local configuration change; no automatic fallback",
+  "previous_model_probe": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "attempts": 1,
+    "http_status": 404,
+    "api_error_code": 404,
+    "no_endpoint_reported": false,
+    "outcome": "unavailable",
+    "safe_error": "Сервис модели сейчас недоступен. Попробуй позже."
+  },
+  "production_modes": {
+    "model": "dots-studio/dots-3-note-preview:free",
+    "temperature": 0.3,
+    "max_output_tokens": 2048,
+    "llm_attempts": 2,
+    "mcp_calls": 0,
+    "database_writes": 0,
+    "telegram_calls": 0,
+    "all_passed": true,
+    "outcomes": [
+      {
+        "mode": "translate",
+        "ok": true,
+        "attempts": 1,
+        "answer": "The weather is nice today.",
+        "saved_fields": {
+          "is_complete": true
+        },
+        "public_response_metadata": {
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1792964268-Ew1rnU0Vd7RQ1uPRNAbk",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 536,
+            "completion_tokens": 7,
+            "total_tokens": 543,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "The weather is nice today."
+        }
+      },
+      {
+        "mode": "quiz",
+        "ok": true,
+        "attempts": 1,
+        "answer": "Вопрос 1/5\n\nЧто такое переменная в Python и как её объявить?",
+        "saved_fields": {
+          "is_complete": true,
+          "quiz_question": 1,
+          "quiz_topic": "Python",
+          "quiz_finished": false
+        },
+        "public_response_metadata": {
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1792964269-tFp2SZkQ7O0OVy10A6Tp",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 862,
+            "completion_tokens": 25,
+            "total_tokens": 887,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "{\"feedback\":\"\",\"kind\":\"question\",\"text\":\"Что такое переменная в Python и как её объявить?\"}"
+        }
+      }
+    ]
+  },
+  "current_weather_mcp": {
+    "created_at": "2026-10-25T21:39:07.788546+00:00",
+    "status": "completed",
+    "protocol": {
+      "query": "Какая сейчас погода в Ростове-на-Дону, Россия?",
+      "now": "2026-10-26T00:39:07+03:00",
+      "timezone": "Europe/Moscow",
+      "model": "dots-studio/dots-3-note-preview:free",
+      "temperature": 0.3,
+      "max_output_tokens": 2048,
+      "tool_mode": "structured",
+      "limits": {
+        "llm_calls": 2,
+        "mcp_application_calls": 1
+      },
+      "automatic_retries": false,
+      "storage": "isolated memory; no PostgreSQL or Telegram",
+      "catalog_sha256": "e762e8ad524fe3d499036587b800766d4609296933eb3e474d17424b2f8999c6"
+    },
+    "raw_data": [
+      {
+        "phase": "decide",
+        "status": "ok",
+        "started_at": "2026-10-25T21:39:10.523169+00:00",
+        "input_sha256": "92dbe228d2d372a286d202038a0e59ad0f84c7f21417a1758dcd8ed32925a50f",
+        "request_sha256": "543e3c9e87d81fda80adf91dabe9adaeaf49aec58ce545a08e29ab2426fa1ba4",
+        "temperature": 0.3,
+        "message_roles": [
+          "system",
+          "user"
+        ],
+        "disable_tools": false,
+        "wire": {
+          "request_sha256": "74b93a5b37aae392c53e0cdfc937f787ec424e60b35071e56ce1ca06c7a0b235",
+          "model": "dots-studio/dots-3-note-preview:free",
+          "temperature": 0.3,
+          "max_tokens": 2048,
+          "tools_present": false,
+          "tools": null,
+          "tool_choice": null,
+          "reasoning": {
+            "enabled": false
+          },
+          "provider": {
+            "max_price": {
+              "prompt": 0,
+              "completion": 0
+            },
+            "require_parameters": true
+          }
+        },
+        "raw_content": "{\"action\": \"call_tool\", \"arguments\": {\"city\": \"Ростов-на-Дону, Россия\"}, \"name\": \"get_weather\", \"reason\": \"Запрос на текущую погоду в конкретном городе\"}",
+        "raw_tool_calls": [],
+        "truncated": false,
+        "model": "dots-studio/dots-3-note-preview:free",
+        "id": "gen-1792964350-PbZsz6RJGfKl8zJl6mH8",
+        "provider": "AtlasCloud",
+        "usage": {
+          "prompt_tokens": 1803,
+          "completion_tokens": 53,
+          "total_tokens": 1856,
+          "cost": 0
+        },
+        "finish_reason": "stop",
+        "duration_ms": 6527,
+        "finished_at": "2026-10-25T21:39:17.054439+00:00"
+      },
+      {
+        "phase": "complete",
+        "status": "ok",
+        "started_at": "2026-10-25T21:39:24.435294+00:00",
+        "input_sha256": "1614993beadd4c417e395f07b75aee97b9259ec7c1d3cfd936750b34ce907c42",
+        "request_sha256": "03cc59bdacf4e1bad09f18e7a06059653b44ff6b4d41e6a6cd72fcdd6dffd775",
+        "temperature": 0.3,
+        "message_roles": [
+          "system",
+          "user",
+          "user"
+        ],
+        "disable_tools": true,
+        "wire": {
+          "request_sha256": "217f258cdf9a9d9840e70c1718015def54c747dbc8027478372801ef1c4651c7",
+          "model": "dots-studio/dots-3-note-preview:free",
+          "temperature": 0.3,
+          "max_tokens": 2048,
+          "tools_present": true,
+          "tools": [],
+          "tool_choice": null,
+          "reasoning": {
+            "enabled": false
+          },
+          "provider": {
+            "max_price": {
+              "prompt": 0,
+              "completion": 0
+            }
+          }
+        },
+        "raw_content": "Сейчас в Ростове-на-Дону ясно, +9 °C, ветер 14,4 км/ч. Данные на 26 октября 2026, 00:30 (UTC+03:00).",
+        "raw_tool_calls": [],
+        "truncated": false,
+        "model": "dots-studio/dots-3-note-preview:free",
+        "id": "gen-1792964364-LZwGIF1ive44jPLptBRy",
+        "provider": "AtlasCloud",
+        "usage": {
+          "prompt_tokens": 1055,
+          "completion_tokens": 65,
+          "total_tokens": 1120,
+          "cost": 0
+        },
+        "finish_reason": "stop",
+        "duration_ms": 1595,
+        "finished_at": "2026-10-25T21:39:26.037868+00:00"
+      }
+    ],
+    "mcp_calls": [
+      {
+        "operation": "tools/call",
+        "name": "get_weather",
+        "arguments": {
+          "city": "Ростов-на-Дону, Россия"
+        },
+        "status": "ok",
+        "started_at": "2026-10-25T21:39:17.055271+00:00",
+        "result": {
+          "status": "ok",
+          "place": {
+            "name": "Ростов-на-Дону",
+            "country": "Россия",
+            "region": "Ростовская Область"
+          },
+          "temperature_c": 9.0,
+          "condition": {
+            "code": 0,
+            "description": "Ясно"
+          },
+          "wind": {
+            "speed": 14.4,
+            "unit": "km/h"
+          },
+          "observed_at": "2026-10-26T00:30:00+03:00",
+          "timezone": "Europe/Moscow",
+          "source": "Open-Meteo"
+        },
+        "finished_at": "2026-10-25T21:39:24.434945+00:00"
+      }
+    ],
+    "displayed_answer": "Сейчас в Ростове-на-Дону ясно, +9 °C, ветер 14,4 км/ч. Данные на 26 октября 2026, 00:30 (UTC+03:00).",
+    "audit": {
+      "decision": "call_tool",
+      "target": "get_weather",
+      "status": "OK",
+      "reason": "Ответ составлен по проверенному результату MCP.",
+      "error_code": null,
+      "llm_calls": 2,
+      "mcp_calls": 1,
+      "duration_ms": 15519,
+      "argument_summary": "Город: Ростов-на-Дону, Россия"
+    },
+    "metrics": {
+      "criteria": {
+        "two_successful_llm_calls": true,
+        "one_successful_weather_mcp_read": true,
+        "valid_current_weather_result": true,
+        "rostov_on_don_in_russia": true,
+        "final_tools_disabled": true,
+        "visible_answer_saved": true
+      },
+      "all_passed": true,
+      "llm_calls": 2,
+      "mcp_application_calls": 1,
+      "database_writes": 0,
+      "telegram_calls": 0,
+      "api_cost": 0
+    },
+    "finished_at": "2026-10-25T21:39:26.038764+00:00"
+  },
+  "totals": {
+    "nemotron_attempts": 1,
+    "dots_llm_calls": 4,
+    "mcp_application_calls": 1,
+    "known_dots_api_cost": 0,
+    "telegram_test_messages": 0,
+    "test_database_writes": 0
+  },
+  "application_healthcheck": "passed after restart; polling active; PostgreSQL SELECT 1 passed",
+  "limits": "Smoke samples only, no claim of complete or stable model quality"
+}
