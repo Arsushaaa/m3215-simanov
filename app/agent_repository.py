@@ -63,6 +63,29 @@ class AgentRepository:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
 
+    async def start_request(self, user_id: int, message_id: int) -> None:
+        """Persist the attempt before network work, without keeping its connection.
+
+        Final audit and terminal state still commit together in ``record``. A failed
+        final transaction leaves this marker, so /why cannot mistake an older
+        event for the result of the new request.
+        """
+        if not _identifier(user_id) or not _identifier(message_id):
+            raise ValueError("Некорректный идентификатор запроса.")
+        async with self.pool.acquire() as connection, connection.transaction():
+            await connection.execute(
+                "INSERT INTO labbi_users(user_id) VALUES ($1) ON CONFLICT DO NOTHING", user_id
+            )
+            await connection.fetchval(
+                "SELECT user_id FROM labbi_users WHERE user_id=$1 FOR UPDATE", user_id
+            )
+            await connection.execute(
+                "INSERT INTO labbi_agent_requests(user_id, telegram_message_id, telegram_chat_id) "
+                "VALUES ($1, $2, $1) ON CONFLICT (user_id, telegram_message_id) DO NOTHING",
+                user_id,
+                message_id,
+            )
+
     async def has_processed(self, user_id: int, message_id: int) -> bool:
         if not _identifier(user_id) or not _identifier(message_id):
             raise ValueError("Некорректный идентификатор запроса.")
@@ -260,12 +283,36 @@ class ConfirmationRepository(AgentRepository):
         if not _identifier(user_id):
             raise ConfirmationError("UNAUTHORIZED", "История действий недоступна.")
         row = await self.pool.fetchrow(
-            "SELECT created_at, decision, target, status, reason, argument_summary, "
-            "error_code, llm_calls, mcp_calls, duration_ms FROM labbi_agent_events "
-            "WHERE user_id=$1 ORDER BY id DESC LIMIT 1",
+            "SELECT event.created_at, event.decision, event.target, event.status, event.reason, "
+            "event.argument_summary, event.error_code, event.llm_calls, event.mcp_calls, "
+            "event.duration_ms, event.request_created_at, "
+            "pending.created_at AS pending_created_at "
+            "FROM (SELECT max(request.created_at) AS created_at FROM labbi_agent_requests request "
+            "WHERE request.user_id=$1 AND request.status='processing' AND NOT EXISTS "
+            "(SELECT 1 FROM labbi_agent_events recorded "
+            "WHERE recorded.user_id=$1 AND recorded.request_id=request.id)) pending "
+            "LEFT JOIN LATERAL (SELECT saved.created_at, saved.decision, saved.target, "
+            "saved.status, saved.reason, saved.argument_summary, saved.error_code, "
+            "saved.llm_calls, saved.mcp_calls, saved.duration_ms, "
+            "COALESCE(request.created_at, saved.created_at) AS request_created_at "
+            "FROM labbi_agent_events saved LEFT JOIN labbi_agent_requests request "
+            "ON request.id=saved.request_id AND request.user_id=saved.user_id "
+            "WHERE saved.user_id=$1 ORDER BY saved.id DESC LIMIT 1) event ON true",
             user_id,
         )
-        return SafeAgentEvent(**dict(row)) if row is not None else None
+        if row is None:
+            return None
+        event = dict(row)
+        pending = event.pop("pending_created_at")
+        request_started = event.pop("request_created_at")
+        if pending is not None and (request_started is None or pending > request_started):
+            raise ConfirmationError(
+                "SOURCE_UNAVAILABLE",
+                "Итог последнего запроса ещё не сохранён: запрос обрабатывается "
+                "или произошла ошибка аудита. Объяснение предыдущего запроса не относится "
+                "к последнему.",
+            )
+        return SafeAgentEvent(**event) if event["created_at"] is not None else None
 
     @staticmethod
     def _arguments(action) -> ReminderArguments:

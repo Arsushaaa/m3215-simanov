@@ -65,6 +65,7 @@ def setup_agent(bot_settings):
     repo = SimpleNamespace(
         timezone=AsyncMock(return_value=None),
         has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
         record=AsyncMock(),
     )
     agent = AgentService(llm, mcp, repo, bot_settings, now=lambda: NOW)
@@ -92,6 +93,56 @@ async def test_plain_answer_one_model_no_mcp_and_no_identity_in_prompt(setup_age
     assert "9999999999999" not in payload
     audit = repo.record.call_args.kwargs
     assert (audit["llm_calls"], audit["mcp_calls"], audit["status"]) == (1, 0, "OK")
+
+
+async def test_request_marker_commits_before_model_and_final_audit(setup_agent):
+    agent, llm, _, repo = setup_agent
+    phases = []
+
+    async def start(*args):
+        assert args == (9999999999999, 1)
+        phases.append("started")
+
+    async def decide(*args, **kwargs):
+        assert phases == ["started"]
+        phases.append("model")
+        return routing(text="Обычный ответ.")
+
+    async def record(*args, **kwargs):
+        assert phases == ["started", "model"]
+        phases.append("finished")
+
+    repo.start_request.side_effect = start
+    llm.decide.side_effect = decide
+    repo.record.side_effect = record
+    assert (await ask(agent)).text == "Обычный ответ."
+    assert phases == ["started", "model", "finished"]
+
+
+async def test_failed_request_marker_prevents_untracked_network_work(setup_agent):
+    agent, llm, mcp, repo = setup_agent
+    repo.start_request.side_effect = TimeoutError("PRIVATE database details")
+    with pytest.raises(ModelError, match="Не удалось зарегистрировать запрос") as error:
+        await ask(agent)
+    assert "PRIVATE" not in error.value.user_message
+    llm.decide.assert_not_awaited()
+    llm.complete.assert_not_awaited()
+    mcp.call_tool.assert_not_awaited()
+    audit = repo.record.call_args.kwargs
+    assert audit["error_code"] == "AUDIT_UNAVAILABLE"
+    assert (audit["llm_calls"], audit["mcp_calls"]) == (0, 0)
+
+
+async def test_final_audit_failure_preserves_answer_without_model_retry(setup_agent, caplog):
+    agent, llm, mcp, repo = setup_agent
+    repo.record.side_effect = TimeoutError("PRIVATE database details")
+    assert (await ask(agent)).text == "Обычный ответ."
+    repo.start_request.assert_awaited_once()
+    repo.record.assert_awaited_once()
+    llm.decide.assert_awaited_once()
+    mcp.call_tool.assert_not_awaited()
+    assert "TimeoutError" in caplog.text
+    assert "PRIVATE" not in caplog.text
 
 
 @pytest.mark.parametrize("mode", ["structured", "native"])

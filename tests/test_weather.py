@@ -102,6 +102,94 @@ def kazan_geocoding():
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@pytest.fixture
+def moscow_geocoding():
+    # Публичный ответ Open-Meteo от 25.10.2026: одноимённые места в пяти странах,
+    # включая несколько мест без доступных различающих административных названий.
+    path = Path(__file__).parent / "fixtures" / "open_meteo_moscow.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def rostov_geocoding():
+    # Публичный ответ Open-Meteo от 25.10.2026: exact «Ростов» в Украине,
+    # а российские города названы «Ростов-на-Дону» и «Ростов Великий».
+    path = Path(__file__).parent / "fixtures" / "open_meteo_rostov.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+async def test_real_moscow_geocoding_does_not_turn_duplicate_labels_into_invalid_arguments(
+    moscow_geocoding,
+):
+    session = FakeSession(FakeResponse(moscow_geocoding))
+    result = await WeatherService(session).get_weather("Москва")
+    assert result.root.status == "ambiguous"
+    assert len(result.root.candidates) == 5
+    assert result.root.candidates[0].model_dump() == {
+        "name": "Москва",
+        "country": "Россия",
+        "region": "Москва",
+    }
+    # Деревня с населением 17 не отсекается в пользу столицы.
+    assert result.root.candidates[4].region == "Тверская Область, Пеновский Район"
+    assert len(session.calls) == 1
+
+
+async def test_real_moscow_geocoding_can_choose_capital_only_by_explicit_region(
+    moscow_geocoding,
+):
+    session = FakeSession(FakeResponse(moscow_geocoding), FakeResponse(weather()))
+    result = await WeatherService(session).get_weather("Москва, Россия, Москва")
+    assert result.root.status == "ok"
+    assert session.calls[1][1]["params"]["latitude"] == 55.75204
+    assert session.calls[1][1]["params"]["longitude"] == 37.61781
+
+
+@pytest.mark.parametrize("query", ["Ростов", "ростов", " РОСТОВ "])
+async def test_real_rostov_does_not_choose_exact_ukrainian_name_over_russian_cities(
+    rostov_geocoding, query
+):
+    session = FakeSession(FakeResponse(rostov_geocoding))
+    result = await WeatherService(session).get_weather(query)
+    assert result.root.status == "ambiguous"
+    assert [(place.name, place.country) for place in result.root.candidates] == [
+        ("Ростов", "Украина"),
+        ("Ростов-на-Дону", "Россия"),
+        ("Ростов Великий", "Россия"),
+    ]
+    assert len(session.calls) == 1
+
+
+async def test_real_rostov_explicit_country_still_asks_which_russian_city(rostov_geocoding):
+    session = FakeSession(FakeResponse(rostov_geocoding))
+    result = await WeatherService(session).get_weather("Ростов, Россия")
+    assert result.root.status == "ambiguous"
+    assert [place.name for place in result.root.candidates] == [
+        "Ростов-на-Дону",
+        "Ростов Великий",
+    ]
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "query,latitude,longitude",
+    [
+        ("Ростов, Ростовская область", 47.21997, 39.70769),
+        ("Ростов, Ярославская область", 57.19081, 39.41307),
+        ("Ростов-на-Дону", 47.21997, 39.70769),
+    ],
+)
+async def test_real_rostov_explicit_full_name_or_region_chooses_matching_coordinates(
+    rostov_geocoding, query, latitude, longitude
+):
+    session = FakeSession(FakeResponse(rostov_geocoding), FakeResponse(weather()))
+    result = await WeatherService(session).get_weather(query)
+    assert result.root.status == "ok"
+    assert result.root.place.country == "Россия"
+    assert session.calls[1][1]["params"]["latitude"] == latitude
+    assert session.calls[1][1]["params"]["longitude"] == longitude
+
+
 @pytest.mark.parametrize("query", ["Казань", "Казань, Россия", "Казань, RU"])
 async def test_real_kazan_geocoding_groups_labels_without_choosing_a_location(
     kazan_geocoding, query
@@ -116,6 +204,7 @@ async def test_real_kazan_geocoding_groups_labels_without_choosing_a_location(
             "region": "Татарстан, Gorodskoy Okrug Kazan’",
         },
         {"name": "Казань", "country": "Россия", "region": "Кировская Область"},
+        {"name": "Казань-Омга", "country": "Россия", "region": "Кировская Область"},
     ]
     assert len(session.calls) == 1
 
@@ -134,13 +223,27 @@ async def test_real_kazan_geocoding_explicit_tatarstan_uses_only_matching_coordi
 
 
 async def test_real_kazan_geocoding_group_does_not_become_a_unique_location(kazan_geocoding):
-    session = FakeSession(FakeResponse(kazan_geocoding))
+    # Оставляем найденные одноимённые места: если ответ не содержит других
+    # полных названий, неразличимая группа всё равно не превращается в одну точку.
+    data = deepcopy(kazan_geocoding)
+    data["results"] = [place for place in data["results"] if place["name"] == "Казань"]
+    session = FakeSession(FakeResponse(data))
     result = await WeatherService(session).get_weather("Казань, Кировская область")
     assert result.root.status == "error"
     assert result.root.error.code == "AMBIGUOUS_PLACE"
     assert "Уточни" in result.root.error.message
     assert "выбрать точные координаты по этим данным нельзя" in result.root.error.message
     assert result.root.error.retryable is False
+    assert len(session.calls) == 1
+
+
+async def test_real_kazan_region_does_not_hide_compound_name_or_choose_one_duplicate(
+    kazan_geocoding,
+):
+    session = FakeSession(FakeResponse(kazan_geocoding))
+    result = await WeatherService(session).get_weather("Казань, Кировская область")
+    assert result.root.status == "ambiguous"
+    assert [place.name for place in result.root.candidates] == ["Казань", "Казань-Омга"]
     assert len(session.calls) == 1
 
 
@@ -335,6 +438,29 @@ async def test_unknown_alias_does_not_erase_explicit_country():
 async def test_exact_name_excludes_different_prefix_locations():
     session = session_for([location(), location(id=2, name="Казанка", admin1="Другой регион")])
     assert (await WeatherService(session).get_weather("Казань")).root.status == "ok"
+
+
+@pytest.mark.parametrize("separator", [" ", "-", "‐", "‑", "–", "—"])
+async def test_whole_word_name_extensions_require_clarification(separator):
+    places = [location(name="Пример"), location(id=2, name=f"Пример{separator}Город")]
+    session = FakeSession(FakeResponse({"results": places}))
+    result = await WeatherService(session).get_weather("Пример")
+    assert result.root.status == "ambiguous"
+    assert len(result.root.candidates) == 2
+    assert len(session.calls) == 1
+
+
+async def test_short_name_clarification_does_not_depend_on_population_or_result_order():
+    places = [
+        location(id=2, name="Ростов-на-Дону", population=1),
+        location(name="Ростов", country="Украина", country_code="UA", population=99999999),
+        location(id=3, name="Ростовка", population=1),
+    ]
+    session = FakeSession(FakeResponse({"results": places}))
+    result = await WeatherService(session).get_weather("Ростов")
+    assert result.root.status == "ambiguous"
+    assert [place.name for place in result.root.candidates] == ["Ростов-на-Дону", "Ростов"]
+    assert len(session.calls) == 1
 
 
 async def test_ambiguity_candidates_are_bounded_and_use_lower_administrative_levels():

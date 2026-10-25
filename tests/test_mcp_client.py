@@ -691,6 +691,7 @@ async def test_failed_real_client_preserves_plain_dialog_without_reconnect(setup
     repo = SimpleNamespace(
         timezone=AsyncMock(return_value=None),
         has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
         record=AsyncMock(),
     )
     agent = AgentService(llm, client, repo, client.settings)

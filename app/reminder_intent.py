@@ -34,9 +34,22 @@ _WANT = re.compile(
     r"(?:(?:создать|добавить|поставить|сохранить)\s+)?напоминание\b",
     re.I,
 )
+_EN_INTRO = r"(?:(?:please|hello|hi)[,!\s]+)*(?:(?:can|could|would|will)\s+you\s+)?"
+_EN_REMIND = re.compile(_EN_INTRO + r"(?:please\s+)?remind\s+me\b", re.I)
+_EN_CREATE = re.compile(
+    _EN_INTRO + r"(?:please\s+)?(?:create|add|set|save|schedule)\s+"
+    r"(?:me\s+)?(?:a\s+)?reminder\b",
+    re.I,
+)
+_EN_WANT = re.compile(
+    _EN_INTRO + r"(?:i\s+(?:want|need)(?:\s+to\s+(?:create|add|set|save))?)\s+"
+    r"(?:a\s+)?reminder\b",
+    re.I,
+)
 _THEORY = re.compile(
-    r"^[\s,:]*(?:(?:мне|нам|пожалуйста)[\s,:]+)*"
-    r"(?:что\s+такое\b|как\b|чем\b|почему\b|разниц[ау]\b|определение\b|синтаксис\b)",
+    r"^[\s,:]*(?:(?:мне|нам|пожалуйста|please)[\s,:]+)*"
+    r"(?:что\s+такое\b|как\b|чем\b|почему\b|разниц[ау]\b|определение\b|синтаксис\b|"
+    r"what\b|how\b|why\b|the\s+(?:definition|syntax|difference)\b)",
     re.I,
 )
 _PROGRAMMING = re.compile(r"\b(?:python|питон|java|javascript|asyncio|sql)\b", re.I)
@@ -46,12 +59,29 @@ _ISO = re.compile(
     re.I,
 )
 _CLOCK = re.compile(
-    r"(?<![\w:])(?:[вк]\s*)?(\d{1,2}):([0-5]\d)"
-    r"(?::([0-5]\d)(?:[.,](\d{1,6}))?)?(?!\d|:\d)",
+    r"(?<![\w:])(?:(?:[вк]|at)\s*)?(\d{1,2}):([0-5]\d)"
+    r"(?::([0-5]\d)(?:[.,](\d{1,6}))?)?(?!\d|:\d)"
+    r"(?:\s*([ap])\.?m\.?(?!\w))?",
     re.I,
 )
-_HOUR = re.compile(r"\b[вк]\s*(\d{1,2})(?![\d:.])(?:\s*час(?:а|ов)?)?\b", re.I)
-_REL_DATE = re.compile(r"\b(послезавтра|завтра|сегодня)\b", re.I)
+_HOUR = re.compile(
+    r"(?<![\w:])(?:(?:[вк]|at)\s*|(?=\d{1,2}\s*[ap]\.?m))"
+    r"(\d{1,2})(?![\d:.])(?:\s*час(?:а|ов)?)?(?:\s*([ap])\.?m\.?)?(?!\w)",
+    re.I,
+)
+_RELATIVE_DAYS = {
+    "сегодня": 0,
+    "завтра": 1,
+    "послезавтра": 2,
+    "today": 0,
+    "tomorrow": 1,
+    "day after tomorrow": 2,
+    "the day after tomorrow": 2,
+}
+_REL_DATE = re.compile(
+    r"\b(послезавтра|завтра|сегодня|(?:the\s+)?day\s+after\s+tomorrow|tomorrow|today)\b",
+    re.I,
+)
 _ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 _MONTHS = {
     name: number
@@ -76,18 +106,42 @@ _NUMBERS = {
     "десять": 10,
     "полтора": 1.5,
     "полторы": 1.5,
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "half": 0.5,
 }
 _NUMBER = r"(?:\d{1,6}(?!\d)|" + "|".join(_NUMBERS) + r")"
-_UNIT = r"(?:секунд(?:у|ы)?|минут(?:у|ы)?|час(?:а|ов)?|день|дня|дней)"
-_DURATION = re.compile(r"\bчерез\s+(?:(" + _NUMBER + r")\s+)?(" + _UNIT + r")\b", re.I)
-_HALF_HOUR = re.compile(r"\bчерез\s+полчаса\b", re.I)
+_UNIT = (
+    r"(?:секунд(?:у|ы)?|минут(?:у|ы)?|час(?:а|ов)?|день|дня|дней|seconds?|minutes?|hours?|days?)"
+)
+_DURATION = re.compile(r"\b(?:через|in)\s+(?:(" + _NUMBER + r")\s+)?(" + _UNIT + r")\b", re.I)
+_HALF_HOUR = re.compile(r"\b(?:через\s+полчаса|in\s+half\s+an\s+hour)\b", re.I)
+_WEEKDAY = re.compile(
+    r"\b(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+    re.I,
+)
 _FOLLOWUP_WORDS = (
     set(
         "сегодня завтра послезавтра утром днём днем вечером ночью после обеда занятий "
         "в на к через час часа часов минуту минуты минут секунду секунды секунд день дня дней "
         "лучше давай тогда нет не а пусть будет пожалуйста восемнадцать девятнадцать "
         "двадцать тридцать полчаса понедельник вторник среду четверг пятницу субботу "
-        "воскресенье".split()
+        "воскресенье today tomorrow the day after morning afternoon evening night "
+        "at in on am pm a m p hour hours minute minutes second seconds days "
+        "instead then please no not and or next monday tuesday wednesday thursday "
+        "friday saturday sunday eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen twenty thirty".split()
     )
     | set(_NUMBERS)
     | set(_MONTHS)
@@ -117,9 +171,16 @@ def _followup(text: str) -> bool:
 
 def _request(text: str) -> bool:
     cleaned = _clean(text)
-    match = _REMIND.match(cleaned) or _CREATE.match(cleaned) or _WANT.match(cleaned)
+    match = next(
+        (
+            match
+            for pattern in (_REMIND, _CREATE, _WANT, _EN_REMIND, _EN_CREATE, _EN_WANT)
+            if (match := pattern.match(cleaned)) is not None
+        ),
+        None,
+    )
     if match is None:
-        verb = re.search(r"\bнапом(?:ни(?:те)?|нить)\b", cleaned)
+        verb = re.search(r"\b(?:напом(?:ни(?:те)?|нить)|remind\s+me)\b", cleaned)
         if verb and _followup(cleaned[: verb.start()]):
             match = verb
     if match is None:
@@ -139,14 +200,14 @@ def _reminder_response(text: str) -> bool:
     if text in {TIME_REQUIRED, DATE_REQUIRED, REMINDER_CLARIFY, BUTTON_REQUIRED}:
         return True
     cleaned = _clean(text)
-    if re.search(r"\bнапомн\w*", cleaned):
+    if re.search(r"\b(?:напомн\w*|remind(?:er|ing)?|remind\s+you)\b", cleaned):
         return not _PROGRAMMING.search(cleaned) or bool(
             _CLOCK.search(cleaned) or _REL_DATE.search(cleaned)
         )
     return bool(
         re.search(
             r"^во\s+сколько(?:\s+завтра|\s+сегодня)?[?.!]*$|"
-            r"^в\s+какое\s+время[?.!]*$|/timezone\b",
+            r"^в\s+какое\s+время[?.!]*$|^what\s+time[?.!]*$|/timezone\b",
             cleaned,
         )
     )
@@ -212,6 +273,14 @@ class ReminderContext:
             return False
 
 
+def _hour(value: int, meridiem: str | None) -> int:
+    if meridiem is None:
+        return value
+    if not 1 <= value <= 12:
+        raise ValueError("Invalid 12-hour clock")
+    return value % 12 + (12 if meridiem == "p" else 0)
+
+
 def _evidence(texts: list[str]) -> ReminderContext:
     clock, day, instant, duration = None, None, None, None
     for text in texts:
@@ -240,12 +309,13 @@ def _evidence(texts: list[str]) -> ReminderContext:
                 match = (periods or halves)[0]
                 remainder = cleaned[match.end() :]
                 extra_unit = re.match(
-                    r"[\s,]+(?:и\s+)?(?:полчаса|\w+\s+" + _UNIT + r")\b", remainder
+                    r"[\s,]+(?:(?:и|and)\s+)?(?:полчаса|half\s+an\s+hour|\w+\s+" + _UNIT + r")\b",
+                    remainder,
                 )
                 outside = cleaned[: match.start()] + remainder
                 has_absolute = any(
                     pattern.search(outside)
-                    for pattern in (_REL_DATE, _ISO_DATE, _MONTH_DATE, _CLOCK, _HOUR)
+                    for pattern in (_REL_DATE, _ISO_DATE, _MONTH_DATE, _CLOCK, _HOUR, _WEEKDAY)
                 )
                 if not extra_unit and not has_absolute:
                     if halves:
@@ -256,10 +326,10 @@ def _evidence(texts: list[str]) -> ReminderContext:
                         if number and number.isdecimal():
                             amount = int(number)
                         unit = match[2]
-                        seconds = 1 if unit.startswith("секунд") else 60
-                        if unit.startswith("час"):
+                        seconds = 1 if unit.startswith(("секунд", "second")) else 60
+                        if unit.startswith(("час", "hour")):
                             seconds = 3600
-                        elif unit in {"день", "дня", "дней"}:
+                        elif unit in {"день", "дня", "дней", "day", "days"}:
                             seconds = 86400
                         try:
                             duration = timedelta(seconds=amount * seconds) if amount > 0 else None
@@ -274,7 +344,8 @@ def _evidence(texts: list[str]) -> ReminderContext:
             and not hours
             and re.search(
                 r"\b(?:утром|днём|днем|вечером|ночью|после\s+обеда)\b|"
-                r"\b[вк]\s+[а-яё]+\b",
+                r"\b[вк]\s+[а-яё]+\b|\b(?:morning|afternoon|evening|night)\b|"
+                r"\bat\s+[a-z]+\b",
                 cleaned,
             )
         ):
@@ -282,25 +353,25 @@ def _evidence(texts: list[str]) -> ReminderContext:
         if clocks or hours:
             instant, duration, clock = None, None, None
             if len(clocks) + len(hours) == 1 and not re.search(
-                r"\b(?:не\s+[вк]|или|либо)\b", cleaned
+                r"\b(?:не\s+[вк]|или|либо|not\s+at|or)\b", cleaned
             ):
                 match = (clocks or hours)[0]
                 try:
                     clock = (
                         time(
-                            int(match[1]),
+                            _hour(int(match[1]), match[5]),
                             int(match[2]),
                             int(match[3] or 0),
                             int((match[4] or "").ljust(6, "0")),
                         )
                         if clocks
-                        else time(int(match[1]))
+                        else time(_hour(int(match[1]), match[2]))
                     )
                 except ValueError:
                     pass
         dates = []
         for match in _REL_DATE.finditer(cleaned):
-            dates.append({"сегодня": 0, "завтра": 1, "послезавтра": 2}[match[1]])
+            dates.append(_RELATIVE_DAYS[" ".join(match[1].split())])
         for match in _ISO_DATE.finditer(cleaned):
             try:
                 dates.append(date(*map(int, match.groups())))
@@ -312,15 +383,16 @@ def _evidence(texts: list[str]) -> ReminderContext:
                 dates.append(date(int(match[3]), month, number) if match[3] else (month, number))
             except ValueError:
                 dates.append(None)
-        if re.search(
-            r"\b(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)\b", cleaned
-        ):
+        if _WEEKDAY.search(cleaned):
             day, instant, duration = None, None, None
         if dates:
             instant, duration = None, None
             day = (
                 dates[0]
-                if len(dates) == 1 and not re.search(r"\bне\s+(?:завтра|сегодня)", cleaned)
+                if len(dates) == 1
+                and not re.search(
+                    r"\b(?:не\s+(?:завтра|сегодня)|not\s+(?:tomorrow|today))", cleaned
+                )
                 else None
             )
     return ReminderContext("\n".join(texts), clock, day, instant, duration)

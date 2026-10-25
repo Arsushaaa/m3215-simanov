@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "registered_at": "2026-10-25T20:44:55.515343+00:00",
+  "source_sha256": {
+    "app/__init__.py": "0194b688b9cbfc9123e1933c008ae2bd730f79c0bd70d4d04fdaf8ea4253c976",
+    "app/__main__.py": "c2f9a2daa0f51d2e496ec63e78cc82ea00ad401dee54ed7118dc8ce329b66891",
+    "app/agent.py": "235e7f414eaee56ee366088bf5ce436b641a9101e3dff7238afa77ed163fd046",
+    "app/agent_repository.py": "2a3b75a94a3502158de695a6eea61565ceedbee649d1d43fbb9c56825841511c",
+    "app/config.py": "32bee510ed04079134ad9d41ff205fd6b35a103fd5aeb26116e83f6258f3dff1",
+    "app/confirmation_models.py": "cbc8bc2faf2f310aff47d1a3ad124fc710c2177a4c169e3f7981ac9f602690e4",
+    "app/confirmations.py": "8d870ea9583192aaf6900ad4d8a58d336f8a59575675bc7d40af4621f41f5bc9",
+    "app/db.py": "99004e91609d12d6a5aae7a4554224d99ea5812e87bd8168ada0bc32a0d6d2ff",
+    "app/dialog.py": "a662f2332e657b03c3e846033d66414aea967860758d7bb8434c0f82e67c7b0f",
+    "app/essay.py": "0504bb0299d5097e05d402553aa2db74f8873a60b1c8a579acce7e6e8e4fed13",
+    "app/formatting.py": "5c3e2eafd3c9babe0f5b415da58e3df192d79dcdacf7462308556faff0937982",
+    "app/handlers/__init__.py": "515f371a14c58f963b10a17acebe3a5fbbc427d8ece84f26f98a95e407050225",
+    "app/handlers/assistant.py": "b965fb20caf69fee7420025702a5514e1d26c6514c420666a6beab01da55b939",
+    "app/health.py": "68340a0b7b29dd396806ded59ac51976cfd914bc571c17fa08fcd24c5ae221f7",
+    "app/healthcheck.py": "6faebfba0b40567441b3cd28196b48e0322612badd0b2a27921972678dc57d15",
+    "app/llm.py": "7a1c6636d4ec3d5fdb049602845c28d62985be6e81705fc6f35b36055168f937",
+    "app/logging_setup.py": "fc49ef18a823f5c85a0d5dc07819c25aa0ade21e46d7e654374f02ea7780b2c5",
+    "app/mcp/__init__.py": "42a60c05d28604d8e74fde3fd613e1af0f940cf65b0976dc9597a32904f1ab87",
+    "app/mcp/client.py": "3b987fb0e5438c0d7b9db3d2cfa50818fb1db3a58c52522e179c04f86eed955c",
+    "app/mcp/contracts.py": "a9148f576cf39da62f3bc60c5ff16ffbeda65d34309d254748812850b1922978",
+    "app/mcp/schedule.py": "249b3f43dda93829e118ecc2015bd7725639f864b9fd7f57a75882e40b3e6a14",
+    "app/mcp/server.py": "e99cba85064197e4789c9ca8f00bb682bac74b9ace1a4214f5786a4ffd34a18d",
+    "app/mcp/weather.py": "303348b843c220c59f2d4baa97cd2a05c2d683667e858a1638c858ddc62ad9c5",
+    "app/migration.py": "1b2663fd1cc3c17ad2d5687cc1638bb7c46ce515eb8bb05e286b31344eb4d6a8",
+    "app/output_limits.py": "80a793d3317c7749f9e2ed627eb8bbe9a12b5e1d5d9accf828adf399e89271f8",
+    "app/prompts.py": "c456f56d06bd39e973f0dafe7d3605f21729f0222440114c60ca60dd642ba68f",
+    "app/quiz.py": "9aa387f8155580698a1820301d14d794ae502f0d0f43e66bde228bf0e7be9586",
+    "app/reminder_intent.py": "183fa6cd1a2c2e31db6c2ba097b567a5a101963fee81ea51679d45fa71901ad8",
+    "app/repository.py": "85b5eae2689838f2112fdc8d959a77d4b5712697ee433f5dcb63d1307966814b",
+    "app/telegram.py": "1c79d74965c6c81bae28b735e2c435d0a67aa75f9383d537f2835bd3feac0d75",
+    "app/time_display.py": "cdd2df591410e66bb90dbc4472700e1bbd62037b3041d25fc456894be8602cac",
+    "app/timezone_lookup.py": "e499b752e4139acca97a78618c0dde3a03e55e73c98981ee583b26c3d95ba4dc",
+    "app/timezone_ui.py": "c15bd451cd32db53b5ef7c666e08bd73eb313cdd2dfb6d33ba6db5e3a20fb265",
+    "scripts/lab2_experiment.py": "3c1448e1d85ba0e5faf4f8f645c50c3aa3a0f274efcbbe8af457a6d2df7a9e1d",
+    "scripts/lab2_comparison.py": "4a725bd5d0d85a4dfa06c3f60217cea64d89c72427c733fc7fe353d686a46d16",
+    "scripts/lab2_comparison_live.py": "b5b74a049e1c0d8cade471d730b31dc08efbf3a1d8962ab492b35643dcf20129"
+  },
+  "dataset_sha256": "0a9c9f06f85e094ae42aaa3b684ea368b8f051055f5476ed676203e2a1afdc98",
+  "context": {
+    "now": "2026-10-12T09:00:00+03:00",
+    "timezone": "Europe/Moscow"
+  },
+  "cells": [
+    {
+      "id": "xing-t03",
+      "model": "xingchen-agi/xing4.0-29b-a4b:free",
+      "temperature": 0.3
+    },
+    {
+      "id": "dots-t03",
+      "model": "dots-studio/dots-3-note-preview:free",
+      "temperature": 0.3
+    },
+    {
+      "id": "dots-t00",
+      "model": "dots-studio/dots-3-note-preview:free",
+      "temperature": 0.0
+    },
+    {
+      "id": "xing-t00",
+      "model": "xingchen-agi/xing4.0-29b-a4b:free",
+      "temperature": 0.0
+    }
+  ],
+  "order": "case order fixed; rotate cell order by case index; one new case per checkpoint",
+  "extra_cases": [
+    {
+      "id": "new_weather",
+      "query": "Какая текущая температура в Лиссабоне, Португалия?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Лиссабон, Португалия"
+      }
+    },
+    {
+      "id": "new_schedule",
+      "query": "Покажи расписание на послезавтра.",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-14"
+      }
+    },
+    {
+      "id": "new_reminder",
+      "query": "Remind me tomorrow at 11:00 to submit the report",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "submit the report",
+        "remind_at": "2026-10-13T11:00:00+03:00"
+      }
+    },
+    {
+      "id": "new_respond",
+      "query": "Для чего нужен оператор break в цикле Python?",
+      "expected_action": "respond",
+      "expected_arguments": {}
+    }
+  ],
+  "selection": "passed first, arguments descending, actions descending, temperature ascending, model ID ascending",
+  "fixed": {
+    "max_tokens": 2048,
+    "llm_timeout_seconds": 60,
+    "agent_timeout_seconds": 135,
+    "history_max_tokens": 6000,
+    "history_max_messages": 20,
+    "reasoning": {
+      "enabled": false
+    },
+    "tool_mode": "structured",
+    "top_p": "omitted",
+    "seed": "omitted",
+    "penalties": "omitted",
+    "provider_max_price": {
+      "prompt": 0,
+      "completion": 0
+    }
+  },
+  "thresholds": {
+    "actions": [
+      10,
+      12
+    ],
+    "arguments": [
+      8,
+      9
+    ]
+  },
+  "api_base": "https://openrouter.ai/api/v1",
+  "extra_acceptance": "4/4 actions and 3/3 arguments; not used for selection or tuning",
+  "budget": {
+    "grid": 44,
+    "extra": 4,
+    "live_read": 2,
+    "maximum": 50
+  },
+  "live_read": {
+    "query": "Покажи расписание на 13 октября 2026 года.",
+    "tool": "get_schedule",
+    "arguments": {
+      "date": "2026-10-13"
+    }
+  },
+  "limitations": [
+    "The original 12 cases were used during earlier prompt development.",
+    "One sample per model/temperature is not a stability estimate.",
+    "Extra cases are fixed before calls and never used for tuning.",
+    "API errors, truncation and invalid JSON remain failures; no retries.",
+    "A failed campaign will be reported as failed, never relabelled."
+  ]
+}

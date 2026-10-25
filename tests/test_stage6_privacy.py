@@ -107,6 +107,7 @@ async def test_agent_audit_failure_does_not_log_question_prompt_or_model_reason(
 ):
     repository = SimpleNamespace(
         has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
         timezone=AsyncMock(return_value=None),
         record=AsyncMock(side_effect=RuntimeError(" ".join(PRIVATE))),
     )

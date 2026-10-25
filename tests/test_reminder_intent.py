@@ -154,3 +154,105 @@ def test_compound_or_ambiguous_time_requires_clarification():
     ):
         context = reminder_context(request, [])
         assert context is not None and not context.has_time
+
+
+@pytest.mark.parametrize(
+    "text,moment",
+    [
+        (
+            "Remind me tomorrow at 11:00 to submit the report",
+            "2026-10-19T11:00:00+03:00",
+        ),
+        ("Please remind me today at 3 PM to submit the report", "2026-10-18T15:00:00+03:00"),
+        (
+            "Could you please remind me the day after tomorrow at 11:30 a.m. to submit it?",
+            "2026-10-20T11:30:00+03:00",
+        ),
+        ("Set a reminder tomorrow at 12 AM to submit the report", "2026-10-19T00:00:00+03:00"),
+        ("Create a reminder tomorrow at 12 PM to submit the report", "2026-10-19T12:00:00+03:00"),
+        ("I need a reminder tomorrow at 11:00 to submit the report", "2026-10-19T11:00:00+03:00"),
+        ("In two hours remind me to submit the report", "2026-10-18T12:00:00+03:00"),
+        ("Remind me in an hour to submit the report", "2026-10-18T11:00:00+03:00"),
+        ("Remind me in half an hour to submit the report", "2026-10-18T10:30:00+03:00"),
+        ("Remind me in 30 minutes to submit the report", "2026-10-18T10:30:00+03:00"),
+        ("Remind me in 20 seconds to submit the report", "2026-10-18T10:00:20+03:00"),
+        ("Remind me in two days to submit the report", "2026-10-20T10:00:00+03:00"),
+    ],
+)
+def test_english_requests_use_only_explicit_user_date_clock_or_duration(text, moment):
+    context = reminder_context(text, [])
+    assert context is not None and context.has_date and context.has_time
+    assert context.matches(datetime.fromisoformat(moment), NOW, ZONE)
+    assert not context.matches(datetime.fromisoformat(moment).replace(minute=59), NOW, ZONE)
+
+
+@pytest.mark.parametrize("clock", ["3 PM", "at 3 p.m.", "15:00", "at 15:00"])
+def test_english_clock_followup_keeps_date_from_original_user_request(clock):
+    context = reminder_context(
+        clock, history("Remind me tomorrow to submit the report", "What time?")
+    )
+    assert context is not None and context.has_date and context.has_time
+    assert context.matches(datetime.fromisoformat("2026-10-19T15:00:00+03:00"), NOW, ZONE)
+
+
+def test_english_yes_does_not_use_time_invented_by_assistant():
+    context = reminder_context(
+        "yes",
+        history(
+            "Remind me tomorrow to submit the report", "I can remind you at 18:00. Is that OK?"
+        ),
+    )
+    assert context is not None and context.has_date and not context.has_time
+    assert "18:00" not in context.prompt_text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Remind me what recursion is",
+        "Please remind me how Python decorators work",
+        "Remind me the syntax of for in Python",
+        'Explain the phrase "Remind me tomorrow at 11:00 to submit the report"',
+    ],
+)
+def test_english_theory_and_quoted_examples_are_not_write_requests(text):
+    assert reminder_context(text, []) is None
+
+
+@pytest.mark.parametrize(
+    "correction,has_date",
+    [
+        ("in the evening", True),
+        ("at eleven", True),
+        ("at 13 PM", True),
+        ("at 0:30 AM", True),
+        ("at 11:30 or 12:30", True),
+        ("next Friday", False),
+    ],
+)
+def test_english_unsupported_or_invalid_corrections_do_not_keep_old_parameter(correction, has_date):
+    context = reminder_context(
+        correction, history("Remind me tomorrow at 18:30 to submit the report")
+    )
+    assert context is not None and context.has_date == has_date
+    assert not (context.has_date and context.has_time)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Remind me in two hours and 30 minutes to submit the report",
+        "Remind me in two hours and half an hour to submit the report",
+        "Remind me tomorrow in two hours to submit the report",
+        "Remind me next Friday in two hours to submit the report",
+    ],
+)
+def test_english_compound_or_conflicting_temporal_evidence_requires_clarification(text):
+    context = reminder_context(text, [])
+    assert context is not None and not context.has_time
+
+
+def test_english_orphan_cannot_supply_original_request_or_assistant_time():
+    context = reminder_context("at 11 AM", [{"role": "assistant", "content": "What time?"}])
+    assert context is not None and context.is_orphaned
+    assert not context.has_time and not context.has_date

@@ -1,0 +1,669 @@
+{
+  "generated_at": "2026-10-25T20:46:53.582150+00:00",
+  "stage": 6,
+  "status": "passed",
+  "checks": [
+    {
+      "name": "pip check",
+      "command": [
+        "python",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "duration_ms": 188
+    },
+    {
+      "name": "Ruff",
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "exit_code": 0,
+      "duration_ms": 23
+    },
+    {
+      "name": "format",
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "exit_code": 0,
+      "duration_ms": 23
+    },
+    {
+      "name": "pytest + PostgreSQL",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--junitxml=<temporary>/tests.xml"
+      ],
+      "exit_code": 0,
+      "duration_ms": 76642
+    }
+  ],
+  "suite": {
+    "passed": 1312,
+    "failed": 0,
+    "skipped": 0
+  },
+  "source_checks": {
+    "python_312": true,
+    "migrations_001_to_006_unchanged": true,
+    "lab1_commit_unchanged": true,
+    "evaluation_dataset_unchanged": true
+  },
+  "cases": [
+    {
+      "id": "weather_success",
+      "expected": "Проверенные температура, условия, ветер и время; фиксированные HTTP URL.",
+      "tests": [
+        "tests/test_weather.py::test_weather_uses_fixed_endpoints_checked_units_and_utc_to_iana"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_weather.py::test_weather_uses_fixed_endpoints_checked_units_and_utc_to_iana",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "weather_not_found",
+      "expected": "not_found, без погодного HTTP и выдуманных значений.",
+      "tests": [
+        "tests/test_weather.py::test_missing_city_is_not_found_and_does_not_fetch_weather"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_weather.py::test_missing_city_is_not_found_and_does_not_fetch_weather",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "weather_failure",
+      "expected": "Ошибки/тайм-аут ограничены, ответ API не раскрывается, повторов нет.",
+      "tests": [
+        "tests/test_weather.py::test_both_http_calls_share_one_total_timeout",
+        "tests/test_weather.py::test_malformed_current_values_are_rejected",
+        "tests/test_weather.py::test_network_errors_hide_request_details_and_do_not_retry"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_weather.py::test_both_http_calls_share_one_total_timeout",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_weather.py::test_malformed_current_values_are_rejected",
+          "matched": 13,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_weather.py::test_network_errors_hide_request_details_and_do_not_retry",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "schedule_fields_and_empty_day",
+      "expected": "Точные занятия; свободный день отличается от отсутствия покрытия.",
+      "tests": [
+        "tests/test_schedule.py::test_schedule_returns_exact_observable_lesson_fields",
+        "tests/test_schedule.py::test_empty_day_and_outside_coverage_are_distinct"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_schedule.py::test_schedule_returns_exact_observable_lesson_fields",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_schedule.py::test_empty_day_and_outside_coverage_are_distinct",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "invalid_arguments",
+      "expected": "Невозможные даты, пустой текст и лишние поля отклоняются.",
+      "tests": [
+        "tests/test_mcp_contracts.py::test_schedule_date_is_real_iso_and_in_range",
+        "tests/test_mcp_contracts.py::test_reminder_text_limits",
+        "tests/test_mcp_contracts.py::test_agent_decision_rejects_unknown_actions_extras_and_mismatched_arguments"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_contracts.py::test_schedule_date_is_real_iso_and_in_range",
+          "matched": 7,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_contracts.py::test_reminder_text_limits",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_contracts.py::test_agent_decision_rejects_unknown_actions_extras_and_mismatched_arguments",
+          "matched": 7,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "week_boundary",
+      "expected": "Неделя понедельник–воскресенье корректна на границе месяца/года.",
+      "tests": [
+        "tests/test_schedule.py::test_week_crosses_month_and_year_without_changing_system_clock"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_schedule.py::test_week_crosses_month_and_year_without_changing_system_clock",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "confirmation_real_stdio",
+      "expected": "Карточка без записи; callback владельца 0 LLM/1 MCP, одна квитанция PostgreSQL.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_model_calls"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_model_calls",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "update_deduplication",
+      "expected": "Восемь повторов одного update дают один action/request/audit/history pair.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_prepare_is_concurrent_atomic_and_separate_from_dialog_revision"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_prepare_is_concurrent_atomic_and_separate_from_dialog_revision",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "concurrent_confirmation",
+      "expected": "Шесть подтверждений через разные пулы дают одно напоминание; replay не вызывает MCP.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_services_race_across_pools_commits_once_and_replays_without_mcp"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_services_race_across_pools_commits_once_and_replays_without_mcp",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "idempotent_write",
+      "expected": "Повтор ключа возвращает тот же reminder ID без новой записи.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_repository_concurrent_confirmation_and_restart_receipt"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_concurrent_confirmation_and_restart_receipt",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "ownership",
+      "expected": "Чужой владелец не читает/подтверждает/отменяет действие и не меняет запись.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_repository_rejects_unauthorized_stale_or_changed_actions",
+        "tests/test_confirmation_handlers.py::test_callback_from_foreign_or_inaccessible_chat_is_rejected"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_rejects_unauthorized_stale_or_changed_actions",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_callback_from_foreign_or_inaccessible_chat_is_rejected",
+          "matched": 4,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "restart_persistence",
+      "expected": "Настоящий рестарт PostgreSQL и новые пулы сохраняют зоны, состояния, квитанции и аудит.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_database_restart_preserves_zone_actions_receipts_and_private_audit"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_database_restart_preserves_zone_actions_receipts_and_private_audit",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "database_atomic_failure",
+      "expected": "Сбой аудита откатывает выдачу capability и все операции отзыва; нет частичного состояния.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_database_failure_rolls_back_permission_and_every_revocation",
+        "tests/test_integration.py::test_reminder_repository_rolls_back_write_when_audit_fails"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_database_failure_rolls_back_permission_and_every_revocation",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_rolls_back_write_when_audit_fails",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "unknown_commit",
+      "expected": "Потеря ACK восстанавливает прежний action/receipt; неизвестный исход не объявляется успехом.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_repository_unknown_commit_ack_recovers_same_action",
+        "tests/test_confirmations.py::test_timeout_with_uncommitted_action_reports_unknown_not_success"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_unknown_commit_ack_recovers_same_action",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmations.py::test_timeout_with_uncommitted_action_reports_unknown_not_success",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "timezone_dst_expiry",
+      "expected": "IANA, будущее время, DST gap/overlap, TTL и epoch проверяются; отозванное действие не записывается.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_preparation_checks_saved_zone_db_time_and_dst",
+        "tests/test_integration.py::test_confirmation_revocation_covers_pending_and_approved_cards_and_expiry",
+        "tests/test_mcp_contracts.py::test_reminder_rejects_missing_or_nonportable_zone"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_preparation_checks_saved_zone_db_time_and_dst",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_confirmation_revocation_covers_pending_and_approved_cards_and_expiry",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_contracts.py::test_reminder_rejects_missing_or_nonportable_zone",
+          "matched": 7,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "timezone_readonly",
+      "expected": "Поиск/просмотр не меняют зону и карточку; подтверждённая смена атомарно отзывает старое действие.",
+      "tests": [
+        "tests/test_integration.py::test_timezone_menu_only_applies_after_owner_confirmation_and_persists"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_timezone_menu_only_applies_after_owner_confirmation_and_persists",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "mcp_failure_plain_dialog",
+      "expected": "Отказ старта, каталога или разрыв MCP не выключают обычный ответ; чтение честно отклоняется.",
+      "tests": [
+        "tests/test_mcp_client.py::test_failed_real_client_preserves_plain_dialog_without_reconnect"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_client.py::test_failed_real_client_preserves_plain_dialog_without_reconnect",
+          "matched": 3,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "tool_allowlist",
+      "expected": "Неизвестные инструменты, лишние аргументы и изменённые схемы не доходят до SDK.",
+      "tests": [
+        "tests/test_mcp_client.py::test_invalid_calls_never_reach_sdk",
+        "tests/test_mcp_client.py::test_unexpected_catalog_disables_tools"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_client.py::test_invalid_calls_never_reach_sdk",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_unexpected_catalog_disables_tools",
+          "matched": 7,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "result_binding",
+      "expected": "Другая дата не становится фактом; квитанция на другой момент даёт OUTCOME_UNKNOWN.",
+      "tests": [
+        "tests/test_mcp_client.py::test_well_formed_schedule_for_another_day_is_not_a_fact",
+        "tests/test_mcp_client.py::test_well_formed_receipt_for_another_moment_is_unknown"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_client.py::test_well_formed_schedule_for_another_day_is_not_a_fact",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_well_formed_receipt_for_another_moment_is_unknown",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "untrusted_result",
+      "expected": "Инъекция из MCP не может запустить новый инструмент в финале structured/native.",
+      "tests": [
+        "tests/test_llm_tools.py::test_injected_tool_data_cannot_start_another_action_in_read_final"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_llm_tools.py::test_injected_tool_data_cannot_start_another_action_in_read_final",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "no_hidden_retries",
+      "expected": "Ошибки HTTP, тайм-аут и отказ записи не вызывают retry или смену режима.",
+      "tests": [
+        "tests/test_llm_tools.py::test_tool_http_errors_are_safe_and_never_retried",
+        "tests/test_llm_tools.py::test_routing_modes_are_selected_before_http_not_fallback_after_error",
+        "tests/test_mcp_client.py::test_write_outer_timeout_is_unknown_and_does_not_retry"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_llm_tools.py::test_tool_http_errors_are_safe_and_never_retried",
+          "matched": 6,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_llm_tools.py::test_routing_modes_are_selected_before_http_not_fallback_after_error",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_write_outer_timeout_is_unknown_and_does_not_retry",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "bounded_calls_context",
+      "expected": "Чтение максимум2 LLM/1 MCP; контекст включает схемы и результаты; новые вызовы в финале запрещены.",
+      "tests": [
+        "tests/test_agent.py::test_read_uses_two_models_one_mcp_and_final_disables_tools",
+        "tests/test_agent.py::test_context_budget_accounts_for_schema_and_tool_result",
+        "tests/test_llm_tools.py::test_response_body_is_bounded_before_json_decoding"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_agent.py::test_read_uses_two_models_one_mcp_and_final_disables_tools",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_agent.py::test_context_budget_accounts_for_schema_and_tool_result",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_llm_tools.py::test_response_body_is_bounded_before_json_decoding",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "stop_reset_isolation",
+      "expected": "/stop отменяет активные/ожидающие запросы владельца; reset прерывает модель, другие пользователи работают.",
+      "tests": [
+        "tests/test_handlers.py::test_stop_cancels_active_and_queued_requests_and_new_request_still_works",
+        "tests/test_handlers.py::test_reset_interrupts_model_immediately_and_preserves_other_users"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_handlers.py::test_stop_cancels_active_and_queued_requests_and_new_request_still_works",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_handlers.py::test_reset_interrupts_model_immediately_and_preserves_other_users",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "shutdown_waits",
+      "expected": "Завершение дожидается генераций, callbacks, обычных команд и отзыва в БД.",
+      "tests": [
+        "tests/test_handlers.py::test_shutdown_cancels_active_and_queued_generations_before_closing_resources",
+        "tests/test_confirmation_handlers.py::test_shutdown_waits_for_non_generating_command_before_closing_resources",
+        "tests/test_confirmation_handlers.py::test_shutdown_waits_for_in_flight_revocation_before_closing_resources",
+        "tests/test_confirmation_handlers.py::test_shutdown_waits_for_callback_cancellation_before_closing_resources"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_handlers.py::test_shutdown_cancels_active_and_queued_generations_before_closing_resources",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_shutdown_waits_for_non_generating_command_before_closing_resources",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_shutdown_waits_for_in_flight_revocation_before_closing_resources",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_shutdown_waits_for_callback_cancellation_before_closing_resources",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "cleanup_failure",
+      "expected": "Сбой одного close не пропускает остальные; отмена ждёт cleanup, ошибка пула вызывает terminate.",
+      "tests": [
+        "tests/test_stage6_lifecycle.py::test_failing_resource_does_not_skip_other_cleanup_or_leak_details",
+        "tests/test_stage6_lifecycle.py::test_cancel_during_cleanup_waits_for_remaining_closes_and_propagates",
+        "tests/test_stage6_lifecycle.py::test_pool_close_failure_terminates_and_does_not_mask_original_error"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_failing_resource_does_not_skip_other_cleanup_or_leak_details",
+          "matched": 6,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_cancel_during_cleanup_waits_for_remaining_closes_and_propagates",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_pool_close_failure_terminates_and_does_not_mask_original_error",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "telegram_delivery",
+      "expected": "Сначала квитанция, затем удаление карточки; сбой отправки/unknown сохраняют кнопку, второй MCP не вызывается.",
+      "tests": [
+        "tests/test_confirmation_handlers.py::test_receipt_delivery_failure_keeps_card_for_receipt_recovery",
+        "tests/test_confirmation_handlers.py::test_unknown_outcome_or_plain_model_text_does_not_remove_card",
+        "tests/test_confirmation_handlers.py::test_delete_failure_removes_buttons_without_repeating_committed_action"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_confirmation_handlers.py::test_receipt_delivery_failure_keeps_card_for_receipt_recovery",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_unknown_outcome_or_plain_model_text_does_not_remove_card",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_delete_failure_removes_buttons_without_repeating_committed_action",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "privacy_logs",
+      "expected": "Журнал не содержит Telegram identity, текст запроса, инструкции, capability, сырые payload/traceback.",
+      "tests": [
+        "tests/test_stage6_privacy.py::test_library_payloads_are_replaced_before_formatting_and_never_logged",
+        "tests/test_stage6_privacy.py::test_actual_dispatcher_send_failure_does_not_log_update_identity_or_telegram_payload",
+        "tests/test_stage6_lifecycle.py::test_main_reports_error_type_without_untrusted_exception_body",
+        "tests/test_stage6_privacy.py::test_agent_audit_failure_does_not_log_question_prompt_or_model_reason"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_stage6_privacy.py::test_library_payloads_are_replaced_before_formatting_and_never_logged",
+          "matched": 9,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_privacy.py::test_actual_dispatcher_send_failure_does_not_log_update_identity_or_telegram_payload",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_main_reports_error_type_without_untrusted_exception_body",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_privacy.py::test_agent_audit_failure_does_not_log_question_prompt_or_model_reason",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "why_and_history",
+      "expected": "/why читает безопасный owner audit; технические tool messages не попадают в историю; translate/quiz сохранены.",
+      "tests": [
+        "tests/test_confirmations.py::test_why_shows_owner_event_safe_arguments_and_fixed_reason",
+        "tests/test_agent.py::test_dialog_persists_only_user_and_final_and_respects_revision",
+        "tests/test_agent.py::test_other_modes_keep_legacy_model_path"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_confirmations.py::test_why_shows_owner_event_safe_arguments_and_fixed_reason",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_agent.py::test_dialog_persists_only_user_and_final_and_respects_revision",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_agent.py::test_other_modes_keep_legacy_model_path",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "boundaries": {
+    "real_postgresql": true,
+    "real_stdio": true,
+    "telegram_llm_and_weather": "substituted in tests",
+    "real_model_experiment": "stage 7; not performed here",
+    "lab2_tag": "not created by this script"
+  }
+}

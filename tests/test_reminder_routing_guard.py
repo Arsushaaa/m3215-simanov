@@ -67,6 +67,7 @@ def reminder_agent(bot_settings):
     repository = SimpleNamespace(
         timezone=AsyncMock(return_value="Europe/Moscow"),
         has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
         record=AsyncMock(),
     )
     agent = AgentService(llm, mcp, repository, bot_settings, now=lambda: NOW)
@@ -166,6 +167,43 @@ async def test_explicit_matching_reminder_produces_proposal_without_write(remind
     assert reply.reminder.timezone == "Europe/Moscow"
     assert "требуется подтверждение" in reply.text
     assert_no_execution(reminder_agent, llm_calls=1)
+
+
+@pytest.mark.parametrize("mode", ["structured", "native"])
+async def test_english_screenshot_request_prepares_exact_proposal_without_write(
+    reminder_agent, mode
+):
+    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
+    reminder_agent.llm.decide.return_value = reminder_decision(
+        mode, text="Submit the report", remind_at="2026-10-20T08:00:00+00:00"
+    )
+    reply = await ask(reminder_agent, "Remind me tomorrow at 11:00 to submit the report")
+
+    assert reply.reminder is not None
+    assert reply.reminder.arguments.text == "Submit the report"
+    assert reply.reminder.arguments.remind_at.isoformat() == "2026-10-20T11:00:00+03:00"
+    assert reply.reminder.timezone == "Europe/Moscow"
+    assert_no_execution(reminder_agent, llm_calls=1)
+
+
+@pytest.mark.parametrize("mode", ["structured", "native"])
+async def test_english_request_rejects_different_model_time(reminder_agent, mode):
+    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
+    reminder_agent.llm.decide.return_value = reminder_decision(
+        mode, text="Submit the report", remind_at="2026-10-20T11:00:00+03:00"
+    )
+    reply = await ask(reminder_agent, "Remind me tomorrow at 11 PM to submit the report")
+
+    assert_safe_refusal(reply)
+    assert_no_execution(reminder_agent, llm_calls=1)
+
+
+async def test_english_request_without_time_is_clarified_without_model(reminder_agent):
+    reply = await ask(reminder_agent, "Remind me tomorrow to submit the report")
+
+    assert reply.reminder is None
+    assert any(phrase in reply.text.casefold() for phrase in ("время", "во сколько"))
+    assert_no_execution(reminder_agent, llm_calls=0)
 
 
 @pytest.mark.parametrize("mode", ["structured", "native"])

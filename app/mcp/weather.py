@@ -165,9 +165,20 @@ def _locations(value: dict, name: str, qualifiers: list[str]) -> list[_Location]
     if "results" not in value and "generationtime_ms" not in value:
         raise ValueError("Нет результата геокодирования.")
     locations = _Geocoding.model_validate(value).results
-    exact = [location for location in locations if _normalized(location.name) == _normalized(name)]
-    if exact:
-        locations = exact
+    normalized_name = _normalized(name)
+    # Open-Meteo ищет и по альтернативным именам. Точное короткое имя не
+    # отменяет полные названия с теми же словами: «Ростов» также обозначает
+    # «Ростов-на-Дону» и «Ростов Великий». Иначе единственный exact match
+    # в другой стране незаметно подменяет намерение пользователя.
+    # Граница слова сохраняет различие «Казань»/«Казанка», «Ростов»/«Ростовка».
+    named = [
+        location
+        for location in locations
+        if _normalized(location.name) == normalized_name
+        or _normalized(location.name).startswith(normalized_name + " ")
+    ]
+    if named:
+        locations = named
     selected = []
     seen = {}
     for location in locations:

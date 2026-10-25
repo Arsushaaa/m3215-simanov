@@ -176,11 +176,12 @@ class CatalogOnlyMCP:
 class MemoryRepository:
     """Only the narrow storage methods used by one fresh production dialog."""
 
-    def __init__(self, timezone):
+    def __init__(self, timezone, user=USER):
         self.zone, self.audit, self.exchange = timezone, None, None
+        self._user = user
 
     async def user(self, _user_id):
-        return USER
+        return self._user
 
     async def answer(self, _user_id, _message_id):
         return None
@@ -193,6 +194,9 @@ class MemoryRepository:
 
     async def has_processed(self, _user_id, _message_id):
         return False
+
+    async def start_request(self, _user_id, _message_id):
+        pass
 
     async def timezone(self, _user_id):
         return self.zone
@@ -223,7 +227,7 @@ class RecordingClient(OpenRouterClient):
         return await super()._request(payload)
 
     def _observe_response(self, data):
-        for key in ("model", "id"):
+        for key in ("model", "id", "provider"):
             value = data.get(key)
             if isinstance(value, str) and len(value) <= 256:
                 self.observation[key] = value
@@ -285,6 +289,7 @@ class TrialLLM:
         call = {
             "started_at": timestamp(),
             "request_sha256": digest({"messages": messages, "temperature": temperature, **kwargs}),
+            "input_sha256": digest({"messages": messages, **kwargs}),
             "temperature": temperature,
             "message_roles": [item["role"] for item in messages],
             "context_estimate_tokens": (
@@ -330,9 +335,26 @@ class TrialLLM:
         raise RuntimeError("Final generation is forbidden in the routing-only experiment.")
 
 
-def protocol(settings, dataset, cases, catalog):
-    if settings.openrouter_model != MODEL or settings.llm_tool_mode != "structured":
+def protocol(settings, dataset, cases, catalog, *, temperature=TEMPERATURE, models=(MODEL,)):
+    if (
+        not models
+        or any(
+            not isinstance(model, str)
+            or not model.endswith(":free")
+            or not model.removesuffix(":free")
+            or any(character.isspace() for character in model)
+            for model in models
+        )
+        or settings.openrouter_model not in models
+        or settings.llm_tool_mode != "structured"
+    ):
         raise ValueError("Use the selected free model and structured routing, without fallback.")
+    if (
+        type(temperature) not in (int, float)
+        or not math.isfinite(temperature)
+        or not 0 <= temperature <= 1
+    ):
+        raise ValueError("Temperature must be a finite number between zero and one.")
     if settings.schedule_timezone != dataset["evaluation_context"]["timezone"]:
         raise ValueError("Schedule timezone must match the fixed evaluation timezone.")
     return {
@@ -343,7 +365,7 @@ def protocol(settings, dataset, cases, catalog):
         "model": settings.openrouter_model,
         "tool_mode": settings.llm_tool_mode,
         "mode": "study",
-        "temperature": TEMPERATURE,
+        "temperature": temperature,
         "max_output_tokens": settings.llm_max_output_tokens,
         "llm_timeout_seconds": settings.llm_timeout_seconds,
         "agent_timeout_seconds": settings.agent_timeout_seconds,
@@ -380,12 +402,27 @@ def protocol(settings, dataset, cases, catalog):
     }
 
 
-async def run_trials(settings, client, catalog, output, *, case_ids=None, max_api_calls=12):
+async def run_trials(
+    settings,
+    client,
+    catalog,
+    output,
+    *,
+    case_ids=None,
+    max_api_calls=12,
+    temperature=TEMPERATURE,
+    models=(MODEL,),
+    max_new_cases=None,
+):
     if max_api_calls < 0 or max_api_calls > 12:
         raise ValueError("The API budget must be between zero and twelve calls.")
+    if max_new_cases is not None and (type(max_new_cases) is not int or max_new_cases <= 0):
+        raise ValueError("The new-case limit must be a positive integer or None.")
     dataset = load_dataset()
     cases = selected_cases(dataset, case_ids)
-    expected_protocol = protocol(settings, dataset, cases, catalog)
+    expected_protocol = protocol(
+        settings, dataset, cases, catalog, temperature=temperature, models=models
+    )
     if output.exists():
         document = json.loads(output.read_text(encoding="utf-8"))
         if document.get("protocol") != expected_protocol:
@@ -403,9 +440,13 @@ async def run_trials(settings, client, catalog, output, *, case_ids=None, max_ap
             row.update(status="failed", error={"type": "InterruptedAttempt"})
     fixed_now = datetime.fromisoformat(dataset["evaluation_context"]["now"])
     zone = dataset["evaluation_context"]["timezone"]
+    user = replace(USER, temperature=temperature)
+    new_cases = 0
     for case in cases:
         if case["id"] in identifiers:
             continue
+        if max_new_cases is not None and new_cases >= max_new_cases:
+            break
         consumed = sum(len(row.get("calls", [])) for row in rows)
         row = {
             "id": case["id"],
@@ -418,8 +459,9 @@ async def run_trials(settings, client, catalog, output, *, case_ids=None, max_ap
             "actual": {"action": None, "arguments": None},
         }
         rows.append(row)
+        new_cases += 1
         checkpoint(output, document)
-        repository = MemoryRepository(zone)
+        repository = MemoryRepository(zone, user=user)
         measured = TrialLLM(
             client,
             row,
@@ -431,7 +473,7 @@ async def run_trials(settings, client, catalog, output, *, case_ids=None, max_ap
         try:
             # Only the user's synthetic query reaches the production entry point;
             # expected_action/expected_arguments are used below, after generation.
-            answer = await dialog.respond(USER.user_id, 1, case["query"])
+            answer = await dialog.respond(user.user_id, 1, case["query"])
             proposal = getattr(getattr(agent, "reply", None), "reminder", None)
             if proposal is not None:
                 actual = {

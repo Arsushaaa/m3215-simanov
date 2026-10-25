@@ -274,6 +274,7 @@ async def test_injected_tool_data_cannot_start_another_action_in_read_final(clie
     repository = SimpleNamespace(
         timezone=AsyncMock(return_value=None),
         has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
         record=AsyncMock(),
     )
     agent = AgentService(client, mcp, repository, client.settings)

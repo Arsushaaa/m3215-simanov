@@ -1,0 +1,272 @@
+{
+  "checked_at": "2026-10-25T20:44:55.517601+00:00",
+  "models": [
+    {
+      "model": {
+        "id": "xingchen-agi/xing4.0-29b-a4b:free",
+        "canonical_slug": "xingchen-agi/xing4.0-29b-a4b-20261015",
+        "hugging_face_id": "XingChen-AGI/Xing4.0-29B-A4B",
+        "name": "XingChen: Xing4.0 29B A4B (free)",
+        "created": 1792177496,
+        "description": "Xing4.0-29B-A4B is an open-weight mixture-of-experts language model from China Telecom's AI team (TeleAI) and the successor to the TeleChat series. It has 29B total parameters with 4B active per token...",
+        "context_length": 262144,
+        "architecture": {
+          "modality": "text->text",
+          "input_modalities": [
+            "text"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tokenizer": "Other",
+          "instruct_type": null
+        },
+        "pricing": {
+          "prompt": "0",
+          "completion": "0"
+        },
+        "top_provider": {
+          "context_length": 262144,
+          "max_completion_tokens": 235929,
+          "is_moderated": false
+        },
+        "per_request_limits": null,
+        "supported_parameters": [
+          "frequency_penalty",
+          "include_reasoning",
+          "max_tokens",
+          "min_p",
+          "presence_penalty",
+          "reasoning",
+          "repetition_penalty",
+          "response_format",
+          "seed",
+          "stop",
+          "structured_outputs",
+          "temperature",
+          "tool_choice",
+          "tools",
+          "top_k",
+          "top_p"
+        ],
+        "default_parameters": {
+          "temperature": 1,
+          "top_p": 0.95,
+          "repetition_penalty": 1.05
+        },
+        "supported_voices": null,
+        "knowledge_cutoff": null,
+        "expiration_date": null,
+        "links": {
+          "details": "/api/v1/models/xingchen-agi/xing4.0-29b-a4b-20261015/endpoints"
+        },
+        "reasoning": {
+          "mandatory": false,
+          "default_enabled": true
+        }
+      },
+      "endpoints": {
+        "id": "xingchen-agi/xing4.0-29b-a4b:free",
+        "name": "XingChen: Xing4.0 29B A4B (free)",
+        "created": 1792177496,
+        "description": "Xing4.0-29B-A4B is an open-weight mixture-of-experts language model from China Telecom's AI team (TeleAI) and the successor to the TeleChat series. It has 29B total parameters with 4B active per token...",
+        "architecture": {
+          "tokenizer": "Other",
+          "instruct_type": null,
+          "modality": "text->text",
+          "input_modalities": [
+            "text"
+          ],
+          "output_modalities": [
+            "text"
+          ]
+        },
+        "endpoints": [
+          {
+            "name": "Phala | xingchen-agi/xing4.0-29b-a4b-20261015:free",
+            "model_id": "xingchen-agi/xing4.0-29b-a4b:free",
+            "model_name": "XingChen: Xing4.0 29B A4B",
+            "context_length": 262144,
+            "pricing": {
+              "prompt": "0",
+              "completion": "0",
+              "discount": 0
+            },
+            "provider_name": "Phala",
+            "tag": "phala",
+            "service_tier": null,
+            "quantization": "unknown",
+            "max_completion_tokens": 235929,
+            "max_prompt_tokens": null,
+            "supported_parameters": [
+              "reasoning",
+              "include_reasoning",
+              "max_tokens",
+              "temperature",
+              "top_p",
+              "stop",
+              "frequency_penalty",
+              "presence_penalty",
+              "seed",
+              "top_k",
+              "min_p",
+              "repetition_penalty",
+              "response_format",
+              "structured_outputs",
+              "tools",
+              "tool_choice"
+            ],
+            "supports_tool_choice": {
+              "none": true,
+              "auto": true,
+              "required": false,
+              "function": false
+            },
+            "status": 0,
+            "uptime_last_30m": 100,
+            "uptime_last_5m": 100,
+            "uptime_last_1d": 99.86111111111111,
+            "supports_implicit_caching": false,
+            "native_tools": {},
+            "supports_voice_cloning": false,
+            "supports_multiple_audio_references": false,
+            "supports_image_reference": false,
+            "supports_diarization": false,
+            "latency_last_30m": null,
+            "throughput_last_30m": null
+          }
+        ]
+      }
+    },
+    {
+      "model": {
+        "id": "dots-studio/dots-3-note-preview:free",
+        "canonical_slug": "dots-studio/dots-3-note-preview-20260813",
+        "hugging_face_id": null,
+        "name": "Dots Studio: Dots3-Note Preview (free)",
+        "created": 1786680361,
+        "description": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio, with 16B active parameters out of 280B total. It is the lightest model in the Dots 3 family and is...",
+        "context_length": 512000,
+        "architecture": {
+          "modality": "text+image->text",
+          "input_modalities": [
+            "text",
+            "image"
+          ],
+          "output_modalities": [
+            "text"
+          ],
+          "tokenizer": "Other",
+          "instruct_type": null
+        },
+        "pricing": {
+          "prompt": "0",
+          "completion": "0"
+        },
+        "top_provider": {
+          "context_length": 512000,
+          "max_completion_tokens": 460800,
+          "is_moderated": false
+        },
+        "per_request_limits": null,
+        "supported_parameters": [
+          "include_reasoning",
+          "max_tokens",
+          "reasoning",
+          "response_format",
+          "structured_outputs",
+          "temperature",
+          "tool_choice",
+          "tools",
+          "top_p"
+        ],
+        "default_parameters": {},
+        "supported_voices": null,
+        "knowledge_cutoff": null,
+        "expiration_date": "2026-12-31",
+        "links": {
+          "details": "/api/v1/models/dots-studio/dots-3-note-preview-20260813/endpoints"
+        },
+        "reasoning": {
+          "mandatory": false
+        }
+      },
+      "endpoints": {
+        "id": "dots-studio/dots-3-note-preview:free",
+        "name": "Dots Studio: Dots3-Note Preview (free)",
+        "created": 1786680361,
+        "description": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio, with 16B active parameters out of 280B total. It is the lightest model in the Dots 3 family and is...",
+        "architecture": {
+          "tokenizer": "Other",
+          "instruct_type": null,
+          "modality": "text+image->text",
+          "input_modalities": [
+            "text",
+            "image"
+          ],
+          "output_modalities": [
+            "text"
+          ]
+        },
+        "endpoints": [
+          {
+            "name": "AtlasCloud | dots-studio/dots-3-note-preview-20260813:free",
+            "model_id": "dots-studio/dots-3-note-preview:free",
+            "model_name": "Dots Studio: Dots3-Note Preview",
+            "context_length": 512000,
+            "pricing": {
+              "prompt": "0",
+              "completion": "0",
+              "discount": 0
+            },
+            "provider_name": "AtlasCloud",
+            "tag": "atlas-cloud/fp8",
+            "service_tier": null,
+            "quantization": "fp8",
+            "max_completion_tokens": 460800,
+            "max_prompt_tokens": null,
+            "supported_parameters": [
+              "reasoning",
+              "include_reasoning",
+              "max_tokens",
+              "temperature",
+              "top_p",
+              "response_format",
+              "structured_outputs",
+              "tools",
+              "tool_choice"
+            ],
+            "supports_tool_choice": {
+              "none": true,
+              "auto": true,
+              "required": false,
+              "function": false
+            },
+            "status": 0,
+            "uptime_last_30m": 100,
+            "uptime_last_5m": 100,
+            "uptime_last_1d": 100,
+            "supports_implicit_caching": false,
+            "native_tools": {},
+            "supports_voice_cloning": false,
+            "supports_multiple_audio_references": false,
+            "supports_image_reference": false,
+            "supports_diarization": false,
+            "latency_last_30m": null,
+            "throughput_last_30m": null
+          }
+        ]
+      }
+    }
+  ],
+  "free_model_daily_requests": {
+    "used": 0,
+    "limit": 50,
+    "remaining": 50
+  },
+  "sources": [
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/docs/api_reference/limits",
+    "https://openrouter.ai/docs/api_reference/parameters"
+  ]
+}

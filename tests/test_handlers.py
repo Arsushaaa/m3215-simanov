@@ -493,6 +493,7 @@ async def test_commands_cancel_agent_without_a_late_reply(
     )
     audit = SimpleNamespace(
         has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
         timezone=AsyncMock(return_value=None),
         record=AsyncMock(),
     )

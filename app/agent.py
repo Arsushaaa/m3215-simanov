@@ -220,7 +220,7 @@ class AgentService:
             raise
         finally:
             try:
-                async with asyncio.timeout(2):
+                async with asyncio.timeout(5):
                     await self.repository.record(
                         user.user_id,
                         message_id,
@@ -240,6 +240,15 @@ class AgentService:
     async def _respond(self, user, message_id, text, prompt, history, continuing, trace):
         if await self.repository.has_processed(user.user_id, message_id):
             raise ModelError("Этот запрос уже обработан. Отправь новое сообщение.")
+        try:
+            async with asyncio.timeout(5):
+                await self.repository.start_request(user.user_id, message_id)
+        except Exception:
+            trace.error_code = "AUDIT_UNAVAILABLE"
+            raise ModelError(
+                "Не удалось зарегистрировать запрос. Попробуй позже; модель и инструменты "
+                "не вызывались."
+            ) from None
         now = self.now()
         if now.tzinfo is None or now.utcoffset() is None:
             raise ModelError("Не удалось определить текущее время приложения.")

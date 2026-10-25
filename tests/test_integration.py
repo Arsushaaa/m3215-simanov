@@ -1034,6 +1034,118 @@ async def test_agent_audit_database_failure_rolls_back_request_and_event(databas
         await pool.close()
 
 
+async def test_started_request_survives_failed_audit_without_exposing_stale_why(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repository = ConfirmationRepository(pool)
+        await repository.record(
+            101,
+            1,
+            decision="call_tool",
+            target="get_weather",
+            status="OK",
+            reason="Погода получена из источника.",
+            argument_summary="Город: Москва",
+        )
+        # Concurrent starts share the registry identity and do not manufacture events.
+        await asyncio.gather(*(repository.start_request(101, 2) for _ in range(10)))
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_requests") == 2
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 1
+        await pool.execute(
+            "CREATE FUNCTION reject_new_audit() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "BEGIN PERFORM pg_sleep(1); RETURN NEW; END $$; "
+            "CREATE TRIGGER reject_new_audit BEFORE INSERT ON labbi_agent_events "
+            "FOR EACH ROW EXECUTE FUNCTION reject_new_audit()"
+        )
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.1):
+                await repository.record(
+                    101,
+                    2,
+                    decision="call_tool",
+                    target="get_weather",
+                    status="OK",
+                    reason="Погода получена из источника.",
+                    argument_summary="Город: Санкт-Петербург",
+                )
+        assert not await repository.has_processed(101, 2)
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 1
+        with pytest.raises(ConfirmationError, match="Итог последнего запроса ещё не сохранён"):
+            await repository.latest_event(101)
+        # The missing-audit marker survives process restart and a history reset.
+        await DialogRepository(pool).reset(101)
+        await pool.close()
+        pool = await create_pool(settings)
+        repository = ConfirmationRepository(pool)
+        with pytest.raises(ConfirmationError, match="Итог последнего запроса ещё не сохранён"):
+            await repository.latest_event(101)
+        assert await repository.latest_event(202) is None
+        await pool.execute("DROP TRIGGER reject_new_audit ON labbi_agent_events")
+        await repository.record(
+            101,
+            2,
+            decision="call_tool",
+            target="get_weather",
+            status="OK",
+            reason="Погода получена из источника.",
+            argument_summary="Город: Санкт-Петербург",
+            llm_calls=2,
+            mcp_calls=1,
+        )
+        event = await repository.latest_event(101)
+        assert event.argument_summary == "Город: Санкт-Петербург"
+        assert (event.llm_calls, event.mcp_calls) == (2, 1)
+        assert await pool.fetchval("SELECT count(*) FROM labbi_agent_events") == 2
+        await repository.start_request(101, 2)
+        assert await repository.has_processed(101, 2)
+        assert await repository.latest_event(101) == event
+        # An older unfinished marker must not hide a newer, successfully audited request.
+        await repository.start_request(101, 3)
+        await repository.record(
+            101,
+            4,
+            decision="clarify",
+            target=None,
+            status="CLARIFY",
+            reason="Нужно уточнить запрос.",
+        )
+        assert (await repository.latest_event(101)).status == "CLARIFY"
+        # Starts overlap: A starts, B starts, A completes, then B's audit times out.
+        # A's event timestamp is newer than B's start, but it still describes A.
+        await repository.start_request(101, 5)
+        await repository.start_request(101, 6)
+        await repository.record(
+            101,
+            5,
+            decision="call_tool",
+            target="get_weather",
+            status="OK",
+            reason="Погода получена из источника.",
+            argument_summary="Город: Москва",
+        )
+        await pool.execute(
+            "CREATE TRIGGER reject_new_audit BEFORE INSERT ON labbi_agent_events "
+            "FOR EACH ROW EXECUTE FUNCTION reject_new_audit()"
+        )
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.1):
+                await repository.record(
+                    101,
+                    6,
+                    decision="call_tool",
+                    target="get_weather",
+                    status="OK",
+                    reason="Погода получена из источника.",
+                    argument_summary="Город: Санкт-Петербург",
+                )
+        with pytest.raises(ConfirmationError, match="Итог последнего запроса ещё не сохранён"):
+            await repository.latest_event(101)
+    finally:
+        await pool.close()
+
+
 async def test_agent_dialog_real_stdio_and_postgres_keep_bounded_calls_and_plain_history(database):
     settings, _, _, _ = database
     settings = replace(
