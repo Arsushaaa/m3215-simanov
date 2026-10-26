@@ -66,7 +66,8 @@ Invalid argument`, проверьте, не проходит ли путь пр�
 BOT_TOKEN=токен_из_BotFather
 OPENROUTER_API_KEY=ключ_из_OpenRouter
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free
+OPENROUTER_MODEL=nvidia/nemotron-3.5-super-vl:free
+LLM_TOOL_MODE=native
 ```
 
 Токен Telegram создаётся через [BotFather](https://t.me/BotFather).
