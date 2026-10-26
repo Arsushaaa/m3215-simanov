@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from app.agent_prompts import ROUTING_RULES
 from app.config import Settings
 from app.confirmation_models import ConfirmationError
+from app.decision_schema import model_schema
 from app.llm import ModelError
 from app.mcp.client import MCPClientError
 from app.mcp.contracts import (
@@ -163,14 +164,14 @@ class AgentService:
         self.llm, self.mcp, self.repository, self.settings = llm, mcp, repository, settings
         self.now = now or (lambda: datetime.now(UTC))
 
-    def _tools(self):
+    def _tools(self, context=None):
         tools = [
             {
                 "type": "function",
                 "function": {
                     "name": value["name"],
                     "description": value["description"],
-                    "parameters": value["inputSchema"],
+                    "parameters": model_schema(value["inputSchema"]),
                 },
             }
             for value in self.mcp.tools.values()
@@ -183,7 +184,10 @@ class AgentService:
                     "function": {
                         "name": "prepare_reminder",
                         "description": "Подготовить карточку с источниками; без записи.",
-                        "parameters": ReminderPreparation.model_json_schema(),
+                        "parameters": model_schema(
+                            ReminderPreparation.model_json_schema(),
+                            pending=context is not None and context.pending is not None,
+                        ),
                     },
                 }
             )
@@ -351,9 +355,16 @@ class AgentService:
         now = now.replace(microsecond=0)
         timezone = await self.repository.timezone(user.user_id)
         facts = self._facts(now, timezone, context)
-        tools = self._tools()
+        tools = self._tools(context)
         structured = self.settings.llm_tool_mode == "structured"
-        schema = AgentDecision.model_json_schema() if structured else tools
+        schema = (
+            model_schema(
+                AgentDecision.model_json_schema(),
+                pending=context is not None and context.pending is not None,
+            )
+            if structured
+            else tools
+        )
         routing_prompt = prompt + facts + ROUTING_RULES
         if structured:
             routing_prompt += (

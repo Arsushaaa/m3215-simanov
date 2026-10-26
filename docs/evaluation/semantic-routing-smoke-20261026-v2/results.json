@@ -1,0 +1,381 @@
+{
+  "created_at": "2026-10-26T15:17:23.054414+00:00",
+  "manifest_sha256": "139333da30479b05d00910301eba40e147331025fba7ddbe28fa3a07ad488e7e",
+  "attempts": [
+    {
+      "id": "natural_reminder",
+      "query": "не забудь мне напомнить в 11:00 завтра приготовить пирог",
+      "started_at": "2026-10-26T15:17:23.054724+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:17:23.058979+00:00",
+          "request_sha256": "f42dabf0a633cd4691d8fa6fb3413958ed3bb1cad0b8a0b16fc1aaae31cf3bc8",
+          "input_sha256": "da750d916ef04c0824a26efe1badb5a1db1422fc724c6068dfed7b95071e5bbb",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 5424,
+          "raw_content": "{\"action\":\"call_tool\",\"arguments\":{\"remind_at\":\"2026-10-27T11:00:00+03:00\",\"text\":\"Приготовить пирог\"},\"evidence\":{\"date\":{\"source\":\"pending_card\"},\"request\":{\"message_index\":0,\"quote\":\"не забудь мне напомнить в 11:00 завтра приготовить пирог\",\"source\":\"user\"},\"text\":{\"source\":\"pending_card\"},\"time\":{\"source\":\"pending_card\"}},\"name\":\"add_reminder\",\"reason\":\"Задача, время и дата заданы явно или вычислимы: завтра = 2026-10-27, 11:00 по местному времени.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793027843-bxv9dud4U8U6NXqxrCml",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1730,
+            "completion_tokens": 166,
+            "total_tokens": 1896,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 7156,
+          "finished_at": "2026-10-26T15:17:30.219131+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify",
+        "arguments": {}
+      },
+      "displayed_answer": "Не удалось подготовить точную карточку. Укажи дату, точное время и текст напоминания. Напоминание ещё не сохранено.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": "INVALID_ARGUMENTS",
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 7165,
+        "argument_summary": "Время: 2026-10-27T11:00:00+03:00; зона: Europe/Moscow"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:17:30.220355+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    },
+    {
+      "id": "negated_reminder",
+      "query": "Не напоминай мне про пирог. Просто объясни, как его приготовить.",
+      "started_at": "2026-10-26T15:17:30.227313+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:17:30.234081+00:00",
+          "request_sha256": "0c2b2db1e0e60b5b2b2062f0ee0fd6d52de23e5fc55f960c42a457c3650ba04b",
+          "input_sha256": "c66fedb81060e4c3eb6d625752902394ff4e94f2a0e144f6c36bb1ee7683f12c",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 5430,
+          "raw_content": "{\"action\":\"respond\",\"reason\":\"Пользователь просит объяснить рецепт приготовления пирога, а не создавать напоминание. Задача соответствует режиму объяснения программирования/блюда.\",\"text\":\"Вот простой рецепт классического яблочного пирога по шагам:\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793027850-k6OTSKhCaTNq04dnFCdu",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1731,
+            "completion_tokens": 76,
+            "total_tokens": 1807,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 6132,
+          "finished_at": "2026-10-26T15:17:36.367369+00:00"
+        }
+      ],
+      "actual": {
+        "action": "respond",
+        "arguments": {}
+      },
+      "displayed_answer": "Вот простой рецепт классического яблочного пирога по шагам:",
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "OK",
+        "reason": "Сформирован ответ без инструмента.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 6140,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:17:36.368176+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "english_weather",
+      "query": "What's the weather in Kazan, Russia?",
+      "started_at": "2026-10-26T15:17:36.375747+00:00",
+      "status": "failed",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:17:36.382223+00:00",
+          "request_sha256": "d2b9dbb34b41c14c8bb7299e0ea0fea7fe9b27d108d46ba4c0126fb0866fa59e",
+          "input_sha256": "dc37d50905af118d588a9aced963a197fa440670d4604350784ee04e05a6f6d9",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 5403,
+          "error": {
+            "type": "ModelError",
+            "message": "Модель не успела ответить. Попробуй ещё раз позже."
+          },
+          "duration_ms": 60895,
+          "finished_at": "2026-10-26T15:18:37.277941+00:00"
+        }
+      ],
+      "actual": {
+        "action": null,
+        "arguments": {}
+      },
+      "error": {
+        "type": "ModelError",
+        "message": "Модель не успела ответить. Попробуй ещё раз позже."
+      },
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "FAILED",
+        "reason": "Ответ не прошёл проверку или сервис недоступен.",
+        "error_code": "INVALID_RESULT",
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 60902,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:18:37.278680+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    },
+    {
+      "id": "unspecified_clock",
+      "query": "Не забудь завтра вечером напомнить про пирог.",
+      "started_at": "2026-10-26T15:18:37.286416+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:18:37.291351+00:00",
+          "request_sha256": "5998f60185b4b0215d238c032749edd4bb8a0301ee124e7e414ce3f8e96921be",
+          "input_sha256": "1843dcba3bb1f7f03f7f7f7acf897e4a98f689fe56fc4bd872b6d8bf0a5ea0ae",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 5419,
+          "raw_content": "{\"action\":\"clarify_reminder\",\"question\":\"Вы имели в виду завтра вечером в конкретное время (например, в 19:00) или просто в течение вечера? Также уточните, пожалуйста, задачу — например, «приготовить пирог» или «купить ингредиенты для пирога».\",\"reason\":\"Слово «в вечер» не задаёт точное время, а задача описана размыто — нужно уточнение для корректного формирования напоминания.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793027917-NB5Z4bv7dJcMwcLBp5vF",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1723,
+            "completion_tokens": 133,
+            "total_tokens": 1856,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 7166,
+          "finished_at": "2026-10-26T15:18:44.457552+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify_reminder",
+        "arguments": {}
+      },
+      "displayed_answer": "Вы имели в виду завтра вечером в конкретное время (например, в 19:00) или просто в течение вечера? Также уточните, пожалуйста, задачу — например, «приготовить пирог» или «купить ингредиенты для пирога».\n\nНапоминание ещё не сохранено.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 7172,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:18:44.458688+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "reordered_reminder",
+      "query": "Завтра к одиннадцати хочу приготовить пирог — напомни об этом.",
+      "started_at": "2026-10-26T15:18:44.459092+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:18:44.464122+00:00",
+          "request_sha256": "c39b1091f8fd48d4cd1e6d65b5207c17b972465b675426d9d3601d59b6651584",
+          "input_sha256": "8be7b24633612717661e9f3a261f38b3fc3f5e3686b151a71240ba258906ef8f",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 5429,
+          "raw_content": "{\"action\":\"call_tool\",\"arguments\":{\"remind_at\":\"2026-10-27T11:00:00+03:00\",\"text\":\"Приготовить пирог\"},\"evidence\":{\"date\":{\"source\":\"pending_card\"},\"request\":{\"message_index\":0,\"quote\":\"Завтра к одиннадцати хочу приготовить пирог — напомни об этом.\",\"source\":\"user\"},\"text\":{\"source\":\"pending_card\"},\"time\":{\"source\":\"pending_card\"}},\"name\":\"add_reminder\",\"reason\":\"Запрос на напоминание с чёткой датой (завтра) и временем (11:00).\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793027924-Ex7xaAZgC6Zs2shmQbQe",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1731,
+            "completion_tokens": 149,
+            "total_tokens": 1880,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 7150,
+          "finished_at": "2026-10-26T15:18:51.614709+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify",
+        "arguments": {}
+      },
+      "displayed_answer": "Не удалось подготовить точную карточку. Укажи дату, точное время и текст напоминания. Напоминание ещё не сохранено.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": "INVALID_ARGUMENTS",
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 7156,
+        "argument_summary": "Время: 2026-10-27T11:00:00+03:00; зона: Europe/Moscow"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:18:51.615772+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    },
+    {
+      "id": "relative_card_edit",
+      "query": "Нет, лучше на два часа позже",
+      "started_at": "2026-10-26T15:18:51.623247+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:18:51.630291+00:00",
+          "request_sha256": "4369e4867bb60b1a1f601e195219e40b877b74c96bc0ddf3431dbea67962ec85",
+          "input_sha256": "f44e6c795d21164641bbfe0aef67b5140bcde06028065099b516851b32d16dc8",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 5468,
+          "raw_content": "{\"action\":\"clarify_reminder\",\"question\":\"Уточните, пожалуйста, на какое время вы хотите перенести напоминание: на 2 часа позже от запланированного в карточке (19:00) — то есть на 21:00 завтра? Или у вас другая задача/дата в виду?\",\"reason\":\"Пользователь указал «на два часа позже», но в карточке уже есть задача 'Приготовить пирог' на 2026-10-27T19:00:00+03:00. Нужно подтвердить, что перенос именно этой задачи на 21:00, или уточнить, если речь о другом напоминании.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793027931-b8RzXNMo7X5EBKxekA80",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1793,
+            "completion_tokens": 197,
+            "total_tokens": 1990,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 3609,
+          "finished_at": "2026-10-26T15:18:55.240095+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify_reminder",
+        "arguments": {}
+      },
+      "displayed_answer": "Уточните, пожалуйста, на какое время вы хотите перенести напоминание: на 2 часа позже от запланированного в карточке (19:00) — то есть на 21:00 завтра? Или у вас другая задача/дата в виду?\n\nНапоминание ещё не сохранено.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 3617,
+        "argument_summary": ""
+      },
+      "former_card_revoked": true,
+      "finished_at": "2026-10-26T15:18:55.241071+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "correct": 2,
+      "total": 6
+    },
+    "actions": {
+      "correct": 2,
+      "total": 6
+    },
+    "arguments": {
+      "correct": 0,
+      "total": 4
+    },
+    "llm_calls": 6,
+    "executed_mcp_calls": 0,
+    "database_writes": 0,
+    "telegram_calls": 0,
+    "api_cost": null,
+    "acceptance": "not_passed"
+  },
+  "finished_at": "2026-10-26T15:18:55.248984+00:00"
+}
