@@ -371,7 +371,10 @@ class AgentService:
                 "\nВерни один JSON-объект по схеме. Обнаруженные возможности: "
                 + _json(
                     {
-                        "tools": list(self.mcp.tools),
+                        "tools": [
+                            {"name": value["name"], "description": value["description"][:160]}
+                            for value in self.mcp.tools.values()
+                        ],
                         "resources": list(self.mcp.resources),
                     }
                 )

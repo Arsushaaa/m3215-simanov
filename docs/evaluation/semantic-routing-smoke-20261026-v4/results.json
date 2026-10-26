@@ -1,0 +1,385 @@
+{
+  "created_at": "2026-10-26T15:29:57.856772+00:00",
+  "manifest_sha256": "9a395721b2d8da2639e02a0eb1d75a13a77b743ccc88d615e5a0aca2a377c3a1",
+  "attempts": [
+    {
+      "id": "natural_reminder",
+      "query": "не забудь мне напомнить в 11:00 завтра приготовить пирог",
+      "started_at": "2026-10-26T15:29:57.857266+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:29:57.864444+00:00",
+          "request_sha256": "b9fed4a5758d5e57c1c615927cf7366fca6e859d6be75f8df6ccce34e2f213e7",
+          "input_sha256": "b0098a439177f740e416e7633edb776d8a64380c7de23826ae299d9f88123777",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4501,
+          "raw_content": "{\n  \"action\": \"call_tool\",\n  \"arguments\": {\n    \"date\": \"2026-10-27\"\n  },\n  \"name\": \"get_schedule\",\n  \"reason\": \"Пользователь просит напомнить в 11:00 завтра, но не указал точный час — нужно уточнить. Однако, если '11:00' понимается как 11:00 утра, это конкретное время. Проверим расписание на завтра.\"\n}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793028598-0jqX2d3EBjzKrgupuj6N",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1410,
+            "completion_tokens": 117,
+            "total_tokens": 1527,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 9405,
+          "finished_at": "2026-10-26T15:30:07.270293+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-27"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_schedule",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 9414,
+        "argument_summary": "Дата: 2026-10-27"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:30:07.271232+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    },
+    {
+      "id": "negated_reminder",
+      "query": "Не напоминай мне про пирог. Просто объясни, как его приготовить.",
+      "started_at": "2026-10-26T15:30:07.271572+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:30:07.279552+00:00",
+          "request_sha256": "5c8d948056b54ff53b04f8dd6816481cc67f18b336c2b67f578ed94f7b199bd1",
+          "input_sha256": "c4900e9936576533c35aa3d483a48a6bbed86c92d2b82dca0086afa4b66d1690",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4506,
+          "raw_content": "{ \"action\": \"respond\", \"reason\": \"Пользователь просит объяснить, как приготовить пирог, без упоминания напоминаний.\" , \"text\": \"Для приготовления пирога понадобится тесто и начинка. Сначала замесите тесто из муки, воды, масла и соли, затем раскатайте его в тонкий пласт. Выложите начинку (например, яблоки, творог или мясо) на середину, соедините края и запекайте в духовке при 180°C около 30–40 минут, до золотистого цвета.\" }",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793028607-OdqgEzRCOJ3D9mBSspCv",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1411,
+            "completion_tokens": 161,
+            "total_tokens": 1572,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 8253,
+          "finished_at": "2026-10-26T15:30:15.533793+00:00"
+        }
+      ],
+      "actual": {
+        "action": "respond",
+        "arguments": {}
+      },
+      "displayed_answer": "Для приготовления пирога понадобится тесто и начинка. Сначала замесите тесто из муки, воды, масла и соли, затем раскатайте его в тонкий пласт. Выложите начинку (например, яблоки, творог или мясо) на середину, соедините края и запекайте в духовке при 180°C около 30–40 минут, до золотистого цвета.",
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "OK",
+        "reason": "Сформирован ответ без инструмента.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 8263,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:30:15.534608+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "english_weather",
+      "query": "What's the weather in Kazan, Russia?",
+      "started_at": "2026-10-26T15:30:15.535012+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:30:15.542779+00:00",
+          "request_sha256": "36b3e1b7bc31d9563c6cbd9cfefb0ef25f1ca289739f6b8c206802553f9750f5",
+          "input_sha256": "9f4878ae74107833dcad953c014b672061f57e086a175e83c231e4012e395e2a",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4480,
+          "raw_content": "{\"action\":\"call_tool\",\"arguments\":{\"city\":\"Казань, Россия\"},\"name\":\"get_weather\",\"reason\":\"User asked for weather in Kazan, Russia. City name must be translated to Russian Cyrillic per routing rules.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793028615-Fa2eP3Zat8xjC9UlGBQY",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1397,
+            "completion_tokens": 49,
+            "total_tokens": 1446,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 11057,
+          "finished_at": "2026-10-26T15:30:26.601040+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_weather",
+        "arguments": {
+          "city": "Казань, Россия"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_weather",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 11066,
+        "argument_summary": "Город: Казань, Россия"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:30:26.601802+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "unspecified_clock",
+      "query": "Не забудь завтра вечером напомнить про пирог.",
+      "started_at": "2026-10-26T15:30:26.602374+00:00",
+      "status": "failed",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:30:26.609794+00:00",
+          "request_sha256": "c358bbeec3583ef6b40f52fded5b0a6df6baacccac45ce1af2670c1508626b33",
+          "input_sha256": "7894d4e7437fd08e99c99447cadb1437676a08852691d571921ae913ab926975",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4495,
+          "error": {
+            "type": "ModelError",
+            "message": "Не удалось связаться с моделью. Попробуй позже."
+          },
+          "duration_ms": 35552,
+          "finished_at": "2026-10-26T15:31:02.162904+00:00"
+        }
+      ],
+      "actual": {
+        "action": null,
+        "arguments": {}
+      },
+      "error": {
+        "type": "ModelError",
+        "message": "Не удалось связаться с моделью. Попробуй позже."
+      },
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "FAILED",
+        "reason": "Ответ не прошёл проверку или сервис недоступен.",
+        "error_code": "INVALID_RESULT",
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 35561,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:31:02.163653+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": false,
+        "arguments_correct": null,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    },
+    {
+      "id": "reordered_reminder",
+      "query": "Завтра к одиннадцати хочу приготовить пирог — напомни об этом.",
+      "started_at": "2026-10-26T15:31:02.164213+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:31:02.172004+00:00",
+          "request_sha256": "bc19ad4afc4ef1862f5318df41a5fb572af236e09f0a3553c737f2c7a90b9db3",
+          "input_sha256": "d0ec2bb1e8dd38433db84c96f40a13cfda024f17c39126c0003a1b801d21fd42",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4506,
+          "raw_content": "{\n  \"action\": \"call_tool\",\n  \"arguments\": {\n    \"date\": \"2026-10-27\"\n  },\n  \"name\": \"get_schedule\",\n  \"reason\": \"Пользователь просит напоминание на завтра в 11:00. Текущая дата — 26 октября 2026 года, следовательно, завтра — 27 октября 2026 года. Время указано точно (11:00), часовой пояс — Europe/Moscow (из trusted data). Запрос чёткий, без неопределённостей.\"\n}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793028662-ndHIQ9nUua4iGxqk6wJZ",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1411,
+            "completion_tokens": 144,
+            "total_tokens": 1555,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 8141,
+          "finished_at": "2026-10-26T15:31:10.313980+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-27"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_schedule",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 8150,
+        "argument_summary": "Дата: 2026-10-27"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:31:10.315230+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    },
+    {
+      "id": "relative_card_edit",
+      "query": "Нет, лучше на два часа позже",
+      "started_at": "2026-10-26T15:31:10.315862+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:31:10.323971+00:00",
+          "request_sha256": "3c9e0954e3a9dfe42d465d5ed3f33ecdb16315a277a49b3f9fba3f7f3c1b0334",
+          "input_sha256": "53b755544b97008b072f8c6ab77bb0a06f2294e6e67eba151b74fbe6d0df1844",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4807,
+          "raw_content": "{\"action\":\"call_tool\",\"arguments\":{\"date\":\"2026-10-26\"},\"name\":\"get_schedule\",\"reason\":\"Пользователь попросил перенести напоминание на два часа позже, но не указал, с какого времени. Текущее время — 10:00, поэтому 12:00 — логичный вариант. Однако без точного исходного времени нельзя точно рассчитать. Запрашиваю расписание на сегодня, чтобы уточнить контекст.\"}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793028670-lh4WkxQLlGOfsRNb1sEn",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1473,
+            "completion_tokens": 122,
+            "total_tokens": 1595,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 7323,
+          "finished_at": "2026-10-26T15:31:17.647998+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-26"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_schedule",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 7332,
+        "argument_summary": "Дата: 2026-10-26"
+      },
+      "former_card_revoked": true,
+      "finished_at": "2026-10-26T15:31:17.649159+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "correct": 2,
+      "total": 6
+    },
+    "actions": {
+      "correct": 2,
+      "total": 6
+    },
+    "arguments": {
+      "correct": 1,
+      "total": 4
+    },
+    "llm_calls": 6,
+    "executed_mcp_calls": 0,
+    "database_writes": 0,
+    "telegram_calls": 0,
+    "api_cost": null,
+    "acceptance": "not_passed"
+  },
+  "finished_at": "2026-10-26T15:31:17.657104+00:00"
+}

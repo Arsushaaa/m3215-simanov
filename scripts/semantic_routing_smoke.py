@@ -344,7 +344,11 @@ def summarize(document):
     }
 
 
-async def run(settings, folder, *, catalog=None, client=None):
+async def run(settings, folder, *, catalog=None, client=None, max_new_cases=None):
+    if max_new_cases is not None and (
+        type(max_new_cases) is not int or not 1 <= max_new_cases <= CASE_LIMIT
+    ):
+        raise ValueError("max_new_cases must be between one and six.")
     settings, folder = fixed_settings(settings), Path(folder)
     manifest_path, output = folder / "manifest.json", folder / "results.json"
     manifest = json.loads(manifest_path.read_text())
@@ -375,6 +379,8 @@ async def run(settings, folder, *, catalog=None, client=None):
                 row["score"] = score_case(next(c for c in CASES if c["id"] == row["id"]), row)
         checkpoint(output, document)
         pending = [case for case in CASES if case["id"] not in ids]
+        if max_new_cases is not None:
+            pending = pending[:max_new_cases]
         if not pending:
             summarize(document)
             checkpoint(output, document)
@@ -454,6 +460,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument("--folder", type=Path, required=True)
+    parser.add_argument("--max-new-cases", type=int, default=None)
     operation = parser.add_mutually_exclusive_group(required=True)
     operation.add_argument("--prepare", action="store_true")
     operation.add_argument("--run", action="store_true")
@@ -463,7 +470,7 @@ def main():
         asyncio.run(prepare(settings, args.folder))
         print("Six-case preregistration saved. Commit manifest.json before --run.")
     else:
-        result = asyncio.run(run(settings, args.folder))
+        result = asyncio.run(run(settings, args.folder, max_new_cases=args.max_new_cases))
         print(json.dumps(result["metrics"], ensure_ascii=False))
 
 
