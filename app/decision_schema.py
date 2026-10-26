@@ -23,4 +23,12 @@ def model_schema(schema, *, pending=False):
                 hints(child)
 
     hints(result)
+    weather = result.get("$defs", {}).get("WeatherArguments", result)
+    city = weather.get("properties", {}).get("city")
+    if city is not None:
+        city["description"] = (
+            "City name IN RUSSIAN (на русском), Cyrillic only. Translate city and "
+            "explicitly supplied country/region before returning this argument. "
+            "Do not copy Latin names or invent a country."
+        )
     return result

@@ -365,7 +365,7 @@ class AgentService:
             if structured
             else tools
         )
-        routing_prompt = prompt + facts + ROUTING_RULES
+        routing_prompt = prompt + ROUTING_RULES
         if structured:
             routing_prompt += (
                 "\nВерни один JSON-объект по схеме. Обнаруженные возможности: "
@@ -376,6 +376,7 @@ class AgentService:
                     }
                 )
             )
+        routing_prompt += facts
         messages = fit_context(
             routing_prompt,
             indexed_history(history),
