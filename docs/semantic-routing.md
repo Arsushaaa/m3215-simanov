@@ -199,3 +199,12 @@ require_parameters не исключал endpoint. Приложение по-п�
 Основание: [правила require_parameters](https://openrouter.ai/docs/guides/routing/provider-selection).
 Новый отдельный [native dots протокол](evaluation/semantic-routing-smoke-20261026-native-dots/manifest.json)
 сохраняет исходные шесть случаев, 6/4 и один LLM на случай.
+
+
+Native dots ответила обещанием подготовки без функции: один начатый кейс
+не прошёл, остальные пять не запускались ([результат](evaluation/semantic-routing-smoke-20261026-native-dots/results.json)).
+Это не готовая карточка и не успешная приёмка. Следующий опыт проверяет
+NVIDIA native уже без неподдерживаемого параметра: [манифест](evaluation/semantic-routing-smoke-20261026-native-nvidia-v2/manifest.json).
+Код/шесть случаев не изменяются. Полный офлайн-прогон после native harness:
+[1388 тестов и 28 критериев](evaluation/lab2-final-v2-checks.json); HTTP-совместимость
+с удалённым флагом дополнительно проверена 125 целевыми тестами.
