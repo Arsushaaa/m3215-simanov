@@ -64,7 +64,32 @@ class FakeClient(RecordingClient):
         value = self.overrides.get(case["id"], decision)
         if isinstance(value, BaseException):
             raise value
-        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        calls = []
+        if "tools" not in payload or isinstance(value, str):
+            text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        elif value["action"] == "respond":
+            text = value["text"]
+        else:
+            text = None
+            if value["action"] == "call_tool":
+                name = value["name"]
+                arguments = value["arguments"]
+                if name == "add_reminder":
+                    name = "prepare_reminder"
+                    arguments = {"arguments": arguments, "evidence": value["evidence"]}
+            else:
+                name = value["action"]
+                arguments = {key: item for key, item in value.items() if key != "action"}
+            calls = [
+                {
+                    "id": "synthetic-tool-call",
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": json.dumps(arguments, ensure_ascii=False),
+                    },
+                }
+            ]
         self.observation = {}
         self._observe_response(
             {
@@ -81,13 +106,14 @@ class FakeClient(RecordingClient):
                         "finish_reason": "stop",
                         "message": {
                             "content": text,
+                            "tool_calls": calls,
                             "reasoning": "PRIVATE-hidden-chain",
                         },
                     }
                 ],
             }
         )
-        return RoutingCompletion(text, [])
+        return RoutingCompletion(text, calls)
 
 
 @pytest.fixture
@@ -103,10 +129,13 @@ async def preregister(settings, folder):
     )
 
 
+@pytest.mark.parametrize("tool_mode", ["structured", "native"])
 async def test_all_six_cases_use_production_routing_and_preserve_only_safe_evidence(
-    bot_settings, tmp_path, committed
+    bot_settings, tmp_path, committed, tool_mode
 ):
+    bot_settings = replace(bot_settings, llm_tool_mode=tool_mode)
     manifest = await preregister(bot_settings, tmp_path)
+    assert manifest["protocol"]["tool_mode"] == tool_mode
     assert len(manifest["plan"]["cases"]) == 6
     client = FakeClient(bot_settings)
     report = await smoke.run(bot_settings, tmp_path, catalog=catalog(), client=client)
@@ -126,8 +155,14 @@ async def test_all_six_cases_use_production_routing_and_preserve_only_safe_evide
     for payload in client.requests:
         assert payload["temperature"] == 0.2
         assert payload["provider"]["max_price"] == {"prompt": 0, "completion": 0}
-        assert "tools" not in payload
-        assert payload["response_format"]["json_schema"]["strict"] is True
+        if tool_mode == "structured":
+            assert "tools" not in payload
+            assert payload["response_format"]["json_schema"]["strict"] is True
+        else:
+            assert "response_format" not in payload
+            assert payload["tool_choice"] == "auto"
+            assert payload["parallel_tool_calls"] is False
+            assert "prepare_reminder" in {tool["function"]["name"] for tool in payload["tools"]}
         assert "expected_action" not in json.dumps(payload)
         assert "expected_arguments" not in json.dumps(payload)
     serialized = (tmp_path / "results.json").read_text()
@@ -142,6 +177,20 @@ async def test_all_six_cases_use_production_routing_and_preserve_only_safe_evide
     assert await smoke.run(bot_settings, tmp_path, catalog=catalog(), client=client) == report
     assert (tmp_path / "results.json").read_bytes() == unchanged
     assert len(client.requests) == 6 and client.started == 1 and len(committed) == 2
+    if tool_mode == "native":
+        assert [
+            row["calls"][0]["raw_tool_calls"][0]["function"]["name"]
+            if row["calls"][0]["raw_tool_calls"]
+            else None
+            for row in report["attempts"]
+        ] == [
+            "prepare_reminder",
+            None,
+            "get_weather",
+            "clarify_reminder",
+            "prepare_reminder",
+            "prepare_reminder",
+        ]
 
 
 @pytest.mark.parametrize("remaining", [5, 0, -1, True, "6", None])

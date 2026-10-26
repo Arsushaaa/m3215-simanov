@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
-from app.agent_prompts import ROUTING_RULES
+from app.agent_prompts import NATIVE_ROUTING_FORMAT, ROUTING_RULES
 from app.config import Settings
 from app.confirmation_models import ConfirmationError
 from app.decision_schema import model_schema
@@ -379,6 +379,8 @@ class AgentService:
                     }
                 )
             )
+        else:
+            routing_prompt += NATIVE_ROUTING_FORMAT
         routing_prompt += facts
         messages = fit_context(
             routing_prompt,

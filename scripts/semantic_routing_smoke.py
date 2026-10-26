@@ -90,11 +90,11 @@ CASES = (
     },
 )
 PLAN = {
-    "version": 1,
+    "version": 2,
     "now": NOW.isoformat(),
     "timezone": ZONE,
     "temperature": TEMPERATURE,
-    "tool_mode": "structured",
+    "tool_mode": "explicit preregistered structured/native",
     "cases": CASES,
     "limits": {
         "llm_per_case": 1,
@@ -120,9 +120,10 @@ def fixed_settings(settings):
         or any(c.isspace() for c in model)
     ):
         raise ValueError("An explicitly configured free model is required; no fallback is used.")
+    if settings.llm_tool_mode not in {"structured", "native"}:
+        raise ValueError("Explicit structured/native mode is required before preregistration.")
     return replace(
         settings,
-        llm_tool_mode="structured",
         schedule_timezone=ZONE,
         schedule_file=str(ROOT / "data/schedule.json"),
         llm_max_output_tokens=2048,
@@ -148,11 +149,11 @@ def source_snapshot():
 def protocol(settings, catalog):
     settings = fixed_settings(settings)
     return {
-        "version": 1,
+        "version": 2,
         "plan_sha256": digest(PLAN),
         "model": settings.openrouter_model,
         "temperature": TEMPERATURE,
-        "tool_mode": "structured",
+        "tool_mode": settings.llm_tool_mode,
         "max_output_tokens": 2048,
         "llm_timeout_seconds": 60,
         "agent_timeout_seconds": 135,
@@ -414,7 +415,14 @@ async def run(settings, folder, *, catalog=None, client=None, max_new_cases=None
                 try:
                     row["displayed_answer"] = await dialog.respond(1, 1, case["query"])
                     proposal = getattr(getattr(agent, "reply", None), "reminder", None)
-                    raw_action = parse_decision(row["calls"][0]["raw_content"]).action
+                    call = row["calls"][0]
+                    if settings.llm_tool_mode == "structured":
+                        raw_action = parse_decision(call["raw_content"]).action
+                    else:
+                        native_calls = call["raw_tool_calls"]
+                        raw_action = (
+                            native_calls[0]["function"]["name"] if native_calls else "respond"
+                        )
                     action = (
                         "clarify_reminder"
                         if raw_action == "clarify_reminder"

@@ -1,0 +1,88 @@
+{
+  "created_at": "2026-10-26T15:46:24.602916+00:00",
+  "manifest_sha256": "fe5faeb44d4aedb2da78cbd85c587f9534254c75a840e6b6b30a6b36f611c15f",
+  "attempts": [
+    {
+      "id": "natural_reminder",
+      "query": "не забудь мне напомнить в 11:00 завтра приготовить пирог",
+      "started_at": "2026-10-26T15:46:24.603426+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-10-26T15:46:24.610442+00:00",
+          "request_sha256": "6bd5d029953c0df01c8696c20a551c25c45420c0e6560469039b9eef212fc58f",
+          "input_sha256": "e374be83ee01ff205435ef0fa3f82ede2ea43852a96c3b40b09f8050ff6081d0",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 4659,
+          "raw_content": "{\n  \"action\": \"call_tool\",\n  \"arguments\": {\n    \"date\": \"2026-10-27\"\n  },\n  \"name\": \"get_schedule\",\n  \"reason\": \"Запрос на расписание на завтра для проверки свободного времени перед созданием напоминания.\"\n}",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "dots-studio/dots-3-note-preview:free",
+          "id": "gen-1793029585-aPEX6VMbQcLaLwaDBLda",
+          "provider": "AtlasCloud",
+          "usage": {
+            "prompt_tokens": 1640,
+            "completion_tokens": 71,
+            "total_tokens": 1711,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 6633,
+          "finished_at": "2026-10-26T15:46:31.244689+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-27"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_schedule",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 6642,
+        "argument_summary": "Дата: 2026-10-27"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-10-26T15:46:31.245646+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "correct": 0,
+      "total": 6
+    },
+    "actions": {
+      "correct": 0,
+      "total": 6
+    },
+    "arguments": {
+      "correct": 0,
+      "total": 4
+    },
+    "llm_calls": 1,
+    "executed_mcp_calls": 0,
+    "database_writes": 0,
+    "telegram_calls": 0,
+    "api_cost": 0,
+    "acceptance": "not_passed"
+  },
+  "finished_at": "2026-10-26T15:46:31.246338+00:00"
+}

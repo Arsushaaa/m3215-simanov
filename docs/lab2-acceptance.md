@@ -1,10 +1,14 @@
 # Проверка и демонстрация ЛР2
 
-Актуальная сдаваемая версия — `lab2-final`. Исторические `lab1` и `lab2`
-сохраняются без изменений. Последняя полная приёмка:
-[1370 тестов, все 28 критериев](evaluation/lab2-provider-rejection-checks.json),
-без ошибок и пропусков. Дополнения:
-[ручные граничные сценарии](adversarial-fixes.md), [отказы провайдера](provider-rejections.md).
+Новый кандидат сдаваемой версии — `lab2-final-v2`; прежний `lab2-final`
+был отклонён и сохраняется вместе с `lab1` и `lab2` без перемещения тегов.
+Последний полный офлайн-прогон новой маршрутизации:
+[1383 теста, все 28 критериев](evaluation/semantic-routing-submit-final-checks.json),
+без ошибок и пропусков. После него проекция JSON-схемы проверена отдельно.
+Реальные проверки нового сценария и их ограничения —
+[семантическая маршрутизация](semantic-routing.md); офлайн-успех не означает
+успех настоящей модели. [1370 тестов](evaluation/lab2-provider-rejection-checks.json)
+относятся к исторической версии `lab2-final`.
 
 Карта составлена по [требованиям ЛР2](labs-guide.md#lab2) и [спецификации](../spec.md).
 Она связывает наблюдаемое поведение с реализацией и доказательствами проверки.
@@ -29,7 +33,7 @@
   секретами длиной от восьми символов без вывода значений.
 - [Свежий протокол независимого клиента](evaluation/lab2-stage7-probe.json): discovery,
   чтение дня/недели и отказ `UNAUTHORIZED` для записи без доверенного права.
-- [Неизменный набор эксперимента](evaluation/lab2-routing.json): 12 запросов,
+- [Неизменный набор исторического эксперимента](evaluation/lab2-routing.json): 12 запросов,
   фиксированные часы и ожидаемые действия. Результаты реальной модели сохраняет
   `scripts/lab2_experiment.py` в `docs/evaluation/lab2-results.json`.
   Итог — 12/12 действий и 9/9 аргументов; исходный и промежуточный неуспешные
@@ -41,7 +45,8 @@
 Дополнение от 25 октября: [исправления и 1312 тестов](live-fixes.md),
 [предварительно зарегистрированное сравнение моделей](evaluation/lab2-comparison.md).
 dots T=0,3 прошла 10/12 и 8/9 с фактическими 12/12 и 8/9; дополнительные
-формулировки и один реальный MCP-read проверены отдельно. Исторические прогоны
+формулировки и один реальный MCP-read проверены отдельно. Сравнение относится
+к прежним промптам и схеме, не к кандидату `lab2-final-v2`. Исторические прогоны
 с изменением промпта не заменены и не используются как независимая оценка.
 
 Имена в столбце «Проверка» — существующие функции pytest. Полные пути и исходы
@@ -59,7 +64,7 @@ dots T=0,3 прошла 10/12 и 8/9 с фактическими 12/12 и 8/9; �
 | Выбор ответа, уточнения либо одного инструмента по строгому решению; разрешённый allowlist | `app/llm.py`, `app/agent.py`, `app/mcp/contracts.py`; заранее выбранные `structured`/`native`, без извлечения команд из свободного текста | `test_strict_decisions_reject_free_text_extra_fields_and_untrusted_targets`, `test_canonical_but_undiscovered_tool_is_not_executed`, `test_invalid_calls_never_reach_sdk`; критерий `tool_allowlist` |
 | Ограниченный цикл: методичка допускает максимум 2 MCP; проект использует максимум 1 прикладной MCP и 2 LLM на чтение | `app/agent.py`; финальный LLM не может вызвать новый инструмент, discovery не входит в бюджет сообщения | `test_read_uses_two_models_one_mcp_and_final_disables_tools`, `test_multiple_native_calls_are_refused_before_partial_execution`, `test_context_budget_accounts_for_schema_and_tool_result`; критерий `bounded_calls_context` |
 | Результат чтения передаётся модели с источником; неверная схема/дата не становится фактом | `app/mcp/client.py`, `app/llm.py`, `app/agent.py`; отдельный временный tool-контекст, в истории только вопрос/итог | `test_well_formed_schedule_for_another_day_is_not_a_fact`, `test_dialog_persists_only_user_and_final_and_respects_revision`; критерии `result_binding`, `why_and_history` |
-| `add_reminder`: текст 1–500, будущий момент с ISO-offset, сохранённая IANA-зона, проверка DST | `app/mcp/contracts.py`, `app/reminder_intent.py`, `app/confirmations.py`; время сверяется с пользовательской просьбой | `test_reminder_future_context_is_explicit_and_normalized`, `test_reminder_text_limits`, `test_dst_gap_and_overlap_need_clarification`, `test_confirmation_preparation_checks_saved_zone_db_time_and_dst`; критерии `invalid_arguments`, `timezone_dst_expiry` |
+| `add_reminder`: текст 1–500, будущий момент с ISO-offset, сохранённая IANA-зона, проверка DST | `app/mcp/contracts.py`, `app/agent_prompts.py`, `app/reminder_grounding.py`, `app/confirmations.py`; LLM определяет смысл, код проверяет дословные источники и календарные ограничения, владелец сверяет точную карточку | `test_reminder_future_context_is_explicit_and_normalized`, `test_reminder_text_limits`, `test_dst_gap_and_overlap_need_clarification`, `test_confirmation_preparation_checks_saved_zone_db_time_and_dst`; критерии `invalid_arguments`, `timezone_dst_expiry` |
 | Точная карточка и явное подтверждение владельца в течение 5 минут; изменение/отмена/истечение отзывают право | `app/confirmation_models.py`, `app/confirmations.py`, `app/agent_repository.py`, `app/handlers/assistant.py`; отдельный `confirmation_epoch` | `test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_model_calls`, `test_confirmation_revocation_covers_pending_and_approved_cards_and_expiry`; критерий `confirmation_real_stdio` |
 | Модель не задаёт владельца и право записи; независимый MCP-клиент без права получает отказ | Идентичность из Telegram update; capability минимум 256 бит передаётся в доверенном MCP `_meta`, хеш и связанное действие проверяет PostgreSQL | `test_arguments_trim_strings_but_do_not_accept_model_owner`, `test_confirmed_write_sends_capability_only_in_trusted_metadata`, `test_reminder_repository_rejects_unauthorized_stale_or_changed_actions`; критерий `ownership` и независимый probe |
 | Повтор update даёт одну подготовку; конкурентные подтверждения — одно напоминание | `app/agent_repository.py`, `app/migrations/006_agent_state.sql`; блокировки и уникальные ограничения PostgreSQL | `test_confirmation_prepare_is_concurrent_atomic_and_separate_from_dialog_revision`, `test_confirmation_services_race_across_pools_commits_once_and_replays_without_mcp`; критерии `update_deduplication`, `concurrent_confirmation`, `idempotent_write` |
@@ -73,7 +78,7 @@ dots T=0,3 прошла 10/12 и 8/9 с фактическими 12/12 и 8/9; �
 | Миграции и конфигурация воспроизводимы; SQL/расписание включены в Docker и деплой; персональных данных в учебном файле нет | `app/migration.py`, `app/config.py`, `.env.example`, Compose, Dockerfile, `scripts/cloud.py`, `.gitignore` | `test_agent_migration_upgrades_lab1_and_preserves_history_and_registry`, `test_repository_fixture_covers_all_fourteen_days_and_has_no_personal_fields`, `tests/test_compose.py`, `tests/test_scripts.py`; `source_checks.migrations_001_to_006_unchanged` и контейнерный протокол |
 | `AGENTS.md`, `spec.md`, `plan.md` соответствуют реализации; запуск и независимая демонстрация описаны | Документы в корне, README, документы этапов 2–6, `scripts/mcp_probe.py` | Ручная сверка карты с исходниками; `test_independent_stdio_probe_needs_no_database_or_telegram_keys`, `test_independent_stdio_client_commits_confirmed_reminder_in_real_postgres` |
 | Реальный эксперимент: все 12 запросов, действие ≥10/12, аргументы ≥8/9, исходные данные и разбор ошибок | Неизменный `docs/evaluation/lab2-routing.json`; скрипт `scripts/lab2_experiment.py` | Итоговый `docs/evaluation/lab2-results.json`: 12/12 и 9/9. В `lab2-experiment.md` разобраны оба неуспешных прогона и повтор всех кейсов после уточнения одного блока правил |
-| Итоговый отчёт, использование AI, ограничения, зафиксированное состояние `lab2-final` | Финальный отчёт/инструкция защиты и аннотированный тег после приёмки; исходный `lab2` сохранён | `docs/lab2-report.md` и `docs/lab2-defense.md`; проверить `git show lab2-final` и чистоту рабочего дерева |
+| Итоговый отчёт, использование AI, ограничения, новое состояние `lab2-final-v2` | Отчёт/инструкция защиты и новый аннотированный тег после приёмки; старые теги сохраняются | `docs/lab2-report.md` и `docs/lab2-defense.md`; после фиксации проверить `git show lab2-final-v2` и чистоту рабочего дерева |
 
 ## Воспроизводимая демонстрация
 
@@ -124,7 +129,9 @@ dots T=0,3 прошла 10/12 и 8/9 с фактическими 12/12 и 8/9; �
    в отдельной временной БД с тестовой идентичностью.
 8. Показать все 12 результатов реальной модели, расчёт двух метрик, объяснение
    ошибок и сохранённый повтор после изменения одного элемента, если он потребовался.
-   После финальной приёмки показать аннотированный тег `lab2` и сохранённый `lab1`.
+   Для новой маршрутизации отдельно показать её реальные результаты и ограничения.
+   После финальной приёмки показать новый аннотированный тег `lab2-final-v2`
+   и сохранённые исторические теги.
 
 ## Границы результата
 
