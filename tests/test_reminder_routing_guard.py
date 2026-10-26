@@ -1,4 +1,4 @@
-"""Напоминание требует явного времени пользователя и отдельной карточки."""
+"""One model chooses intent; code validates sources and keeps writes separate."""
 
 import json
 from dataclasses import replace
@@ -9,50 +9,57 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.agent import CHOOSE_ONE, AgentService
-from app.llm import RoutingCompletion
+from app.llm import ModelError, RoutingCompletion
 from app.mcp.contracts import tool_schemas
 from app.prompts import PROMPTS
 from app.repository import UserSettings
 
 NOW = datetime(2026, 10, 19, 7, tzinfo=UTC)
-REQUEST = "Напомни мне завтра в 18:30 приготовить пирог"
-FORGED_SUCCESS = "Напоминание установлено. Я напомню завтра в 18:30 приготовить пирог."
+REQUEST = "Не забудь мне напомнить в 11:00 завтра приготовить пирог"
 REMINDER_ARGUMENTS = {
     "text": "Приготовить пирог",
-    "remind_at": "2026-10-20T18:30:00+03:00",
+    "remind_at": "2026-10-20T11:00:00+03:00",
 }
+
+
+def quote(text, index=0):
+    return {"source": "user", "message_index": index, "quote": text}
+
+
+def evidence_for(text):
+    return {name: quote(text) for name in ("request", "text", "date", "time")}
 
 
 def structured(action="respond", **fields):
     return RoutingCompletion(
-        text=json.dumps({"action": action, "reason": "Выбор действия.", **fields}),
-        tool_calls=[],
-        truncated=False,
+        json.dumps({"action": action, "reason": "Выбор действия.", **fields}), []
     )
 
 
-def reminder_decision(mode="structured", **overrides):
-    arguments = {**REMINDER_ARGUMENTS, **overrides}
+def reminder_decision(mode="structured", *, question=REQUEST, evidence=None, **overrides):
+    proposal = {
+        "arguments": {**REMINDER_ARGUMENTS, **overrides},
+        "evidence": evidence if evidence is not None else evidence_for(question),
+    }
     if mode == "structured":
-        return structured("call_tool", name="add_reminder", arguments=arguments)
+        return structured("call_tool", name="add_reminder", **proposal)
     return RoutingCompletion(
-        text=None,
-        tool_calls=[
+        None,
+        [
             {
-                "id": "call_reminder",
+                "id": "prepare-card",
                 "type": "function",
-                "function": {"name": "add_reminder", "arguments": json.dumps(arguments)},
+                "function": {"name": "prepare_reminder", "arguments": json.dumps(proposal)},
             }
         ],
-        truncated=False,
     )
 
 
 @pytest.fixture
 def reminder_agent(bot_settings):
     llm = SimpleNamespace(
-        decide=AsyncMock(return_value=structured(text=FORGED_SUCCESS)),
-        complete=AsyncMock(),
+        decide=AsyncMock(return_value=structured(text="Ответ без инструмента.")),
+        complete=AsyncMock(side_effect=AssertionError("No second model for a proposal")),
     )
     mcp = SimpleNamespace(
         available=True,
@@ -61,8 +68,8 @@ def reminder_agent(bot_settings):
             for name in ("get_weather", "get_schedule", "add_reminder")
         },
         resources={"schedule://current-week": {}},
-        call_tool=AsyncMock(),
-        read_resource=AsyncMock(),
+        call_tool=AsyncMock(side_effect=AssertionError("Preparation cannot write")),
+        read_resource=AsyncMock(side_effect=AssertionError("No partial execution")),
     )
     repository = SimpleNamespace(
         timezone=AsyncMock(return_value="Europe/Moscow"),
@@ -70,268 +77,215 @@ def reminder_agent(bot_settings):
         start_request=AsyncMock(),
         record=AsyncMock(),
     )
-    agent = AgentService(llm, mcp, repository, bot_settings, now=lambda: NOW)
-    return SimpleNamespace(agent=agent, llm=llm, mcp=mcp, repository=repository)
+    return SimpleNamespace(
+        agent=AgentService(llm, mcp, repository, bot_settings, now=lambda: NOW),
+        llm=llm,
+        mcp=mcp,
+        repository=repository,
+    )
 
 
-async def ask(setup, text=REQUEST, *, history=None):
+async def ask(setup, text=REQUEST, *, history=None, context=None):
     return await setup.agent.respond(
         UserSettings(1, "study", 0.3, 0),
         10,
         text,
         prompt=PROMPTS["study"],
         history=history or [],
+        confirmation_context=context,
     )
 
 
-def assert_no_execution(setup, *, llm_calls):
-    assert setup.llm.decide.await_count == llm_calls
+def assert_preparation_only(setup):
+    setup.llm.decide.assert_awaited_once()
     setup.llm.complete.assert_not_awaited()
     setup.mcp.call_tool.assert_not_awaited()
     setup.mcp.read_resource.assert_not_awaited()
     audit = setup.repository.record.call_args.kwargs
-    assert (audit["llm_calls"], audit["mcp_calls"]) == (llm_calls, 0)
-
-
-def assert_safe_refusal(reply):
-    assert reply.reminder is None
-    assert reply.text != FORGED_SUCCESS
-    assert any(
-        phrase in reply.text.casefold()
-        for phrase in ("не сохран", "не установ", "уточни", "повтори", "подтвержден")
-    )
-
-
-async def test_missing_time_is_clarified_locally_without_model_or_mcp(reminder_agent):
-    reply = await ask(reminder_agent, "ты сможешь напомнить мне завтра приготовить пирог")
-
-    assert reply.reminder is None
-    assert any(phrase in reply.text.casefold() for phrase in ("время", "во сколько"))
-    assert_no_execution(reminder_agent, llm_calls=0)
-
-
-async def test_yes_does_not_adopt_time_invented_by_legacy_assistant(reminder_agent):
-    history = [
-        {"role": "user", "content": "ты сможешь напомнить мне завтра приготовить пирог"},
-        {
-            "role": "assistant",
-            "content": "Хорошо, напомню завтра в 18:00 приготовить пирог. Подтверждаешь?",
-        },
-    ]
-    reply = await ask(reminder_agent, "да", history=history)
-
-    assert reply.reminder is None
-    assert any(phrase in reply.text.casefold() for phrase in ("время", "во сколько"))
-    assert_no_execution(reminder_agent, llm_calls=0)
-
-
-async def test_missing_timezone_is_requested_before_model_or_mcp(reminder_agent):
-    reminder_agent.repository.timezone.return_value = None
-    reply = await ask(reminder_agent)
-
-    assert reply.reminder is None
-    assert "/timezone" in reply.text
-    assert_no_execution(reminder_agent, llm_calls=0)
-
-
-@pytest.mark.parametrize("action", ["respond", "clarify"])
-async def test_structured_plain_text_cannot_claim_reminder_success(reminder_agent, action):
-    field = "text" if action == "respond" else "question"
-    reminder_agent.llm.decide.return_value = structured(action, **{field: FORGED_SUCCESS})
-    reply = await ask(reminder_agent)
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-async def test_native_plain_text_cannot_claim_reminder_success(reminder_agent):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode="native")
-    reminder_agent.llm.decide.return_value = RoutingCompletion(
-        text=FORGED_SUCCESS, tool_calls=[], truncated=False
-    )
-    reply = await ask(reminder_agent)
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
+    assert (audit["llm_calls"], audit["mcp_calls"]) == (1, 0)
 
 
 @pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_explicit_matching_reminder_produces_proposal_without_write(reminder_agent, mode):
+@pytest.mark.parametrize(
+    "question",
+    [
+        REQUEST,
+        "В 11:00 завтра надо приготовить пирог — можешь об этом напомнить?",
+        "Чтобы я не забыл: завтра к одиннадцати напомни приготовить пирог",
+        "Make sure I don't forget to bake a pie tomorrow at 11 AM",
+    ],
+)
+async def test_unfamiliar_word_order_reaches_one_model_and_prepares_without_mcp(
+    reminder_agent, mode, question
+):
     reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(mode)
-    reply = await ask(reminder_agent)
-
+    reminder_agent.llm.decide.return_value = reminder_decision(mode, question=question)
+    reply = await ask(reminder_agent, question)
     assert reply.reminder is not None
     assert reply.reminder.arguments.text == REMINDER_ARGUMENTS["text"]
     assert reply.reminder.arguments.remind_at.isoformat() == REMINDER_ARGUMENTS["remind_at"]
-    assert reply.reminder.timezone == "Europe/Moscow"
     assert "требуется подтверждение" in reply.text
-    assert_no_execution(reminder_agent, llm_calls=1)
+    assert reminder_agent.llm.decide.call_args.args[0][-1] == {"role": "user", "content": question}
+    assert_preparation_only(reminder_agent)
+    if mode == "native":
+        names = {
+            item["function"]["name"] for item in reminder_agent.llm.decide.call_args.kwargs["tools"]
+        }
+        assert {"prepare_reminder", "get_weather", "get_schedule"} <= names
+        assert "add_reminder" not in names
 
 
-@pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_english_screenshot_request_prepares_exact_proposal_without_write(
-    reminder_agent, mode
-):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(
-        mode, text="Submit the report", remind_at="2026-10-20T08:00:00+00:00"
-    )
-    reply = await ask(reminder_agent, "Remind me tomorrow at 11:00 to submit the report")
-
-    assert reply.reminder is not None
-    assert reply.reminder.arguments.text == "Submit the report"
-    assert reply.reminder.arguments.remind_at.isoformat() == "2026-10-20T11:00:00+03:00"
-    assert reply.reminder.timezone == "Europe/Moscow"
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-@pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_english_request_rejects_different_model_time(reminder_agent, mode):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(
-        mode, text="Submit the report", remind_at="2026-10-20T11:00:00+03:00"
-    )
-    reply = await ask(reminder_agent, "Remind me tomorrow at 11 PM to submit the report")
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-async def test_english_request_without_time_is_clarified_without_model(reminder_agent):
-    reply = await ask(reminder_agent, "Remind me tomorrow to submit the report")
-
-    assert reply.reminder is None
-    assert any(phrase in reply.text.casefold() for phrase in ("время", "во сколько"))
-    assert_no_execution(reminder_agent, llm_calls=0)
-
-
-@pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_model_cannot_replace_explicit_user_time(reminder_agent, mode):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(
-        mode, remind_at="2026-10-20T18:00:00+03:00"
-    )
-    reply = await ask(reminder_agent)
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-@pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_unsolicited_reminder_decision_is_not_prepared(reminder_agent, mode):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(mode)
-    reply = await ask(reminder_agent, "Чем список отличается от кортежа в Python?")
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-async def test_explanation_mentioning_reminders_keeps_ordinary_model_path(reminder_agent):
-    answer = "В Python напоминания можно реализовать через планировщик задач."
-    reminder_agent.llm.decide.return_value = structured(text=answer)
-    reply = await ask(reminder_agent, "Объясни, как реализуют напоминания в Python")
-
-    assert reply.text == answer
-    assert reply.reminder is None
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-@pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_equivalent_utc_model_timestamp_is_canonicalized_to_saved_zone(reminder_agent, mode):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(
-        mode, remind_at="2026-10-20T15:30:00+00:00"
-    )
-    reply = await ask(reminder_agent)
-
-    assert reply.reminder is not None
-    assert reply.reminder.arguments.remind_at.isoformat() == "2026-10-20T18:30:00+03:00"
-    assert reply.reminder.timezone == "Europe/Moscow"
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-@pytest.mark.parametrize("mode", ["structured", "native"])
-async def test_utc_timestamp_for_different_instant_is_not_accepted(reminder_agent, mode):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
-    reminder_agent.llm.decide.return_value = reminder_decision(
-        mode, remind_at="2026-10-20T18:30:00+00:00"
-    )
-    reply = await ask(reminder_agent)
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-@pytest.mark.parametrize("mode", ["structured", "native"])
 @pytest.mark.parametrize(
-    "now,text,model_timestamp",
+    "question",
+    [
+        "Не забудь завтра напомнить про пирог",
+        "Remind me tomorrow to bake a pie",
+    ],
+)
+async def test_missing_time_is_a_model_clarification_without_mcp(reminder_agent, question):
+    reminder_agent.llm.decide.return_value = structured(
+        "clarify_reminder", question="Во сколько напомнить?"
+    )
+    reply = await ask(reminder_agent, question)
+    assert reply.reminder is None
+    assert "Во сколько" in reply.text and "ещё не сохранено" in reply.text
+    assert_preparation_only(reminder_agent)
+
+
+async def test_missing_timezone_is_not_a_gate_before_intent_selection(reminder_agent):
+    reminder_agent.repository.timezone.return_value = None
+    reminder_agent.llm.decide.return_value = reminder_decision()
+    reply = await ask(reminder_agent)
+    assert reply.reminder is None and "/timezone" in reply.text
+    assert_preparation_only(reminder_agent)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Не напоминай мне завтра про пирог. Объясни рецепт.",
+        "Разбери фразу «не забудь напомнить завтра в 11:00 приготовить пирог».",
+        "Объясни, как реализуют напоминания в Python",
+    ],
+)
+async def test_negative_quoted_and_theoretical_text_can_choose_ordinary_response(
+    reminder_agent, question
+):
+    reminder_agent.llm.decide.return_value = structured(text="Объяснение без создания действия.")
+    reply = await ask(reminder_agent, question)
+    assert reply.text == "Объяснение без создания действия." and reply.reminder is None
+    assert_preparation_only(reminder_agent)
+
+
+async def test_several_requested_actions_are_clarified_by_the_model(reminder_agent):
+    reminder_agent.llm.decide.return_value = structured("clarify", question=CHOOSE_ONE)
+    reply = await ask(
+        reminder_agent,
+        "Покажи погоду в Москве и не забудь напомнить завтра в 11:00 приготовить пирог",
+    )
+    assert reply.text == CHOOSE_ONE and reply.reminder is None
+    assert_preparation_only(reminder_agent)
+
+
+async def test_followup_sources_reference_only_indexed_user_messages(reminder_agent):
+    history = [
+        {"role": "user", "content": "Завтра нужно приготовить пирог, напомни мне"},
+        {"role": "assistant", "content": "Во сколько? Например, в 18:00?"},
+    ]
+    evidence = {
+        "request": quote("напомни мне", 1),
+        "text": quote("приготовить пирог", 1),
+        "date": quote("Завтра", 1),
+        "time": quote("11:00"),
+    }
+    reminder_agent.llm.decide.return_value = reminder_decision(evidence=evidence)
+    reply = await ask(reminder_agent, "В 11:00", history=history)
+    assert reply.reminder is not None
+    messages = reminder_agent.llm.decide.call_args.args[0]
+    assert json.loads(messages[1]["content"]) == {
+        "message_index": 1,
+        "text": history[0]["content"],
+    }
+    assert messages[2]["content"] == history[1]["content"]
+    assert_preparation_only(reminder_agent)
+
+
+@pytest.mark.parametrize("bad_source", [quote("18:00", 1), quote("11:00", 19)])
+async def test_assistant_only_or_nonexistent_evidence_cannot_prepare(reminder_agent, bad_source):
+    evidence = evidence_for(REQUEST)
+    evidence["time"] = bad_source
+    reminder_agent.llm.decide.return_value = reminder_decision(evidence=evidence)
+    reply = await ask(
+        reminder_agent,
+        history=[{"role": "assistant", "content": "Напомню в 18:00"}],
+    )
+    assert reply.reminder is None
+    assert reminder_agent.repository.record.call_args.kwargs["error_code"] == "INVALID_ARGUMENTS"
+    assert_preparation_only(reminder_agent)
+
+
+async def test_equivalent_utc_timestamp_is_canonicalized_without_language_reparsing(reminder_agent):
+    reminder_agent.llm.decide.return_value = reminder_decision(
+        remind_at="2026-10-20T08:00:00+00:00"
+    )
+    reply = await ask(reminder_agent)
+    assert reply.reminder.arguments.remind_at.isoformat() == "2026-10-20T11:00:00+03:00"
+    assert_preparation_only(reminder_agent)
+
+
+@pytest.mark.parametrize(
+    "now,question,moment",
     [
         (
             datetime(2026, 3, 28, 7, tzinfo=UTC),
-            "Напомни мне 29 марта 2026 в 02:30 приготовить пирог",
+            "Напомни 29 марта 2026 в 02:30 приготовить пирог",
             "2026-03-29T02:30:00+01:00",
         ),
-        (
-            NOW,
-            "Напомни мне 25 октября 2026 в 02:30 приготовить пирог",
-            "2026-10-25T02:30:00+02:00",
-        ),
-        (
-            NOW,
-            "Напомни мне 25 октября 2026 в 02:30 приготовить пирог",
-            "2026-10-25T02:30:00+01:00",
-        ),
+        (NOW, "Напомни 25 октября 2026 в 02:30 приготовить пирог", "2026-10-25T02:30:00+02:00"),
+        (NOW, "Напомни 25 октября 2026 в 02:30 приготовить пирог", "2026-10-25T02:30:00+01:00"),
     ],
 )
-async def test_zone_normalization_keeps_dst_gap_and_overlap_rejected(
-    reminder_agent, mode, now, text, model_timestamp
+async def test_model_selected_time_still_rejects_dst_gap_and_overlap(
+    reminder_agent, now, question, moment
 ):
-    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode=mode)
     reminder_agent.agent.now = lambda: now
     reminder_agent.repository.timezone.return_value = "Europe/Berlin"
-    reminder_agent.llm.decide.return_value = reminder_decision(mode, remind_at=model_timestamp)
-    reply = await ask(reminder_agent, text)
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=1)
-
-
-@pytest.mark.parametrize("timezone", [None, "Europe/Moscow"])
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Какая погода в Москве и напомни мне завтра в 18:30 приготовить пирог",
-        "Напомни мне завтра в 18:30 приготовить пирог и покажи расписание на завтра",
-    ],
-)
-async def test_explicit_read_and_reminder_require_one_action_before_model(
-    reminder_agent, timezone, text
-):
-    reminder_agent.repository.timezone.return_value = timezone
-    reminder_agent.llm.decide.return_value = reminder_decision()
-    reply = await ask(reminder_agent, text)
-
-    assert reply.text == CHOOSE_ONE
+    reminder_agent.llm.decide.return_value = reminder_decision(question=question, remind_at=moment)
+    reply = await ask(reminder_agent, question)
     assert reply.reminder is None
-    assert_no_execution(reminder_agent, llm_calls=0)
+    assert_preparation_only(reminder_agent)
 
 
-@pytest.mark.parametrize("text", ["да", "в 18:30"])
+async def test_native_model_cannot_expose_the_mcp_write_function(reminder_agent):
+    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode="native")
+    result = reminder_decision("native")
+    result.tool_calls[0]["function"]["name"] = "add_reminder"
+    reminder_agent.llm.decide.return_value = result
+    with pytest.raises(ModelError, match="некорректное действие"):
+        await ask(reminder_agent)
+    assert_preparation_only(reminder_agent)
+
+
 @pytest.mark.parametrize(
-    "assistant_text",
+    "name,parameters",
     [
-        "Во сколько напомнить? Напиши точное время, например 18:30.",
-        "Хорошо, напомню завтра в 18:00 приготовить пирог. Подтверждаешь?",
+        ("clarify_reminder", {"question": "Во сколько напомнить?", "reason": "Нужны часы."}),
+        ("use_confirmation", {"reason": "Нужна кнопка владельца."}),
     ],
 )
-async def test_orphan_short_reply_never_uses_assistant_time_or_model_success(
-    reminder_agent, text, assistant_text
-):
-    reply = await ask(
-        reminder_agent, text, history=[{"role": "assistant", "content": assistant_text}]
+async def test_native_app_actions_do_not_become_mcp_calls(reminder_agent, name, parameters):
+    reminder_agent.agent.settings = replace(reminder_agent.agent.settings, llm_tool_mode="native")
+    reminder_agent.llm.decide.return_value = RoutingCompletion(
+        None,
+        [
+            {
+                "id": "local-step",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(parameters)},
+            }
+        ],
     )
-
-    assert_safe_refusal(reply)
-    assert_no_execution(reminder_agent, llm_calls=0)
+    reply = await ask(reminder_agent, "Подготовь, если можешь")
+    assert reply.reminder is None
+    assert "не сохранено" in reply.text
+    assert_preparation_only(reminder_agent)

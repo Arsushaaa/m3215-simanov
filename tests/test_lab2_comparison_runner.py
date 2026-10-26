@@ -69,9 +69,9 @@ async def test_two_free_models_and_temperatures_receive_identical_inputs(bot_set
         assert report["protocol"]["temperature"] == temperature
         assert report["metrics"]["routing_accuracy"]["total"] == 12
         assert report["metrics"]["argument_accuracy"]["total"] == 9
-        assert report["metrics"]["llm_calls"] == len(client.calls) == 11
+        assert report["metrics"]["llm_calls"] == len(client.calls) == 12
         assert len(report["attempts"]) == 12
-        assert report["attempts"][-1]["routing_source"] == "local_validation"
+        assert report["attempts"][-1]["routing_source"] == "llm"
         assert all(call[1] == temperature for call in client.calls)
         payloads = [{"messages": messages, **kwargs} for messages, _, kwargs in client.calls]
         serialized = json.dumps(payloads, ensure_ascii=False, sort_keys=True).encode()
@@ -79,7 +79,7 @@ async def test_two_free_models_and_temperatures_receive_identical_inputs(bot_set
         assert b"expected_arguments" not in serialized
         assert all("expected" not in payload for payload in payloads)
         assert [call[0][-1]["content"] for call in client.calls] == [
-            case["query"] for case in dataset["cases"][:-1]
+            case["query"] for case in dataset["cases"]
         ]
         recorded_calls = [call for row in report["attempts"] for call in row["calls"]]
         assert [call["input_sha256"] for call in recorded_calls] == [
@@ -160,13 +160,13 @@ async def test_reopening_comparison_checkpoint_uses_no_additional_quota(bot_sett
     settings = replace(bot_settings, openrouter_model=SECOND_MODEL)
     client, output = CapturingClient(), tmp_path / "checkpoint.json"
     original = await run_trials(settings, client, catalog(), output, models=MODELS, temperature=0)
-    assert len(client.calls) == 11
+    assert len(client.calls) == 12
     reopened = await run_trials(settings, client, catalog(), output, models=MODELS, temperature=0)
-    assert len(client.calls) == 11
+    assert len(client.calls) == 12
     assert reopened["attempts"] == original["attempts"]
     with pytest.raises(ValueError, match="different protocol"):
         await run_trials(settings, client, catalog(), output, models=MODELS, temperature=0.3)
-    assert len(client.calls) == 11
+    assert len(client.calls) == 12
 
 
 @pytest.mark.parametrize("temperature", [0, 1])
@@ -201,7 +201,7 @@ async def test_twelve_single_case_invocations_keep_full_protocol_and_identical_i
         assert report["metrics"]["scope"] == "full_12_cases"
         assert report["metrics"]["routing_accuracy"]["total"] == 12
         assert report["metrics"]["argument_accuracy"]["total"] == 9
-    assert len(client.calls) == 11
+    assert len(client.calls) == 12
     assert client.calls == complete_client.calls
     assert [row["id"] for row in report["attempts"]] == [row["id"] for row in complete["attempts"]]
     assert report["metrics"] == complete["metrics"]
@@ -210,7 +210,7 @@ async def test_twelve_single_case_invocations_keep_full_protocol_and_identical_i
     ]
     # Completed reports remain idempotent even with an invocation limit.
     await run_trials(bot_settings, client, catalog(), output, max_new_cases=1)
-    assert len(client.calls) == 11
+    assert len(client.calls) == 12
 
 
 @pytest.mark.parametrize("limit", [0, -1, True, 1.0, "1"])

@@ -259,6 +259,14 @@ async def test_reminder_is_only_a_proposal_without_mcp_or_second_model(setup_age
         "call_tool",
         name="add_reminder",
         arguments={"text": "Сдать отчёт", "remind_at": "2026-10-19T18:30:00+03:00"},
+        evidence={
+            field: {
+                "source": "user",
+                "message_index": 0,
+                "quote": "Напомни завтра в 18:30 сдать отчёт",
+            }
+            for field in ("request", "text", "date", "time")
+        },
     )
     reply = await ask(agent, "Напомни завтра в 18:30 сдать отчёт")
     assert reply.reminder is not None if timezone else reply.reminder is None
@@ -290,7 +298,7 @@ async def test_schedule_and_reminder_use_their_own_trusted_calendar_day(setup_ag
     system = llm.decide.call_args.args[0][0]["content"]
     assert '"schedule_now":"2026-10-12T00:30:00+03:00"' in system
     assert '"reminder_now":"2026-10-11T17:30:00-04:00"' in system
-    assert "напоминаний — по reminder_now" in system
+    assert '"reminder_timezone":"America/New_York"' in system
 
 
 async def test_tool_error_is_not_sent_as_instructions_or_retried(setup_agent):

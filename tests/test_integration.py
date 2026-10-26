@@ -1560,13 +1560,25 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         moment = (now + timedelta(days=1)).astimezone(ZoneInfo("Europe/Moscow"))
         private_reason = "private-reminder-model-reason-do-not-store"
         private_text = "Личный отчёт для лабораторной"
+        question = f"Напомни: {private_text} {moment.isoformat()}"
+
+        def source(quote):
+            return {"source": "user", "message_index": 0, "quote": quote}
+
         decisions = [
             {
                 "action": "call_tool",
                 "name": "add_reminder",
                 "arguments": {"text": private_text, "remind_at": moment.isoformat()},
+                "evidence": {
+                    "request": source("Напомни"),
+                    "text": source(private_text),
+                    "date": source(moment.isoformat()),
+                    "time": source(moment.isoformat()),
+                },
                 "reason": private_reason,
             },
+            {"action": "use_confirmation", "reason": private_reason},
             {"action": "respond", "text": "Привет!", "reason": private_reason},
         ]
         llm = SimpleNamespace(
@@ -1588,7 +1600,6 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         agent = AgentService(llm, mcp, AgentRepository(pool), settings, now=lambda: now)
         dialog = DialogService(repository, llm, settings, agent=agent, confirmations=service)
         assert "Europe/Moscow" in await dialog.timezone(101, "Europe/Moscow")
-        question = f"Напомни: {private_text} {moment.isoformat()}"
         card_text = await dialog.respond(101, 1, question)
         card = await dialog.confirmation_card(101, 1)
         assert card is not None and card.state == "pending"
@@ -1610,7 +1621,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         assert "не сохранено" in button_reply
         assert await dialog.respond(101, 3, "давай") == button_reply
         assert (await confirmations.current_card(101)).action_id == card.action_id
-        assert llm.decide.await_count == 1
+        assert llm.decide.await_count == 2
         mcp.call_tool.assert_not_awaited()
         assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
         assert await dialog.respond(101, 2, "Привет") == "Привет!"
@@ -1625,7 +1636,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         assert "Напоминание сохранено." in answer
         assert format_datetime(moment, "Europe/Moscow") in answer and "Europe/Moscow" in answer
         assert "пока не подключена" in answer
-        assert llm.decide.await_count == 2
+        assert llm.decide.await_count == 3
         llm.complete.assert_not_awaited()
         mcp.call_tool.assert_awaited_once()
         name, arguments = mcp.call_tool.await_args.args
@@ -1652,7 +1663,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
             "SELECT decision, target, status, reason, argument_summary, llm_calls, mcp_calls "
             "FROM labbi_agent_events WHERE user_id=101 ORDER BY id"
         )
-        assert sum(row["llm_calls"] for row in audit) == 2
+        assert sum(row["llm_calls"] for row in audit) == 3
         assert sum(row["mcp_calls"] for row in audit) == 1
         assert all(private_reason not in str(dict(row)) for row in audit)
         assert all(private_text not in str(dict(row)) for row in audit)
@@ -1672,7 +1683,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         assert await repository.history(101, 20) == []
         assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
         mcp.call_tool.assert_awaited_once()
-        assert llm.decide.await_count == 2
+        assert llm.decide.await_count == 3
         llm.complete.assert_not_awaited()
     finally:
         await mcp.close()

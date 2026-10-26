@@ -359,6 +359,51 @@ class ClarifyDecision(StrictModel):
     reason: Reason
 
 
+class ClarifyReminderDecision(StrictModel):
+    action: Literal["clarify_reminder"]
+    question: AnswerText
+    reason: Reason
+
+
+class ConfirmReminderDecision(StrictModel):
+    action: Literal["use_confirmation"]
+    reason: Reason
+
+
+class CancelReminderDecision(StrictModel):
+    action: Literal["cancel_reminder"]
+    reason: Reason
+
+
+class UserQuote(StrictModel):
+    source: Literal["user"]
+    message_index: int = Field(
+        ge=0, le=20, description="0 — текущая реплика; остальные индексы даны в истории."
+    )
+    quote: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+
+
+class PendingCardReference(StrictModel):
+    source: Literal["pending_card"]
+
+
+ParameterSource = Annotated[UserQuote | PendingCardReference, Field(discriminator="source")]
+
+
+class ReminderEvidence(StrictModel):
+    request: UserQuote = Field(
+        description="Дословная просьба пользователя создать или изменить напоминание."
+    )
+    text: ParameterSource
+    date: ParameterSource
+    time: ParameterSource
+
+
+class ReminderPreparation(StrictModel):
+    arguments: ReminderArguments
+    evidence: ReminderEvidence
+
+
 class WeatherDecision(StrictModel):
     action: Literal["call_tool"]
     name: Literal["get_weather"]
@@ -373,19 +418,10 @@ class ScheduleDecision(StrictModel):
     reason: Reason
 
 
-class ReminderDecision(StrictModel):
+class ReminderDecision(ReminderPreparation):
     action: Literal["call_tool"]
     name: Literal["add_reminder"]
-    arguments: ReminderArguments
     reason: Reason
-
-
-class ReminderRoutingDecision(
-    RootModel[Annotated[ReminderDecision | ClarifyDecision, Field(discriminator="action")]]
-):
-    """Подготовка напоминания не допускает свободного сообщения об успехе."""
-
-    model_config = ConfigDict(strict=True, frozen=True, json_schema_extra={"type": "object"})
 
 
 class ResourceDecision(StrictModel):
@@ -402,7 +438,13 @@ ToolDecision = Annotated[
 class AgentDecision(
     RootModel[
         Annotated[
-            RespondDecision | ClarifyDecision | ToolDecision | ResourceDecision,
+            RespondDecision
+            | ClarifyDecision
+            | ClarifyReminderDecision
+            | ConfirmReminderDecision
+            | CancelReminderDecision
+            | ToolDecision
+            | ResourceDecision,
             Field(discriminator="action"),
         ]
     ]

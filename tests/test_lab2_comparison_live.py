@@ -285,6 +285,22 @@ async def test_changed_protocol_cannot_overwrite_existing_result(bot_settings, t
     assert output.read_bytes() == before and len(fake_http.payloads) == 2
 
 
+async def test_legacy_live_protocol_cannot_be_replayed(bot_settings, tmp_path, fake_http):
+    output = tmp_path / "old-live.json"
+    report = await run_live(bot_settings, source(), output, temperature=0)
+    assert report["protocol"]["version"] == 2
+    assert "app/reminder_intent.py" not in report["protocol"]["source_sha256"]
+    report["protocol"]["version"] = 1
+    checkpoint(output, report)
+    original = output.read_bytes()
+
+    with pytest.raises(ValueError, match="different protocol"):
+        await run_live(bot_settings, source(), output, temperature=0)
+
+    assert output.read_bytes() == original
+    assert len(fake_http.payloads) == 2
+
+
 async def test_cancellation_consumes_slot_and_never_replays(bot_settings, tmp_path, monkeypatch):
     output = tmp_path / "interrupted.json"
 

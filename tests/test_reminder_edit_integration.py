@@ -5,6 +5,7 @@ database, Telegram account, weather endpoint or real LLM is used.
 """
 
 import asyncio
+import json
 import os
 from dataclasses import replace
 from datetime import datetime, time, timedelta
@@ -16,11 +17,13 @@ from zoneinfo import ZoneInfo
 import pytest
 from test_integration import database as database
 
-from app.agent_repository import ConfirmationRepository, ReminderRepository
+from app.agent import AgentService
+from app.agent_repository import AgentRepository, ConfirmationRepository, ReminderRepository
 from app.confirmation_models import Authorization, ConfirmationError
 from app.confirmations import ConfirmationService
 from app.db import create_pool
 from app.dialog import DialogService
+from app.llm import RoutingCompletion
 from app.mcp.client import MCPClient
 from app.mcp.contracts import ReminderArguments
 from app.migration import migrate
@@ -70,13 +73,44 @@ async def test_short_time_edit_replaces_old_card_and_commits_once_through_real_m
         await migrate(pool)
         dialogs, confirmations, old = await seed_card(pool)
         llm = SimpleNamespace(
-            complete=AsyncMock(side_effect=AssertionError("Time edits require no LLM")),
-            decide=AsyncMock(side_effect=AssertionError("Time edits require no LLM")),
+            complete=AsyncMock(side_effect=AssertionError("No final model for a reminder edit")),
+            decide=AsyncMock(
+                return_value=RoutingCompletion(
+                    json.dumps(
+                        {
+                            "action": "call_tool",
+                            "name": "add_reminder",
+                            "arguments": {
+                                "text": old.arguments.text,
+                                "remind_at": old.arguments.remind_at.replace(hour=21).isoformat(),
+                            },
+                            "evidence": {
+                                "request": {
+                                    "source": "user",
+                                    "message_index": 0,
+                                    "quote": EDIT,
+                                },
+                                "text": {"source": "pending_card"},
+                                "date": {"source": "pending_card"},
+                                "time": {
+                                    "source": "user",
+                                    "message_index": 0,
+                                    "quote": "21:00",
+                                },
+                            },
+                            "reason": "Пользователь изменил время действующей карточки.",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    [],
+                )
+            ),
         )
         await mcp.start()
         assert mcp.available
         service = ConfirmationService(confirmations, mcp)
-        dialog = DialogService(dialogs, llm, settings, confirmations=service)
+        agent = AgentService(llm, mcp, AgentRepository(pool), settings)
+        dialog = DialogService(dialogs, llm, settings, confirmations=service, agent=agent)
 
         answer = await dialog.respond(101, 11, EDIT)
         edited = await dialog.confirmation_card(101, 11)
@@ -93,7 +127,7 @@ async def test_short_time_edit_replaces_old_card_and_commits_once_through_real_m
         assert old_state == "cancelled"
         assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
         llm.complete.assert_not_awaited()
-        llm.decide.assert_not_awaited()
+        llm.decide.assert_awaited_once()
         mcp.call_tool.assert_not_awaited()
 
         assert "сохранено" not in await dialog.confirm(101, str(old.action_id))
@@ -104,7 +138,7 @@ async def test_short_time_edit_replaces_old_card_and_commits_once_through_real_m
         mcp.call_tool.assert_awaited_once()
         mcp.read_resource.assert_not_awaited()
         llm.complete.assert_not_awaited()
-        llm.decide.assert_not_awaited()
+        llm.decide.assert_awaited_once()
         rows = await pool.fetch("SELECT action_id, text, remind_at FROM labbi_reminders")
         assert len(rows) == 1
         assert rows[0]["action_id"] == edited.action_id
@@ -137,7 +171,17 @@ async def test_stop_between_edit_snapshot_and_prepare_cannot_revive_card_across_
             paused.set()
             await resume.wait()
             source, user, epoch = captured["snapshot"]
-            return await service.prepare_time_edit(user, 11, EDIT, source, epoch)
+            return await confirmations.prepare(
+                user,
+                11,
+                EDIT,
+                ReminderArguments(
+                    text=source.arguments.text,
+                    remind_at=source.arguments.remind_at.replace(hour=21),
+                ),
+                timezone=source.timezone,
+                expected_epoch=epoch,
+            )
 
         task = asyncio.create_task(edit())
         try:
@@ -189,7 +233,17 @@ async def test_edit_revokes_already_issued_write_capability_before_replacement(d
         assert refused.root.status == "error"
         assert refused.root.error.code == "ACTION_CANCELLED"
         assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
-        edited = await service.prepare_time_edit(user, 11, EDIT, source, epoch)
+        edited = await confirmations.prepare(
+            user,
+            11,
+            EDIT,
+            ReminderArguments(
+                text=source.arguments.text,
+                remind_at=source.arguments.remind_at.replace(hour=21),
+            ),
+            timezone=source.timezone,
+            expected_epoch=epoch,
+        )
         assert edited.arguments.remind_at == old.arguments.remind_at.replace(hour=21)
         assert (await confirmations.current_card(101)).action_id == edited.action_id
         old_state = await pool.fetchval(

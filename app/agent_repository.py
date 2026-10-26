@@ -47,6 +47,33 @@ _DECISIONS = frozenset({"respond", "clarify", "call_tool", "read_resource"})
 _TARGETS = frozenset({"get_weather", "get_schedule", "add_reminder", "schedule://current-week"})
 _STATUSES = frozenset({"OK", "CLARIFY", "REJECTED", "FAILED", "CANCELLED", "OUTCOME_UNKNOWN"})
 _TIMEZONE = TypeAdapter(TimezoneName)
+SEMANTIC_REQUEST_WAIT = (
+    "Обрабатывается новый запрос. Дождись ответа и подтверди актуальную карточку."
+)
+
+
+async def _processing_after_action(connection, action, now: datetime) -> bool:
+    """Pause an active card while a newer text's semantics are undecided.
+
+    The caller already holds owner -> action locks. Both capability issuance
+    and the MCP writer use this check; an issued capability cannot bypass the
+    pause. Settings cap the agent deadline at 300 seconds, as does card TTL.
+    A crashed marker's confirmation pause never outlives its source card.
+    """
+    return (
+        await connection.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM labbi_agent_requests incoming "
+            "JOIN labbi_agent_requests original ON original.id=$2 AND original.user_id=$1 "
+            "WHERE incoming.user_id=$1 AND incoming.status='processing' "
+            "AND (incoming.created_at, incoming.telegram_message_id) > "
+            "(original.created_at, original.telegram_message_id) "
+            "AND incoming.created_at > $3::timestamptz - INTERVAL '300 seconds')",
+            action["user_id"],
+            action["request_id"],
+            now,
+        )
+        is True
+    )
 
 
 def _identifier(value: object) -> bool:
@@ -278,6 +305,58 @@ class ConfirmationRepository(AgentRepository):
 
     async def now(self) -> datetime:
         return await self.pool.fetchval("SELECT clock_timestamp()")
+
+    async def semantic_request_context(
+        self, user: "UserSettings", message_id: int
+    ) -> tuple[PreparedAction | None, int]:
+        """Register a semantic request and snapshot its card/epoch atomically.
+
+        No intent is guessed here. Registration only pauses confirmation while
+        the model chooses an action. The epoch is captured even without a card,
+        so /stop during generation cannot be followed by a new preparation.
+        """
+        if not _identifier(getattr(user, "user_id", None)) or not _identifier(message_id):
+            raise ConfirmationError("UNAUTHORIZED", "Подтверждение недоступно.")
+        async with self.pool.acquire() as connection, connection.transaction():
+            current = await connection.fetchrow(
+                "SELECT * FROM labbi_users WHERE user_id=$1 FOR UPDATE", user.user_id
+            )
+            if (
+                current is None
+                or current["revision"] != user.revision
+                or current["mode"] != "study"
+            ):
+                raise ConfirmationError(
+                    "ACTION_CANCELLED", "Диалог изменился. Отправь новый запрос."
+                )
+            claimed = await connection.fetchval(
+                "INSERT INTO labbi_agent_requests(user_id, telegram_message_id, telegram_chat_id) "
+                "VALUES ($1, $2, $1) ON CONFLICT (user_id, telegram_message_id) "
+                "DO NOTHING RETURNING id",
+                user.user_id,
+                message_id,
+            )
+            if claimed is None:
+                raise ConfirmationError("ACTION_CONFLICT", "Этот запрос уже обработан.")
+            epoch = current["confirmation_epoch"]
+            action = await connection.fetchrow(
+                "SELECT * FROM labbi_actions WHERE user_id=$1 "
+                "AND state IN ('pending', 'approved') "
+                "ORDER BY prepared_at DESC, id DESC LIMIT 1 FOR UPDATE",
+                user.user_id,
+            )
+            if action is None:
+                return None, epoch
+            now = await connection.fetchval("SELECT clock_timestamp()")
+            if await self._current(connection, current, action, now) is not None:
+                return None, epoch
+            try:
+                validate_reminder_time(
+                    self._arguments(action), now=now, timezone=current["timezone"]
+                )
+                return self._prepared(action, replayed=True), epoch
+            except (ValidationError, ReminderTimeError):
+                return None, epoch
 
     async def latest_event(self, user_id: int) -> SafeAgentEvent | None:
         if not _identifier(user_id):
@@ -561,16 +640,29 @@ class ConfirmationRepository(AgentRepository):
             return prepared
 
     async def revoke_for_edit(
-        self, user: "UserSettings", message_id: int
+        self,
+        user: "UserSettings",
+        message_id: int,
+        *,
+        expected_epoch: int | None = None,
     ) -> tuple[PreparedAction, int, int] | None:
-        """Capture and revoke an owner's active card before parsing/generation.
+        """Capture and revoke an owner's active card before applying an edit.
 
         Both callback and edit lock owner before action. A callback which has
         already committed cannot be undone; otherwise the old capability is
         revoked here. The returned revision/epoch fence subsequent preparation
         against /reset, /stop, mode/zone changes and competing edits.
+        An explicit epoch tolerates an unrelated answer changing revision,
+        but cannot revoke a newer card or a card invalidated by a command.
         """
-        if not _identifier(getattr(user, "user_id", None)) or not _identifier(message_id):
+        if (
+            not _identifier(getattr(user, "user_id", None))
+            or not _identifier(message_id)
+            or (
+                expected_epoch is not None
+                and (type(expected_epoch) is not int or not 0 <= expected_epoch <= 2**63 - 1)
+            )
+        ):
             raise ConfirmationError("UNAUTHORIZED", "Подтверждение недоступно.")
         async with self.pool.acquire() as connection, connection.transaction():
             current = await connection.fetchrow(
@@ -578,7 +670,11 @@ class ConfirmationRepository(AgentRepository):
             )
             if current is None:
                 return None
-            if current["revision"] != user.revision or current["mode"] != "study":
+            if current["mode"] != "study" or (
+                current["revision"] != user.revision
+                if expected_epoch is None
+                else current["confirmation_epoch"] != expected_epoch
+            ):
                 raise ConfirmationError(
                     "ACTION_CANCELLED", "Диалог изменился. Отправь новый запрос."
                 )
@@ -693,6 +789,8 @@ class ConfirmationRepository(AgentRepository):
                 inactive = await self._current(connection, user, action, now)
                 if inactive is not None:
                     return inactive
+                if await _processing_after_action(connection, action, now):
+                    return Outcome("error", "ACTION_CONFLICT", SEMANTIC_REQUEST_WAIT)
                 try:
                     arguments = self._arguments(action)
                     validate_reminder_time(arguments, now=now, timezone=user["timezone"])
@@ -737,6 +835,8 @@ class ConfirmationRepository(AgentRepository):
                 inactive = await self._current(connection, user, action, now)
                 if inactive is not None:
                     return inactive
+                if await _processing_after_action(connection, action, now):
+                    return Outcome("error", "ACTION_CONFLICT", SEMANTIC_REQUEST_WAIT)
                 await _confirmation_event(
                     connection,
                     action,
@@ -1011,6 +1111,10 @@ class ReminderRepository:
                 "TIMEZONE_REQUIRED" if user["timezone"] is None else "ACTION_CONFLICT",
                 "Задай часовой пояс и подготовь новое подтверждение.",
                 started,
+            )
+        if await _processing_after_action(connection, action, now):
+            return await self._reject(
+                connection, action, "ACTION_CONFLICT", SEMANTIC_REQUEST_WAIT, started
             )
         try:
             normalized = validate_reminder_time(arguments, now=now, timezone=user["timezone"])

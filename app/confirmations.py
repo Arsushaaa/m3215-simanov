@@ -16,8 +16,7 @@ from app.confirmation_models import (
     PreparedAction,
 )
 from app.mcp.client import MCPClient, MCPClientError
-from app.mcp.contracts import ReminderArguments, ReminderTimeError, TimezoneName
-from app.reminder_intent import BUTTON_REQUIRED, REMINDER_CLARIFY, edited_reminder_time
+from app.mcp.contracts import ReminderArguments, TimezoneName
 from app.time_display import format_date, format_datetime
 
 if TYPE_CHECKING:
@@ -52,26 +51,11 @@ class ConfirmationService:
     def __init__(self, repository: "ConfirmationRepository", mcp: MCPClient):
         self.repository, self.mcp = repository, mcp
 
-    async def button_reply(self, user_id: int, message_id: int) -> str | None:
-        """A textual yes to an active card never grants permission to write."""
-        if await self.repository.current_card(user_id) is None:
-            return None
-        if await self.repository.has_processed(user_id, message_id):
-            raise ConfirmationError(
-                "ACTION_CONFLICT", "Этот запрос уже обработан. Отправь новое сообщение."
-            )
-        await self.repository.record(
-            user_id,
-            message_id,
-            decision="clarify",
-            target="add_reminder",
-            status="CLARIFY",
-            reason="Для записи подготовленного напоминания требуется кнопка владельца.",
-            error_code="CONFIRMATION_REQUIRED",
-            llm_calls=0,
-            mcp_calls=0,
-        )
-        return BUTTON_REQUIRED
+    async def begin_semantic_request(
+        self, user: "UserSettings", message_id: int
+    ) -> tuple[PreparedAction | None, int]:
+        """Snapshot trusted pending parameters without interpreting user text."""
+        return await self.repository.semantic_request_context(user, message_id)
 
     async def prepare(
         self,
@@ -100,60 +84,21 @@ class ConfirmationService:
         )
 
     async def begin_edit(
-        self, user: "UserSettings", message_id: int
+        self,
+        user: "UserSettings",
+        message_id: int,
+        *,
+        expected_epoch: int | None = None,
     ) -> tuple[PreparedAction, "UserSettings", int] | None:
-        source = await self.repository.revoke_for_edit(user, message_id)
+        source = await self.repository.revoke_for_edit(
+            user,
+            message_id,
+            **({"expected_epoch": expected_epoch} if expected_epoch is not None else {}),
+        )
         if source is None:
             return None
         card, revision, epoch = source
         return card, replace(user, revision=revision), epoch
-
-    async def prepare_time_edit(
-        self,
-        user: "UserSettings",
-        message_id: int,
-        question: str,
-        source: PreparedAction,
-        epoch: int,
-    ) -> PreparedAction | str:
-        moment = edited_reminder_time(
-            question,
-            source.arguments.remind_at,
-            timezone=source.timezone,
-            now=(await self.repository.now()).replace(microsecond=0),
-        )
-        if moment is not None:
-            try:
-                arguments = ReminderArguments(text=source.arguments.text, remind_at=moment)
-                return await self.repository.prepare(
-                    user,
-                    message_id,
-                    question,
-                    arguments,
-                    timezone=source.timezone,
-                    expected_epoch=epoch,
-                )
-            except ValidationError:
-                moment = None
-            except ConfirmationError as error:
-                if error.code not in {"INVALID_ARGUMENTS", "AMBIGUOUS_TIME"}:
-                    raise
-                moment = None
-            except ReminderTimeError:
-                moment = None
-        answer = "Прежняя карточка отменена. " + REMINDER_CLARIFY
-        await self.repository.record(
-            user.user_id,
-            message_id,
-            decision="clarify",
-            target="add_reminder",
-            status="CLARIFY",
-            reason="Прежнее подтверждение отозвано; параметры изменения требуют уточнения.",
-            error_code="INVALID_ARGUMENTS",
-            llm_calls=0,
-            mcp_calls=0,
-        )
-        return answer
 
     @staticmethod
     def _outcome(outcome: Outcome) -> str:

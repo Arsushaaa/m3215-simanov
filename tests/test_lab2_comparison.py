@@ -23,10 +23,10 @@ def catalog():
     )
 
 
-def test_comparing_inputs_accepts_same_messages_and_skips_local_decisions():
+def test_comparing_inputs_accepts_same_messages_and_skips_nondispatched_failures():
     row = {"id": "weather_1", "calls": [{"input_sha256": "fixed-input"}]}
     reports = {
-        "first": {"attempts": [deepcopy(row), {"id": "local", "calls": []}]},
+        "first": {"attempts": [deepcopy(row), {"id": "not_dispatched", "calls": []}]},
         "second": {"attempts": [deepcopy(row)]},
     }
     assert comparison.compare_inputs(reports) == {"weather_1": "fixed-input"}
@@ -90,7 +90,7 @@ def public_evidence(monkeypatch, bot_settings):
             }
             for model in comparison.MODELS
         ],
-        "quota": {"remaining": 50, "limit": 50, "used": 0},
+        "quota": {"remaining": 54, "limit": 1000, "used": 946},
         "calls": [],
     }
 
@@ -131,12 +131,13 @@ def test_prepare_free_models_schema_and_fixed_budget_without_leaking_key(
     assert {cell["model"] for cell in saved["cells"]} == set(comparison.MODELS)
     assert len(saved["cells"]) == 4
     assert {cell["temperature"] for cell in saved["cells"]} == {0, 0.3}
-    assert saved["budget"] == {"grid": 44, "extra": 4, "live_read": 2, "maximum": 50}
+    assert saved["version"] == comparison.PROTOCOL_VERSION == 2
+    assert saved["budget"] == {"grid": 48, "extra": 4, "live_read": 2, "maximum": 54}
     assert saved["fixed"]["max_tokens"] == 2048
     assert saved["thresholds"] == {"actions": [10, 12], "arguments": [8, 9]}
     assert len(saved["extra_cases"]) == 4
     assert len(provider["models"]) == 2
-    assert provider["free_model_daily_requests"]["remaining"] == 50
+    assert provider["free_model_daily_requests"]["remaining"] == 54
     captured = capsys.readouterr()
     published = (
         "".join(path.read_text() for path in tmp_path.iterdir()) + captured.out + captured.err
@@ -170,12 +171,12 @@ def test_prepare_requires_identical_structured_output_capabilities(
     assert not (tmp_path / "manifest.json").exists()
 
 
-@pytest.mark.parametrize("remaining", [49, 0])
+@pytest.mark.parametrize("remaining", [53, 50, 49, 0])
 def test_prepare_rejects_insufficient_quota_for_full_campaign(
     bot_settings, tmp_path, public_evidence, remaining
 ):
     public_evidence["quota"]["remaining"] = remaining
-    with pytest.raises(ValueError, match="50 remaining"):
+    with pytest.raises(ValueError, match="54 remaining"):
         comparison.prepare(bot_settings, tmp_path)
     assert not (tmp_path / "manifest.json").exists()
 
@@ -191,6 +192,29 @@ def test_prepare_never_overwrites_preregistered_manifest(bot_settings, tmp_path,
     monkeypatch.setattr(comparison, "public_json", unexpected)
     with pytest.raises(ValueError, match="never overwrite"):
         comparison.prepare(bot_settings, tmp_path)
+    assert path.read_text() == original
+
+
+@pytest.mark.parametrize("version", [1, 2])
+async def test_archived_fifty_attempt_protocol_is_rejected_before_git_sdk_or_api(
+    bot_settings, tmp_path, monkeypatch, version
+):
+    manifest = {
+        "version": version,
+        "budget": {"grid": 44, "extra": 4, "live_read": 2, "maximum": 50},
+    }
+    path = tmp_path / "manifest.json"
+    original = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    path.write_text(original)
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("Historical protocols must fail before Git, SDK or HTTP.")
+
+    monkeypatch.setattr(comparison.subprocess, "run", unexpected)
+    monkeypatch.setattr(comparison, "MCPClient", unexpected)
+    monkeypatch.setattr(comparison, "PacedClient", unexpected)
+    with pytest.raises(ValueError, match="Legacy comparison protocol/budget"):
+        await comparison.campaign(bot_settings, tmp_path)
     assert path.read_text() == original
 
 
@@ -212,6 +236,11 @@ class ExtraAnswers:
                 "arguments": case["expected_arguments"],
                 "reason": "Fixture result.",
             }
+            if case["expected_action"] == "add_reminder":
+                quote = {"source": "user", "message_index": 0, "quote": case["query"]}
+                decision["evidence"] = {
+                    field: dict(quote) for field in ("request", "text", "date", "time")
+                }
         return RoutingCompletion(json.dumps(decision, ensure_ascii=False), [])
 
 
@@ -255,3 +284,17 @@ async def test_extra_trials_keep_wrong_raw_output_and_failure_in_fixed_denominat
     assert report["denominators"] == {"actions": 4, "arguments": 3}
     await comparison.extra_trials(bot_settings, client, catalog(), output, temperature=0.3)
     assert len(client.calls) == 4
+
+
+async def test_legacy_extra_result_is_preserved_instead_of_relabelled_or_replayed(
+    bot_settings, tmp_path
+):
+    client, output = ExtraAnswers(), tmp_path / "historical-extra.json"
+    original = '{"cases": [], "status": "completed", "actions": 4, "arguments": 3}\n'
+    output.write_text(original)
+
+    with pytest.raises(ValueError, match="different protocol"):
+        await comparison.extra_trials(bot_settings, client, catalog(), output, temperature=0.3)
+
+    assert output.read_text() == original
+    assert not client.calls

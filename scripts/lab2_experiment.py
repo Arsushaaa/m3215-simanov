@@ -7,6 +7,9 @@ Read decisions stop at the tool boundary; reminders pass normal proposal/time
 validation. There is no final generation, confirmation, weather HTTP or SQL.
 Use a new output and ``--case ID`` to repeat an explicitly selected failed case;
 the full original report is preserved. No attempt is automatically retried.
+The current semantic router uses one LLM decision for every case, including
+clarification. Version-1 checkpoints from the former local parser are historical
+and cannot be resumed with the current protocol.
 """
 
 import argparse
@@ -358,7 +361,7 @@ def protocol(settings, dataset, cases, catalog, *, temperature=TEMPERATURE, mode
     if settings.schedule_timezone != dataset["evaluation_context"]["timezone"]:
         raise ValueError("Schedule timezone must match the fixed evaluation timezone.")
     return {
-        "version": 1,
+        "version": 2,
         "dataset_sha256": DATASET_SHA256,
         "evaluation_context": dataset["evaluation_context"],
         "case_ids": [case["id"] for case in cases],
@@ -384,7 +387,9 @@ def protocol(settings, dataset, cases, catalog, *, temperature=TEMPERATURE, mode
                 "app/agent.py",
                 "app/llm.py",
                 "app/prompts.py",
-                "app/reminder_intent.py",
+                "app/agent_prompts.py",
+                "app/reminder_grounding.py",
+                "app/reminder_messages.py",
                 "app/mcp/contracts.py",
             )
         },
@@ -398,6 +403,7 @@ def protocol(settings, dataset, cases, catalog, *, temperature=TEMPERATURE, mode
             "telegram": "no API calls",
             "expected_answers_in_model_context": False,
             "automatic_retries": False,
+            "routing": "one semantic LLM decision per case; no local intent parsing",
         },
     }
 
@@ -495,7 +501,7 @@ async def run_trials(
         except Exception as error:
             row.update(status="failed", error={"type": type(error).__name__})
         row["audit"] = repository.audit
-        row["routing_source"] = "llm" if row["calls"] else "local_validation"
+        row["routing_source"] = "llm" if row["calls"] else "not_dispatched"
         row["score"] = score(case, row["actual"])
         row["finished_at"] = timestamp()
         document["metrics"] = metrics(dataset, rows, cases)
@@ -541,6 +547,7 @@ async def main(args):
             args.output,
             case_ids=args.case,
             max_api_calls=args.max_api_calls,
+            models=(settings.openrouter_model,),
         )
     finally:
         await client.close()

@@ -1,6 +1,8 @@
 """Preregistered real comparison: frozen inputs, two free models, temperature only.
 
 Prepare/commit the manifest before --run. No production .env is rewritten.
+The current protocol needs 54 attempts: all 12 cases now reach the LLM.
+Archived 50-attempt manifests belong to the former router and are never reused.
 """
 
 import argparse
@@ -43,6 +45,7 @@ CELLS = (
     {"id": "dots-t00", "model": MODELS[1], "temperature": 0.0},
     {"id": "xing-t00", "model": MODELS[0], "temperature": 0.0},
 )
+PROTOCOL_VERSION = 2
 EXTRA = (
     {
         "id": "new_weather",
@@ -72,6 +75,17 @@ EXTRA = (
         "expected_arguments": {},
     },
 )
+
+
+def campaign_budget():
+    grid = len(CELLS) * len(load_dataset()["cases"])
+    extra, live_read = len(EXTRA), 2
+    return {
+        "grid": grid,
+        "extra": extra,
+        "live_read": live_read,
+        "maximum": grid + extra + live_read,
+    }
 
 
 def sources():
@@ -106,10 +120,14 @@ def prepare(settings, folder):
         selected.append({"model": model, "endpoints": endpoints})
     account = public_json(settings.openrouter_base_url + "/key", key=settings.openrouter_api_key)
     quota = account.get("free_model_daily_requests", {})
-    if quota.get("remaining", 0) < 50:
-        raise ValueError("The full fixed campaign needs 50 remaining free requests.")
+    budget = campaign_budget()
+    if quota.get("remaining", 0) < budget["maximum"]:
+        raise ValueError(
+            f"The semantic-routing campaign needs {budget['maximum']} remaining free requests; "
+            "the archived 50-attempt protocol cannot be reused."
+        )
     document = {
-        "version": 1,
+        "version": PROTOCOL_VERSION,
         "registered_at": timestamp(),
         "source_sha256": sources(),
         "dataset_sha256": hashlib.sha256(
@@ -139,7 +157,7 @@ def prepare(settings, folder):
         "thresholds": {"actions": [10, 12], "arguments": [8, 9]},
         "api_base": settings.openrouter_base_url,
         "extra_acceptance": "4/4 actions and 3/3 arguments; not used for selection or tuning",
-        "budget": {"grid": 44, "extra": 4, "live_read": 2, "maximum": 50},
+        "budget": budget,
         "live_read": {
             "query": "Покажи расписание на 13 октября 2026 года.",
             "tool": "get_schedule",
@@ -151,6 +169,8 @@ def prepare(settings, folder):
             "Extra cases are fixed before calls and never used for tuning.",
             "API errors, truncation and invalid JSON remain failures; no retries.",
             "A failed campaign will be reported as failed, never relabelled.",
+            "Every case requires one semantic LLM decision, including clarification.",
+            "This new 54-attempt protocol is distinct from the archived 50-attempt experiment.",
         ],
     }
     checkpoint(
@@ -211,11 +231,38 @@ def compare_inputs(reports):
 
 
 async def extra_trials(settings, client, catalog, path, *, temperature):
-    if path.exists():
-        return json.loads(path.read_text())  # Interrupted attempts are not replayed.
-    report = {"cases": [], "started_at": timestamp(), "status": "in_progress"}
-    checkpoint(path, report)
     context = load_dataset()["evaluation_context"]
+    expected_protocol = {
+        "version": PROTOCOL_VERSION,
+        "source_sha256": sources(),
+        "extra_cases_sha256": digest(EXTRA),
+        "context": context,
+        "model": settings.openrouter_model,
+        "temperature": temperature,
+        "catalog_sha256": digest({"tools": catalog.tools, "resources": catalog.resources}),
+        "max_output_tokens": settings.llm_max_output_tokens,
+        "llm_timeout_seconds": settings.llm_timeout_seconds,
+        "agent_timeout_seconds": settings.agent_timeout_seconds,
+        "history_max_tokens": settings.history_max_tokens,
+        "history_max_messages": settings.history_max_messages,
+        "tool_mode": settings.llm_tool_mode,
+        "maximum_llm_calls": len(EXTRA),
+        "automatic_retries": False,
+    }
+    if path.exists():
+        report = json.loads(path.read_text())
+        if report.get("protocol") != expected_protocol:
+            raise ValueError(
+                "Existing extra result uses a different protocol; choose a new output."
+            )
+        return report  # Interrupted attempts are not replayed.
+    report = {
+        "protocol": expected_protocol,
+        "cases": [],
+        "started_at": timestamp(),
+        "status": "in_progress",
+    }
+    checkpoint(path, report)
     for case in EXTRA:
         row = {
             **case,
@@ -263,6 +310,12 @@ async def extra_trials(settings, client, catalog, path, *, temperature):
 
 
 async def campaign(settings, folder):
+    manifest = json.loads((folder / "manifest.json").read_text())
+    if manifest.get("version") != PROTOCOL_VERSION or manifest.get("budget") != campaign_budget():
+        raise ValueError(
+            "Legacy comparison protocol/budget cannot run with the current semantic router; "
+            "preserve the historical result and prepare a new preregistration."
+        )
     registered = await asyncio.to_thread(
         subprocess.run,
         ["git", "show", "HEAD:" + str((folder / "manifest.json").resolve().relative_to(ROOT))],
@@ -272,7 +325,6 @@ async def campaign(settings, folder):
     )
     if registered.returncode or registered.stdout != (folder / "manifest.json").read_bytes():
         raise ValueError("Commit the exact preregistration before real API calls.")
-    manifest = json.loads((folder / "manifest.json").read_text())
     if manifest["source_sha256"] != sources() or digest(manifest["extra_cases"]) != digest(EXTRA):
         raise ValueError("Frozen source/extra cases changed after preregistration.")
     if digest(manifest["cells"]) != digest(CELLS):

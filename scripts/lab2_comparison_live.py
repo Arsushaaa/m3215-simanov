@@ -170,7 +170,7 @@ def _protocol(settings, source, temperature):
     ):
         raise ValueError("Use a free model, structured routing, fixed timezone and temperature.")
     return {
-        "version": 1,
+        "version": 2,
         "query": QUERY,
         "now": NOW.isoformat(),
         "timezone": ZONE,
@@ -192,7 +192,9 @@ def _protocol(settings, source, temperature):
                 "app/agent.py",
                 "app/llm.py",
                 "app/prompts.py",
-                "app/reminder_intent.py",
+                "app/agent_prompts.py",
+                "app/reminder_grounding.py",
+                "app/reminder_messages.py",
                 "app/mcp/contracts.py",
             )
         },

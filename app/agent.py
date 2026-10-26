@@ -4,34 +4,33 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
+from app.agent_prompts import ROUTING_RULES
 from app.config import Settings
+from app.confirmation_models import ConfirmationError
 from app.llm import ModelError
 from app.mcp.client import MCPClientError
 from app.mcp.contracts import (
     AgentDecision,
+    CancelReminderDecision,
     ClarifyDecision,
+    ClarifyReminderDecision,
+    ConfirmReminderDecision,
     ReminderArguments,
     ReminderDecision,
-    ReminderRoutingDecision,
+    ReminderPreparation,
     ReminderTimeError,
     ResourceDecision,
     RespondDecision,
     validate_reminder_time,
 )
-from app.reminder_intent import (
-    DATE_REQUIRED,
-    REMINDER_CLARIFY,
-    TIME_REQUIRED,
-    is_confirmation_reply,
-    reminder_context,
-    requests_reminder_and_read,
-)
+from app.reminder_grounding import indexed_history, user_sources, validate_evidence
+from app.reminder_messages import BUTTON_REQUIRED, REMINDER_CLARIFY
 from app.time_display import format_datetime
 
 logger = logging.getLogger(__name__)
@@ -127,6 +126,17 @@ class AgentReply:
     text: str = field(repr=False)
     truncated: bool = False
     reminder: ReminderProposal | None = field(default=None, repr=False)
+    revision: int | None = None
+    confirmation_epoch: int | None = None
+
+
+@dataclass
+class RoutingContext:
+    service: object = field(repr=False)
+    pending: object = field(repr=False)
+    epoch: int
+    revision: int | None = None
+    revoked: bool = False
 
 
 @dataclass
@@ -164,7 +174,41 @@ class AgentService:
                 },
             }
             for value in self.mcp.tools.values()
+            if value["name"] != "add_reminder"
         ]
+        if "add_reminder" in self.mcp.tools:
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "prepare_reminder",
+                        "description": "Подготовить карточку с источниками; без записи.",
+                        "parameters": ReminderPreparation.model_json_schema(),
+                    },
+                }
+            )
+        for model, name, description in (
+            (ClarifyReminderDecision, "clarify_reminder", "Уточнить параметры напоминания/правки."),
+            (
+                ConfirmReminderDecision,
+                "use_confirmation",
+                "Направить к кнопке действующей карточки.",
+            ),
+            (CancelReminderDecision, "cancel_reminder", "Отозвать неподтверждённую карточку."),
+        ):
+            parameters = model.model_json_schema()
+            parameters["properties"].pop("action")
+            parameters["required"].remove("action")
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": description,
+                        "parameters": parameters,
+                    },
+                }
+            )
         if WEEK_URI in self.mcp.resources:
             tools.append(
                 {
@@ -182,7 +226,7 @@ class AgentService:
             )
         return tools
 
-    def _facts(self, now, timezone):
+    def _facts(self, now, timezone, context=None):
         local = now.astimezone(ZoneInfo(self.settings.schedule_timezone))
         return "\nДоверенные данные приложения: " + _json(
             {
@@ -194,16 +238,58 @@ class AgentService:
                     now.astimezone(ZoneInfo(timezone)).isoformat() if timezone else None
                 ),
                 "mcp_available": self.mcp.available,
+                "pending_card": (
+                    {
+                        "arguments": context.pending.arguments.model_dump(mode="json"),
+                        "timezone": context.pending.timezone,
+                        "expires_at": context.pending.expires_at.isoformat(),
+                    }
+                    if context is not None and context.pending is not None
+                    else None
+                ),
             }
         )
 
-    async def respond(self, user, message_id, text, *, prompt, history, continuing=False):
+    async def _revoke(self, context, user, message_id):
+        if context is None or context.pending is None or context.revoked:
+            return
+        updated = await context.service.begin_edit(user, message_id, expected_epoch=context.epoch)
+        if updated is not None:
+            _, revised_user, context.epoch = updated
+            context.revision = revised_user.revision
+        context.revoked = True
+
+    async def respond(
+        self,
+        user,
+        message_id,
+        text,
+        *,
+        prompt,
+        history,
+        continuing=False,
+        confirmation_context=None,
+    ):
         trace, started = _Trace(), time.monotonic()
         try:
             async with asyncio.timeout(self.settings.agent_timeout_seconds):
-                return await self._respond(
-                    user, message_id, text, prompt, history, continuing, trace
+                reply = await self._respond(
+                    user,
+                    message_id,
+                    text,
+                    prompt,
+                    history,
+                    continuing,
+                    trace,
+                    confirmation_context,
                 )
+                if confirmation_context is not None:
+                    reply = replace(
+                        reply,
+                        revision=confirmation_context.revision,
+                        confirmation_epoch=confirmation_context.epoch,
+                    )
+                return reply
         except asyncio.CancelledError:
             trace.status, trace.reason, trace.error_code = (
                 "CANCELLED",
@@ -219,6 +305,14 @@ class AgentService:
             trace.reason = "Ответ не прошёл проверку или сервис недоступен."
             raise
         finally:
+            if trace.status in {"FAILED", "CANCELLED"}:
+                try:
+                    async with asyncio.timeout(5):
+                        await self._revoke(confirmation_context, user, message_id)
+                except (Exception, asyncio.CancelledError) as error:
+                    logger.error(
+                        "Отзыв неразобранного действия недоступен: %s", type(error).__name__
+                    )
             try:
                 async with asyncio.timeout(5):
                     await self.repository.record(
@@ -237,12 +331,13 @@ class AgentService:
             except Exception as error:
                 logger.error("Аудит решения недоступен: %s", type(error).__name__)
 
-    async def _respond(self, user, message_id, text, prompt, history, continuing, trace):
-        if await self.repository.has_processed(user.user_id, message_id):
+    async def _respond(self, user, message_id, text, prompt, history, continuing, trace, context):
+        if context is None and await self.repository.has_processed(user.user_id, message_id):
             raise ModelError("Этот запрос уже обработан. Отправь новое сообщение.")
         try:
-            async with asyncio.timeout(5):
-                await self.repository.start_request(user.user_id, message_id)
+            if context is None:
+                async with asyncio.timeout(5):
+                    await self.repository.start_request(user.user_id, message_id)
         except Exception:
             trace.error_code = "AUDIT_UNAVAILABLE"
             raise ModelError(
@@ -255,92 +350,28 @@ class AgentService:
         # Относительное время модели имеет точность до секунд, без случайных микросекунд.
         now = now.replace(microsecond=0)
         timezone = await self.repository.timezone(user.user_id)
-        if requests_reminder_and_read(text):
-            trace.decision, trace.status, trace.reason = (
-                "clarify",
-                "CLARIFY",
-                "Запрошено несколько действий; нужен выбор одного.",
-            )
-            return AgentReply(CHOOSE_ONE)
-        reminder = reminder_context(text, history)
-        if reminder is not None:
-            if timezone is None:
-                return _reminder_clarification(
-                    trace,
-                    "Сначала задай свой часовой пояс: /timezone Europe/Moscow "
-                    "(пример для Москвы и Санкт-Петербурга). Напоминание ещё не сохранено.",
-                    code="TIMEZONE_REQUIRED",
-                )
-            if reminder.is_orphaned:
-                return _reminder_clarification(trace, REMINDER_CLARIFY)
-            if not reminder.has_time:
-                return _reminder_clarification(trace, TIME_REQUIRED)
-            if not reminder.has_date:
-                return _reminder_clarification(trace, DATE_REQUIRED)
-            if is_confirmation_reply(text):
-                return _reminder_clarification(
-                    trace,
-                    "Текстовое «да» не сохраняет напоминание. Для подтверждения нужна "
-                    "действующая кнопка под карточкой. Если карточки нет, повтори просьбу "
-                    "с датой и точным временем.",
-                    code="CONFIRMATION_REQUIRED",
-                )
-        facts = self._facts(now, timezone)
+        facts = self._facts(now, timezone, context)
         tools = self._tools()
-        if reminder is not None:
-            tools = [tool for tool in tools if tool["function"]["name"] == "add_reminder"]
-        rules = (
-            "\nВыбери ровно одно действие по цели текущего запроса. Правила выбора:\n"
-            "1. Объяснение, перевод и другие вопросы без внешних данных: respond с готовым "
-            "ответом. Расписание не помогает объяснять программирование или переводить текст.\n"
-            "2. Текущая погода, температура или совет о зонте в городе: call_tool, "
-            "name=get_weather, arguments={city: название города с указанной страной/регионом}. "
-            "Сохраняй указанное пользователем место; не добавляй страну или регион от себя. "
-            "На этом шаге инструмент ещё НЕ выполнялся. Нельзя писать температуру, "
-            "утверждать, что погода уже получена, или заменять вызов обычным ответом.\n"
-            "3. Занятия в конкретный день, в том числе сегодня, завтра или в день недели: "
-            "call_tool, name=get_schedule, arguments={date: вычисленная дата YYYY-MM-DD}.\n"
-            "4. Только явная просьба показать текущую неделю ЦЕЛИКОМ: read_resource, "
-            "uri=schedule://current-week. Для одного дня этот ресурс не выбирай.\n"
-            "5. Напоминание: call_tool/add_reminder подготавливает подтверждение; "
-            "при неизвестных обязательных параметрах выбирай clarify.\n"
-            "Доверенные schedule_now и reminder_now выше — достаточная база для вычислений. "
-            "Сегодня, завтра и ближайший день недели вычисляй из schedule_now; "
-            "«через N часов/минут» означает reminder_now плюс указанный интервал. "
-            "Если дата или момент однозначно вычисляются, сразу подставь результат "
-            "в аргументы; не проси пользователя вычислять дату или переводить время в ISO. "
-            "Погоду и занятия узнавай только через соответствующее действие; "
-            "не подставляй примеры или данные из памяти. "
-            "Если MCP недоступен, обычные вопросы доступны, а погоду и расписание не выдумывай. "
-            "Если действий несколько, попроси выбрать одно; не выполняй часть запроса. "
-            "Относительные даты занятий считай по schedule_now, "
-            "а напоминаний — по reminder_now в сохранённом поясе пользователя. "
-            "Напоминания только сохраняются, не рассылаются. add_reminder — предложение "
-            "подтверждения, не разрешение записи. Не обещай, что напоминание сохранено. "
-            "Не угадывай часовой пояс напоминания: используй только reminder_timezone; "
-            "если он null, попроси задать /timezone с IANA-именем. "
-            "Если время или текст неясны, задай уточнение."
-        )
-        if reminder is not None:
-            rules += (
-                "\nСейчас требуется только подготовить карточку напоминания: верни "
-                "call_tool/add_reminder с параметрами из пользовательских сообщений "
-                "или clarify, если событие неясно. Не заменяй действие обычным ответом. "
-                "Время из предыдущих ответов ассистента не является выбором пользователя. "
-                "Не придумывай время и не предлагай внешние календари вместо карточки."
-            )
         structured = self.settings.llm_tool_mode == "structured"
-        decision_type = ReminderRoutingDecision if reminder is not None else AgentDecision
-        schema = decision_type.model_json_schema() if structured else tools
-        routing_prompt = prompt + facts + rules
+        schema = AgentDecision.model_json_schema() if structured else tools
+        routing_prompt = prompt + facts + ROUTING_RULES
         if structured:
             routing_prompt += (
-                "\nВерни ровно один JSON-объект по схеме решения. reason — короткое "
-                "объяснение выбора без скрытых рассуждений. Доступные обнаруженные возможности: "
-                + _json({"tools": tools, "resources": list(self.mcp.resources)})
+                "\nВерни один JSON-объект по схеме. Обнаруженные возможности: "
+                + _json(
+                    {
+                        "tools": list(self.mcp.tools),
+                        "resources": list(self.mcp.resources),
+                    }
+                )
             )
         messages = fit_context(
-            routing_prompt, history, text, self.settings, schemas=schema, preserve_last=continuing
+            routing_prompt,
+            indexed_history(history),
+            text,
+            self.settings,
+            schemas=schema,
+            preserve_last=continuing,
         )
         trace.llm_calls += 1
         if structured:
@@ -358,8 +389,6 @@ class AgentService:
                 )
                 return AgentReply(CHOOSE_ONE)
             if not result.tool_calls:
-                if reminder is not None:
-                    return _reminder_clarification(trace, REMINDER_CLARIFY)
                 if not isinstance(result.text, str) or not result.text.strip():
                     raise ModelError(INVALID_DECISION)
                 trace.status, trace.reason = "OK", "Модель сформировала обычный ответ."
@@ -374,7 +403,25 @@ class AgentService:
                     parse_constant=_invalid_constant,
                 )
                 name = call["function"]["name"]
-                if name == WEEK_FUNCTION:
+                if name not in {tool["function"]["name"] for tool in tools}:
+                    raise ValueError("Undiscovered native function")
+                if name == "prepare_reminder":
+                    prepared = ReminderPreparation.model_validate(arguments)
+                    decision = ReminderDecision(
+                        action="call_tool",
+                        name="add_reminder",
+                        reason="Подготовка карточки.",
+                        arguments=prepared.arguments,
+                        evidence=prepared.evidence,
+                    )
+                elif name in {"clarify_reminder", "use_confirmation", "cancel_reminder"}:
+                    model = {
+                        "clarify_reminder": ClarifyReminderDecision,
+                        "use_confirmation": ConfirmReminderDecision,
+                        "cancel_reminder": CancelReminderDecision,
+                    }[name]
+                    decision = model.model_validate({"action": name, **arguments})
+                elif name == WEEK_FUNCTION:
                     if arguments != {}:
                         raise ValueError
                     decision = ResourceDecision(
@@ -391,11 +438,31 @@ class AgentService:
                     ).root
             except (ValueError, KeyError, TypeError, ValidationError, RecursionError):
                 raise ModelError(INVALID_DECISION) from None
+        if isinstance(
+            decision, (ReminderDecision, ClarifyReminderDecision, CancelReminderDecision)
+        ):
+            try:
+                await self._revoke(context, user, message_id)
+            except ConfirmationError as error:
+                raise ModelError(error.user_message) from None
+        if isinstance(decision, ConfirmReminderDecision):
+            trace.decision, trace.target, trace.status = "clarify", "add_reminder", "CLARIFY"
+            trace.reason = "Для записи нужна кнопка действующей карточки владельца."
+            current = (
+                await context.service.repository.current_card(user.user_id)
+                if context is not None
+                else None
+            )
+            return AgentReply(BUTTON_REQUIRED if current is not None else REMINDER_CLARIFY)
+        if isinstance(decision, CancelReminderDecision):
+            trace.decision, trace.target, trace.status = "clarify", "add_reminder", "CANCELLED"
+            trace.reason = "Неподтверждённое действие отозвано по просьбе пользователя."
+            return AgentReply("Подтверждение отменено. Новое напоминание не сохранено.")
+        if isinstance(decision, ClarifyReminderDecision):
+            return _reminder_clarification(
+                trace, decision.question + "\n\nНапоминание ещё не сохранено."
+            )
         trace.decision = decision.action
-        if reminder is not None and not isinstance(decision, ReminderDecision):
-            return _reminder_clarification(trace, REMINDER_CLARIFY)
-        if isinstance(decision, ReminderDecision) and reminder is None:
-            return _reminder_clarification(trace, REMINDER_CLARIFY)
         if isinstance(decision, (RespondDecision, ClarifyDecision)):
             trace.status = "OK" if isinstance(decision, RespondDecision) else "CLARIFY"
             trace.reason = (
@@ -438,20 +505,28 @@ class AgentService:
                     "(пример для Москвы и Санкт-Петербурга)."
                 )
             try:
-                # Модель может выразить тот же момент в UTC. Сначала сверяем его
-                # с пользовательским временем, затем даём валидатору параметры
-                # в сохранённой зоне; проверка DST и будущего времени сохраняется.
+                # A non-UTC local clock must be valid in the saved zone before
+                # conversion; astimezone alone would mask a DST gap as a later time.
+                if decision.arguments.remind_at.utcoffset().total_seconds() != 0:
+                    validate_reminder_time(decision.arguments, now=now, timezone=timezone)
                 candidate = decision.arguments.remind_at.astimezone(ZoneInfo(timezone))
-                if not reminder.matches(candidate, now=now, timezone=timezone):
-                    return _reminder_clarification(
-                        trace, REMINDER_CLARIFY, code="INVALID_ARGUMENTS"
-                    )
+                validate_evidence(
+                    decision.evidence,
+                    decision.arguments,
+                    user_sources(history, text),
+                    context.pending if context is not None else None,
+                    timezone,
+                )
                 normalized = validate_reminder_time(
                     ReminderArguments(text=decision.arguments.text, remind_at=candidate),
                     now=now,
                     timezone=timezone,
                 )
-            except ReminderTimeError as error:
+            except ValueError as error:
+                if not isinstance(error, ReminderTimeError):
+                    return _reminder_clarification(
+                        trace, REMINDER_CLARIFY, code="INVALID_ARGUMENTS"
+                    )
                 trace.error_code = error.code
                 return AgentReply(str(error))
             proposal = ReminderProposal(

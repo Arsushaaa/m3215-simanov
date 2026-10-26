@@ -269,6 +269,10 @@ def test_committed_receipt_remains_valid_after_reminder_time_has_passed():
             "action": "call_tool",
             "name": "add_reminder",
             "arguments": REMINDER,
+            "evidence": {
+                field: {"source": "user", "message_index": 0, "quote": "Напомни завтра"}
+                for field in ("request", "text", "date", "time")
+            },
             "reason": "Нужно подготовить подтверждение",
         },
         {

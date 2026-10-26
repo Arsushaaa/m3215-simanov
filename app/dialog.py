@@ -3,9 +3,11 @@
 import asyncio
 import json
 import re
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from weakref import WeakValueDictionary
 
+from app.agent import RoutingContext
 from app.config import Settings
 from app.confirmation_models import ConfirmationError
 from app.essay import ESSAY_TOPIC_QUESTION, needs_essay_topic
@@ -13,11 +15,6 @@ from app.llm import ModelError, OpenRouterClient
 from app.output_limits import check_output_size
 from app.prompts import MODE_NAMES, PROMPTS
 from app.quiz import INVALID_QUIZ, QuizState
-from app.reminder_intent import (
-    is_confirmation_reply,
-    is_reminder_edit,
-    is_reminder_request,
-)
 from app.repository import DialogRepository
 
 TRUNCATED_NOTICE = (
@@ -103,36 +100,6 @@ class DialogService:
             return cached
         user = await self.repository.user(user_id)
         history = await self.repository.history(user_id, self.settings.history_max_messages)
-        edit_epoch = None
-        if user.mode == "study" and self.confirmations is not None and is_confirmation_reply(text):
-            try:
-                answer = await self.confirmations.button_reply(user_id, message_id)
-            except ConfirmationError as error:
-                raise ModelError(error.user_message) from None
-            if answer is not None:
-                if not await self.repository.save_exchange(user, message_id, text, answer):
-                    raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
-                return answer
-        if user.mode == "study" and self.confirmations is not None and is_reminder_edit(text):
-            try:
-                editing = await self.confirmations.begin_edit(user, message_id)
-                if editing is not None:
-                    source, user, edit_epoch = editing
-                    if not is_reminder_request(text):
-                        edited = await self.confirmations.prepare_time_edit(
-                            user, message_id, text, source, edit_epoch
-                        )
-                        if isinstance(edited, str):
-                            if not await self.repository.save_exchange(
-                                user, message_id, text, edited
-                            ):
-                                raise ModelError(
-                                    "Диалог изменился во время ответа. Отправь вопрос ещё раз."
-                                )
-                            return edited
-                        return edited.card_text
-            except ConfirmationError as error:
-                raise ModelError(error.user_message) from None
         if user.mode == "study" and needs_essay_topic(text, history):
             if not await self.repository.save_exchange(
                 user, message_id, text, ESSAY_TOPIC_QUESTION
@@ -180,9 +147,26 @@ class DialogService:
             preserve_last=continuing,
             schema=schema,
         )
+        routing_context = None
         if user.mode == "study" and self.agent is not None:
+            if self.confirmations is not None:
+                try:
+                    pending, epoch = await self.confirmations.begin_semantic_request(
+                        user, message_id
+                    )
+                    routing_context = RoutingContext(self.confirmations, pending, epoch)
+                except ConfirmationError as error:
+                    raise ModelError(error.user_message) from None
             result = await self.agent.respond(
-                user, message_id, text, prompt=prompt, history=history, continuing=continuing
+                user,
+                message_id,
+                text,
+                prompt=prompt,
+                history=history,
+                continuing=continuing,
+                **(
+                    {"confirmation_context": routing_context} if routing_context is not None else {}
+                ),
             )
         elif quiz_state is not None:
             result = await self.llm.decide(messages, user.temperature, decision_schema=schema)
@@ -190,14 +174,19 @@ class DialogService:
                 raise ModelError(INVALID_QUIZ)
         else:
             result = await self.llm.complete(messages, user.temperature)
+        if isinstance(getattr(result, "revision", None), int):
+            user = replace(user, revision=result.revision)
         if getattr(result, "reminder", None) is not None and self.confirmations is not None:
+            epoch = getattr(result, "confirmation_epoch", None)
+            if epoch is None and routing_context is not None:
+                epoch = routing_context.epoch
             try:
                 card = await self.confirmations.prepare(
                     user,
                     message_id,
                     text,
                     result.reminder,
-                    **({"expected_epoch": edit_epoch} if edit_epoch is not None else {}),
+                    **({"expected_epoch": epoch} if epoch is not None else {}),
                 )
             except ConfirmationError as error:
                 raise ModelError(error.user_message) from None

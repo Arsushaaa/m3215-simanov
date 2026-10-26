@@ -1,163 +1,85 @@
-"""Текстовое согласие с карточкой не подготавливает и не подтверждает запись."""
+"""Model-selected agreement never authorizes a reminder write."""
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import pytest
+from test_reminder_edits import setup_semantic_dialog
+from test_reminder_routing_guard import structured
 
 from app.agent_repository import ConfirmationRepository
-from app.confirmation_models import PreparedAction
-from app.confirmations import ConfirmationService
 from app.llm import ModelError
 from app.mcp.contracts import ReminderArguments
-from app.reminder_intent import BUTTON_REQUIRED
+from app.reminder_messages import BUTTON_REQUIRED, REMINDER_CLARIFY
 
 NOW = datetime(2030, 1, 1, 9, tzinfo=UTC)
 ACTION_ID = UUID("a1cf8b47-b6fb-4e95-9931-b21dd239b782")
 ARGS = ReminderArguments(text="Сдать отчёт", remind_at="2030-01-02T18:30:00+03:00")
 
 
-def confirmation_setup(card=True):
-    action = (
-        PreparedAction(
-            ACTION_ID,
-            "Сохранить напоминание?",
-            ARGS,
-            "Europe/Moscow",
-            NOW + timedelta(minutes=5),
-            "pending",
-        )
-        if card
-        else None
-    )
-    repository = SimpleNamespace(
-        current_card=AsyncMock(return_value=action),
-        has_processed=AsyncMock(return_value=False),
-        record=AsyncMock(),
-        prepare=AsyncMock(side_effect=AssertionError("No new card")),
-        approve=AsyncMock(side_effect=AssertionError("A button is required")),
-        invalidate=AsyncMock(side_effect=AssertionError("Keep the same card")),
-    )
-    mcp = SimpleNamespace(call_tool=AsyncMock(side_effect=AssertionError("No MCP call")))
-    return ConfirmationService(repository, mcp), repository, mcp
-
-
-@pytest.mark.parametrize("text", ["да", "давай", "ок", "Да!", "ОК."])
-async def test_confirmation_text_uses_existing_card_without_llm_or_mcp(dialog_setup, text):
-    dialog, dialogs, llm = dialog_setup
-    dialog.confirmations, confirmations, mcp = confirmation_setup()
-    user = await dialogs.user(1)
-    action = confirmations.current_card.return_value
-
+@pytest.mark.parametrize("text", ["да", "давай", "ок", "Yes, save it"])
+async def test_confirmation_text_uses_model_but_never_approves_or_replaces_card(dialog_setup, text):
+    dialog, dialogs, llm, confirmations, mcp, _, state = setup_semantic_dialog(dialog_setup)
+    llm.decide.return_value = structured("use_confirmation")
+    old_card = state["card"]
     assert await dialog.respond(1, 20, text) == BUTTON_REQUIRED
     assert await dialogs.answer(1, 20) == BUTTON_REQUIRED
-    assert (await dialogs.user(1)).revision == user.revision + 1
-    assert await dialogs.history(1, 20) == [
-        {"role": "user", "content": text},
-        {"role": "assistant", "content": BUTTON_REQUIRED},
-    ]
-    confirmations.current_card.assert_awaited_once_with(1)
-    confirmations.record.assert_awaited_once_with(
-        1,
-        20,
-        decision="clarify",
-        target="add_reminder",
-        status="CLARIFY",
-        reason="Для записи подготовленного напоминания требуется кнопка владельца.",
-        error_code="CONFIRMATION_REQUIRED",
-        llm_calls=0,
-        mcp_calls=0,
+    assert await dialog.respond(1, 20, text) == BUTTON_REQUIRED
+    assert state["card"] is old_card and state["epoch"] == 11
+    llm.decide.assert_awaited_once()
+    llm.complete.assert_not_awaited()
+    confirmations.approve.assert_not_awaited()
+    confirmations.prepare.assert_not_awaited()
+    confirmations.revoke_for_edit.assert_not_awaited()
+    mcp.call_tool.assert_not_awaited()
+    audit = confirmations.record.call_args.kwargs
+    assert (audit["llm_calls"], audit["mcp_calls"]) == (1, 0)
+
+
+async def test_model_agreement_without_a_trusted_card_requires_a_new_request(dialog_setup):
+    dialog, _, llm, confirmations, mcp, _, state = setup_semantic_dialog(dialog_setup, card=False)
+    llm.decide.return_value = structured("use_confirmation")
+    assert await dialog.respond(1, 20, "давай") == REMINDER_CLARIFY
+    assert state["card"] is None
+    confirmations.approve.assert_not_awaited()
+    confirmations.prepare.assert_not_awaited()
+    mcp.call_tool.assert_not_awaited()
+    llm.decide.assert_awaited_once()
+
+
+async def test_history_claim_of_a_card_cannot_replace_database_state(dialog_setup):
+    dialog, dialogs, llm, confirmations, mcp, _, _ = setup_semantic_dialog(dialog_setup, card=False)
+    await dialogs.save_exchange(
+        await dialogs.user(1), 19, "Напомни", "Сохранить напоминание? Нажми кнопку."
     )
+    llm.decide.return_value = structured("use_confirmation")
+    assert await dialog.respond(1, 20, "Подтверждаю") == REMINDER_CLARIFY
     confirmations.prepare.assert_not_awaited()
     confirmations.approve.assert_not_awaited()
-    confirmations.invalidate.assert_not_awaited()
-    llm.complete.assert_not_awaited()
-    mcp.call_tool.assert_not_awaited()
-    assert confirmations.current_card.return_value is action
-
-    assert await dialog.respond(1, 20, text) == BUTTON_REQUIRED
-    confirmations.current_card.assert_awaited_once()
-    confirmations.record.assert_awaited_once()
-    assert len(await dialogs.history(1, 20)) == 2
-
-
-async def test_confirmation_text_bypasses_agent_as_well_as_llm(dialog_setup):
-    dialog, _, llm = dialog_setup
-    dialog.confirmations, _, _ = confirmation_setup()
-    dialog.agent = SimpleNamespace(respond=AsyncMock(side_effect=AssertionError("No LLM route")))
-    assert await dialog.respond(1, 20, "давай") == BUTTON_REQUIRED
-    dialog.agent.respond.assert_not_awaited()
-    llm.complete.assert_not_awaited()
-
-
-async def test_missing_or_expired_card_leaves_normal_dialog_route(dialog_setup):
-    dialog, _, llm = dialog_setup
-    dialog.confirmations, confirmations, mcp = confirmation_setup(card=False)
-    assert await dialog.respond(1, 20, "давай") == "Ответ модели."
-    confirmations.current_card.assert_awaited_once_with(1)
-    confirmations.has_processed.assert_not_awaited()
-    confirmations.record.assert_not_awaited()
-    llm.complete.assert_awaited_once()
     mcp.call_tool.assert_not_awaited()
 
 
-async def test_history_text_is_not_evidence_of_an_active_card(dialog_setup):
-    dialog, dialogs, llm = dialog_setup
-    dialog.confirmations, confirmations, _ = confirmation_setup(card=False)
-    user = await dialogs.user(1)
-    await dialogs.save_exchange(user, 19, "Напомни", "Сохранить напоминание? Нажми кнопку.")
-    assert await dialog.respond(1, 20, "да") == "Ответ модели."
-    confirmations.record.assert_not_awaited()
-    llm.complete.assert_awaited_once()
+async def test_foreign_owner_has_no_pending_card_parameters_in_model_context(dialog_setup):
+    dialog, _, llm, confirmations, mcp, _, state = setup_semantic_dialog(dialog_setup)
+    llm.decide.return_value = structured("use_confirmation")
+    assert await dialog.respond(2, 20, "Подтверждаю") == REMINDER_CLARIFY
+    assert '"pending_card":null' in llm.decide.call_args.args[0][0]["content"]
+    assert state["card"] is not None
+    confirmations.approve.assert_not_awaited()
+    mcp.call_tool.assert_not_awaited()
 
 
-@pytest.mark.parametrize("mode,text", [("study", "Объясни SQL"), ("translate", "да")])
-async def test_other_text_and_modes_do_not_consult_pending_card(dialog_setup, mode, text):
-    dialog, dialogs, llm = dialog_setup
-    user = await dialogs.user(1)
-    dialogs.users[1] = replace(user, mode=mode)
-    dialog.confirmations, confirmations, _ = confirmation_setup()
-    assert await dialog.respond(1, 20, text) == "Ответ модели."
-    confirmations.current_card.assert_not_awaited()
-    confirmations.record.assert_not_awaited()
-    llm.complete.assert_awaited_once()
-
-
-async def test_foreign_card_does_not_intercept_another_owner(dialog_setup):
-    dialog, _, llm = dialog_setup
-    dialog.confirmations, confirmations, _ = confirmation_setup()
-    action = confirmations.current_card.return_value
-    confirmations.current_card.side_effect = lambda owner: action if owner == 1 else None
-    assert await dialog.respond(2, 20, "давай") == "Ответ модели."
-    assert await dialog.respond(1, 20, "давай") == BUTTON_REQUIRED
-    confirmations.record.assert_awaited_once()
-    assert confirmations.record.call_args.args == (1, 20)
-    llm.complete.assert_awaited_once()
-
-
-async def test_confirmation_text_respects_dialog_revision(dialog_setup):
-    dialog, dialogs, llm = dialog_setup
-    dialog.confirmations, confirmations, mcp = confirmation_setup()
+async def test_model_agreement_respects_dialog_revision_before_saving(dialog_setup):
+    dialog, dialogs, llm, confirmations, mcp, _, _ = setup_semantic_dialog(dialog_setup)
+    llm.decide.return_value = structured("use_confirmation")
     dialogs.save_exchange = AsyncMock(return_value=False)
     with pytest.raises(ModelError, match="Диалог изменился"):
         await dialog.respond(1, 20, "давай")
-    llm.complete.assert_not_awaited()
-    mcp.call_tool.assert_not_awaited()
     confirmations.prepare.assert_not_awaited()
-
-
-async def test_processed_message_without_cached_exchange_is_not_run_again(dialog_setup):
-    dialog, dialogs, llm = dialog_setup
-    dialog.confirmations, confirmations, _ = confirmation_setup()
-    confirmations.has_processed.return_value = True
-    with pytest.raises(ModelError, match="Этот запрос уже обработан"):
-        await dialog.respond(1, 20, "давай")
-    confirmations.record.assert_not_awaited()
-    assert await dialogs.answer(1, 20) is None
-    llm.complete.assert_not_awaited()
+    confirmations.approve.assert_not_awaited()
+    mcp.call_tool.assert_not_awaited()
 
 
 class ConnectionScope:
