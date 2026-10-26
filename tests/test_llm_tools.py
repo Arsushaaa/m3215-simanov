@@ -105,7 +105,7 @@ async def test_native_decision_preserves_wire_call_and_discovered_schemas(client
     payload = request["json"]
     assert payload["tools"] == TOOLS
     assert payload["tool_choice"] == "auto"
-    assert payload["parallel_tool_calls"] is False
+    assert "parallel_tool_calls" not in payload
     assert payload["messages"] == MESSAGES
     assert payload["reasoning"] == {"enabled": False}
     assert payload["provider"] == {

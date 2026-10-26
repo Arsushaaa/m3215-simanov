@@ -161,7 +161,7 @@ async def test_all_six_cases_use_production_routing_and_preserve_only_safe_evide
         else:
             assert "response_format" not in payload
             assert payload["tool_choice"] == "auto"
-            assert payload["parallel_tool_calls"] is False
+            assert "parallel_tool_calls" not in payload
             assert "prepare_reminder" in {tool["function"]["name"] for tool in payload["tools"]}
         assert "expected_action" not in json.dumps(payload)
         assert "expected_arguments" not in json.dumps(payload)

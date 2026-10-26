@@ -187,3 +187,15 @@ Pydantic/MCP-валидация сохраняется. Новый опыт ис
 
 Последний полный офлайн-прогон: [1387 тестов, все 28 критериев](evaluation/semantic-routing-v2-checks.json).
 Native-измеритель дополнительно проверен отдельным целевым прогоном.
+
+
+Native NVIDIA отказала до генерации; остальные пять попыток не запускались:
+[результат](evaluation/semantic-routing-smoke-20261026-native/results.json).
+Публичный каталог в момент проверки показывает Nvidia status=-2, AtlasCloud
+status=0. У обоих заявлены tools/tool_choice, у dots поддержаны auto и none.
+Параметр parallel_tool_calls не заявлен; он удалён из native payload, чтобы
+require_parameters не исключал endpoint. Приложение по-прежнему отвергает
+несколько вызовов до исполнения любого MCP, без частичного выполнения.
+Основание: [правила require_parameters](https://openrouter.ai/docs/guides/routing/provider-selection).
+Новый отдельный [native dots протокол](evaluation/semantic-routing-smoke-20261026-native-dots/manifest.json)
+сохраняет исходные шесть случаев, 6/4 и один LLM на случай.

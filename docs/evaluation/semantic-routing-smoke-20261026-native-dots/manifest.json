@@ -1,0 +1,148 @@
+{
+  "registered_at": "2026-10-26T15:50:41.330756+00:00",
+  "protocol": {
+    "version": 2,
+    "plan_sha256": "597ff0485a86f69474dbd494e4f9f11d14aabae25f588528bd761c7329b1586b",
+    "model": "dots-studio/dots-3-note-preview:free",
+    "temperature": 0.2,
+    "tool_mode": "native",
+    "max_output_tokens": 2048,
+    "llm_timeout_seconds": 60,
+    "agent_timeout_seconds": 135,
+    "history_max_tokens": 6000,
+    "history_max_messages": 20,
+    "provider_max_price": {
+      "prompt": 0,
+      "completion": 0
+    },
+    "reasoning": {
+      "enabled": false
+    },
+    "api_base": "https://openrouter.ai/api/v1",
+    "source_sha256": {
+      "app/__init__.py": "0194b688b9cbfc9123e1933c008ae2bd730f79c0bd70d4d04fdaf8ea4253c976",
+      "app/__main__.py": "c2f9a2daa0f51d2e496ec63e78cc82ea00ad401dee54ed7118dc8ce329b66891",
+      "app/agent.py": "d6d14b0044c4617fc0604f8fc744237ac51a9d04b61f0440969663da5b6de402",
+      "app/agent_prompts.py": "ce06763fb29af4d8a7a075bd35214a00f2b972e2b2abc9341a4b5cc80176c449",
+      "app/agent_repository.py": "0b1a48d5c73e9b62fdf2f12f56c956bae3f7c322e9c42d36c4b395b0318b83ef",
+      "app/config.py": "32bee510ed04079134ad9d41ff205fd6b35a103fd5aeb26116e83f6258f3dff1",
+      "app/confirmation_models.py": "cbc8bc2faf2f310aff47d1a3ad124fc710c2177a4c169e3f7981ac9f602690e4",
+      "app/confirmations.py": "3c19d63ded594494e6e42d699d0362da13ed47561e7f46ba965a607b34c96340",
+      "app/db.py": "99004e91609d12d6a5aae7a4554224d99ea5812e87bd8168ada0bc32a0d6d2ff",
+      "app/decision_schema.py": "7e3dbe48e24d13553249a79f6fa3fd1053051abc5ca74f845c40e1d71f1e8b2a",
+      "app/dialog.py": "1c39efa0065ec51f1c655277bc1cd1fd3fb06bdbb97cf070604c3b8c2a7398c6",
+      "app/essay.py": "0504bb0299d5097e05d402553aa2db74f8873a60b1c8a579acce7e6e8e4fed13",
+      "app/formatting.py": "5c3e2eafd3c9babe0f5b415da58e3df192d79dcdacf7462308556faff0937982",
+      "app/handlers/__init__.py": "515f371a14c58f963b10a17acebe3a5fbbc427d8ece84f26f98a95e407050225",
+      "app/handlers/assistant.py": "b965fb20caf69fee7420025702a5514e1d26c6514c420666a6beab01da55b939",
+      "app/health.py": "68340a0b7b29dd396806ded59ac51976cfd914bc571c17fa08fcd24c5ae221f7",
+      "app/healthcheck.py": "6faebfba0b40567441b3cd28196b48e0322612badd0b2a27921972678dc57d15",
+      "app/llm.py": "73e9ab0c71a056191200ecc646842a70726676914520fca6cb9e6092a3c58a21",
+      "app/logging_setup.py": "fc49ef18a823f5c85a0d5dc07819c25aa0ade21e46d7e654374f02ea7780b2c5",
+      "app/mcp/__init__.py": "42a60c05d28604d8e74fde3fd613e1af0f940cf65b0976dc9597a32904f1ab87",
+      "app/mcp/client.py": "3b987fb0e5438c0d7b9db3d2cfa50818fb1db3a58c52522e179c04f86eed955c",
+      "app/mcp/contracts.py": "601db56c8245394ae36d3b12e5b27975ccdb364d7ad0504ee9d3d4c0be245cca",
+      "app/mcp/schedule.py": "249b3f43dda93829e118ecc2015bd7725639f864b9fd7f57a75882e40b3e6a14",
+      "app/mcp/server.py": "42ec56c01063f3cc0419a2bac4b4ca89a13b8566ec763e1efd53989be49ce1be",
+      "app/mcp/weather.py": "5939ba0f58d1ad11dddb939167671fdd2632a6dc1cb7bd4c1b81fc7e4e761791",
+      "app/migration.py": "1b2663fd1cc3c17ad2d5687cc1638bb7c46ce515eb8bb05e286b31344eb4d6a8",
+      "app/migrations/001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+      "app/migrations/002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+      "app/migrations/003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+      "app/migrations/004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+      "app/migrations/005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771",
+      "app/migrations/006_agent_state.sql": "70ff420027af200a9eba7c83f63ca46a17fb0e97c2ec5576972be5859f241212",
+      "app/output_limits.py": "1b80c4c6a2b50d45f7cc5012f26de5a2a348b1ba50137ab073d13f5dcb95438f",
+      "app/prompts.py": "c456f56d06bd39e973f0dafe7d3605f21729f0222440114c60ca60dd642ba68f",
+      "app/quiz.py": "9aa387f8155580698a1820301d14d794ae502f0d0f43e66bde228bf0e7be9586",
+      "app/reminder_grounding.py": "4262525b51dc38b9c3b5fb0344e8f193cf3117fa25d79ef2a939853be1a4838c",
+      "app/reminder_messages.py": "17a7471020e151fcc5a3bb616229509230943b0e117b88d5e9f2231b193dcea6",
+      "app/repository.py": "85b5eae2689838f2112fdc8d959a77d4b5712697ee433f5dcb63d1307966814b",
+      "app/telegram.py": "1c79d74965c6c81bae28b735e2c435d0a67aa75f9383d537f2835bd3feac0d75",
+      "app/time_display.py": "cdd2df591410e66bb90dbc4472700e1bbd62037b3041d25fc456894be8602cac",
+      "app/timezone_lookup.py": "e499b752e4139acca97a78618c0dde3a03e55e73c98981ee583b26c3d95ba4dc",
+      "app/timezone_ui.py": "c15bd451cd32db53b5ef7c666e08bd73eb313cdd2dfb6d33ba6db5e3a20fb265",
+      "scripts/semantic_routing_smoke.py": "653c1bd5d32fc2bc4bcfec51545914d6b19228ac5a2882411cd7ee566cc59cd0",
+      "scripts/lab2_experiment.py": "76153e6df6599cf1c61544542a20e0e80407fc7a6bac2fe92c909dda09b9fd0e",
+      "data/schedule.json": "25805ffbdf9e96f9351184bcc6353b5a32675f26ea0e8e22583e223b4a5b5a48",
+      "requirements.txt": "df2a84994a40a847769d97d633463bce6003a4d352a7cfc9b503dac41095f1f3",
+      "constraints.txt": "1976957c111bd1ceb4986ad95f6f5af4b9c6eb9088ff8dd8127051eaa7c36f48"
+    },
+    "catalog_sha256": "8894b18a509b1a2b89dd50ab9ecd912057db16f0ad443ba452de5723e0ac69dd"
+  },
+  "plan": {
+    "version": 2,
+    "now": "2026-10-26T10:00:00+03:00",
+    "timezone": "Europe/Moscow",
+    "temperature": 0.2,
+    "tool_mode": "explicit preregistered structured/native",
+    "cases": [
+      {
+        "id": "natural_reminder",
+        "query": "не забудь мне напомнить в 11:00 завтра приготовить пирог",
+        "expected_action": "add_reminder",
+        "expected_arguments": {
+          "text": "Приготовить пирог",
+          "remind_at": "2026-10-27T11:00:00+03:00"
+        }
+      },
+      {
+        "id": "negated_reminder",
+        "query": "Не напоминай мне про пирог. Просто объясни, как его приготовить.",
+        "expected_action": "respond",
+        "expected_arguments": {}
+      },
+      {
+        "id": "english_weather",
+        "query": "What's the weather in Kazan, Russia?",
+        "expected_action": "get_weather",
+        "expected_arguments": {
+          "city": "Казань, Россия"
+        }
+      },
+      {
+        "id": "unspecified_clock",
+        "query": "Не забудь завтра вечером напомнить про пирог.",
+        "expected_action": "clarify_reminder",
+        "expected_arguments": {}
+      },
+      {
+        "id": "reordered_reminder",
+        "query": "Завтра к одиннадцати хочу приготовить пирог — напомни об этом.",
+        "expected_action": "add_reminder",
+        "expected_arguments": {
+          "text": "Приготовить пирог",
+          "remind_at": "2026-10-27T11:00:00+03:00"
+        }
+      },
+      {
+        "id": "relative_card_edit",
+        "query": "Нет, лучше на два часа позже",
+        "pending_card": {
+          "text": "Приготовить пирог",
+          "remind_at": "2026-10-27T19:00:00+03:00"
+        },
+        "expected_action": "add_reminder",
+        "expected_arguments": {
+          "text": "Приготовить пирог",
+          "remind_at": "2026-10-27T21:00:00+03:00"
+        }
+      }
+    ],
+    "limits": {
+      "llm_per_case": 1,
+      "maximum_llm_calls": 6,
+      "executed_mcp_calls": 0,
+      "sql_writes": 0,
+      "telegram_calls": 0
+    },
+    "acceptance": "6/6 actions and all four exact/normalized argument sets; all six cases pass",
+    "normalization": "casefold, ё→е, collapsed whitespace, terminal .!?; aware datetime equal instant",
+    "automatic_retries": false
+  },
+  "quota": {
+    "limit": 50,
+    "used": 40,
+    "remaining": 10
+  }
+}

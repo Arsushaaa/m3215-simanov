@@ -96,7 +96,9 @@ class OpenRouterClient:
             raise ValueError("Нужно выбрать один режим: native tools или structured decision.")
         payload = self._payload(messages, temperature)
         if tools is not None:
-            payload.update(tools=tools, tool_choice="auto", parallel_tool_calls=False)
+            # Free endpoints can support tools without parallel_tool_calls.
+            # AgentService rejects multiple calls before any tool is executed.
+            payload.update(tools=tools, tool_choice="auto")
             payload["provider"]["require_parameters"] = True
         elif decision_schema is not None:
             payload["response_format"] = {
