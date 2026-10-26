@@ -1,9 +1,9 @@
 """Текущая погода из фиксированных Open-Meteo API, без выбора города по населению.
 
-После названия города через запятые допускаются точные названия страны/регионов
-из ответа геокодера либо ISO country_code. Регистр, диакритика и разделители
-нормализуются; неизвестные переводы/сокращения не угадываются. Для русских
-уточнений запрашиваются русские названия, для остальных — английские.
+Город и уточнения страны/региона принимаются на русском, геокодер всегда
+запрашивается с language=ru. Регистр, диакритика и разделители нормализуются;
+иностранные названия до MCP-вызова переводит модель. Отсутствующее имя страны
+восстанавливается по проверенному ISO-коду из локального русского CLDR.
 """
 
 import asyncio
@@ -17,6 +17,7 @@ from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 import aiohttp
+from babel import Locale
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from app.mcp.contracts import (
@@ -39,6 +40,7 @@ GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 MAX_HTTP_BYTES = 256 * 1024
 logger = logging.getLogger(__name__)
+_RUSSIAN_COUNTRIES = Locale.parse("ru").territories
 
 # https://open-meteo.com/en/docs#weather_variable_documentation
 WMO_CONDITIONS = {
@@ -99,7 +101,9 @@ class _Location(_ApiModel):
             p for p in (self.admin1, self.admin2, self.admin3, self.admin4) if p
         )
         return Place(
-            name=self.name, country=self.country or self.country_code, region=", ".join(regions)
+            name=self.name,
+            country=self.country or _RUSSIAN_COUNTRIES.get(self.country_code, self.country_code),
+            region=", ".join(regions),
         )
 
 
@@ -186,6 +190,7 @@ def _locations(value: dict, name: str, qualifiers: list[str]) -> list[_Location]
             _normalized(part)
             for part in (
                 location.country,
+                _RUSSIAN_COUNTRIES.get(location.country_code, ""),
                 location.country_code,
                 location.admin1,
                 location.admin2,
@@ -268,16 +273,16 @@ class WeatherService:
                 raise ValueError("Пустая часть места.")
         except (ValidationError, ValueError):
             return self._error(
-                "INVALID_ARGUMENTS", "Укажи город, при необходимости страну и регион."
+                "INVALID_ARGUMENTS",
+                "Укажи город на русском языке, при необходимости страну и регион на русском.",
             )
         phase = "geocoding"
         try:
             async with asyncio.timeout(self.timeout_seconds):
                 name, qualifiers = parts[0], parts[1:]
-                language = "ru" if re.search("[А-Яа-яЁё]", " ".join(qualifiers) or name) else "en"
                 data = await self._json(
                     GEOCODING_URL,
-                    {"name": name, "count": 100, "language": language, "format": "json"},
+                    {"name": name, "count": 100, "language": "ru", "format": "json"},
                 )
                 locations = _locations(data, name, qualifiers)
                 if not locations:

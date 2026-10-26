@@ -105,8 +105,30 @@ ErrorCode = Literal[
 ]
 
 
+RussianPlace = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=100,
+        pattern=(
+            r"^[А-Яа-яЁё][А-Яа-яЁё .'’\-‐‑‒–—]*"
+            r"(?:, *[А-Яа-яЁё][А-Яа-яЁё .'’\-‐‑‒–—]*)*$"
+        ),
+    ),
+]
+
+
 class WeatherArguments(StrictModel):
-    city: ShortText = Field(description="Название города; при уточнении также страна и регион.")
+    city: RussianPlace = Field(
+        description=(
+            "Город на русском языке. Если пользователь указал страну или регион, "
+            "добавь их через запятые тоже на русском. Переведи иностранные названия "
+            "до вызова; латиница и ISO-коды стран не принимаются. Не угадывай "
+            "неуказанные страну/регион: одноимённые места требуют уточнения."
+        ),
+        examples=["Москва", "Ростов-на-Дону, Россия", "Санкт-Петербург, Россия"],
+    )
 
 
 class ScheduleArguments(StrictModel):
