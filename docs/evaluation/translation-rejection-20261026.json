@@ -1,0 +1,75 @@
+{
+  "attempted_llm_calls": 2,
+  "automatic_retries_in_app": 0,
+  "telegram_messages_sent": 0,
+  "mcp_calls": 0,
+  "attempts": [
+    {
+      "started_at": "2026-10-26T09:33:04.494588+00:00",
+      "model": "dots-studio/dots-3-note-preview:free",
+      "attempted_llm_calls": 1,
+      "telegram_messages_sent": 0,
+      "mcp_calls": 0,
+      "status": "observed",
+      "http_status": 400,
+      "response_sha256": "3890fbc454836be1f964897a7afa97bf00024a3c64b571db4c30accdca9ddd1e",
+      "error_present": true,
+      "api_error_code": 400,
+      "metadata_fields": [
+        "raw",
+        "provider_name"
+      ],
+      "upstream_error_code": 400,
+      "message_signals": {
+        "moderation": false,
+        "content_policy": false,
+        "content filter": false,
+        "safety": false,
+        "security": false,
+        "injection": false,
+        "jailbreak": false,
+        "blocked": false,
+        "policy": false,
+        "invalid": false,
+        "sensitive": false,
+        "guardrail": false
+      },
+      "error_message_length": 23,
+      "finished_at": "2026-10-26T09:33:05.335567+00:00"
+    },
+    {
+      "started_at": "2026-10-26T09:34:17.700477+00:00",
+      "model": "dots-studio/dots-3-note-preview:free",
+      "attempted_llm_calls": 1,
+      "telegram_messages_sent": 0,
+      "mcp_calls": 0,
+      "status": "observed",
+      "http_status": 400,
+      "response_sha256": "11130d20623e22900d43fdb4ba4c99abafcff948be84b6399563354128859519",
+      "error_present": true,
+      "api_error_code": 400,
+      "metadata_fields": [
+        "raw",
+        "provider_name"
+      ],
+      "upstream_error_code": 400,
+      "message_signals": {
+        "moderation": false,
+        "content_policy": false,
+        "content filter": false,
+        "safety": false,
+        "security": false,
+        "injection": false,
+        "jailbreak": false,
+        "blocked": false,
+        "policy": false,
+        "invalid": false,
+        "sensitive": false,
+        "guardrail": false
+      },
+      "error_message_length": 23,
+      "finished_at": "2026-10-26T09:34:18.630881+00:00"
+    }
+  ],
+  "interpretation": "The upstream rejects this request with HTTP 400. A specific moderation/filter reason was not confirmed by typed metadata."
+}

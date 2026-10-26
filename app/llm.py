@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 256 * 1024
 MAX_TOOL_ARGUMENT_BYTES = 32 * 1024
 MAX_TOOL_CALLS = 16
+REQUEST_REJECTED_MESSAGE = "Провайдер модели отклонил этот запрос. Ответ не получен."
 
 
 @dataclass(frozen=True)
@@ -183,6 +184,9 @@ class OpenRouterClient:
                 allow_redirects=False,
             ) as response:
                 http_status = response.status
+                if response.status == 400:
+                    outcome = "rejected"
+                    raise ModelError(REQUEST_REJECTED_MESSAGE)
                 if response.status == 429:
                     raise ModelError("Лимит запросов к модели исчерпан. Попробуй позже.")
                 if response.status in {401, 402, 403}:
