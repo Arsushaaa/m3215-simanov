@@ -13,7 +13,11 @@ from app.llm import ModelError, OpenRouterClient
 from app.output_limits import check_output_size
 from app.prompts import MODE_NAMES, PROMPTS
 from app.quiz import INVALID_QUIZ, QuizState
-from app.reminder_intent import is_confirmation_reply
+from app.reminder_intent import (
+    is_confirmation_reply,
+    is_reminder_edit,
+    is_reminder_request,
+)
 from app.repository import DialogRepository
 
 TRUNCATED_NOTICE = (
@@ -99,6 +103,7 @@ class DialogService:
             return cached
         user = await self.repository.user(user_id)
         history = await self.repository.history(user_id, self.settings.history_max_messages)
+        edit_epoch = None
         if user.mode == "study" and self.confirmations is not None and is_confirmation_reply(text):
             try:
                 answer = await self.confirmations.button_reply(user_id, message_id)
@@ -108,6 +113,26 @@ class DialogService:
                 if not await self.repository.save_exchange(user, message_id, text, answer):
                     raise ModelError("Диалог изменился во время ответа. Отправь вопрос ещё раз.")
                 return answer
+        if user.mode == "study" and self.confirmations is not None and is_reminder_edit(text):
+            try:
+                editing = await self.confirmations.begin_edit(user, message_id)
+                if editing is not None:
+                    source, user, edit_epoch = editing
+                    if not is_reminder_request(text):
+                        edited = await self.confirmations.prepare_time_edit(
+                            user, message_id, text, source, edit_epoch
+                        )
+                        if isinstance(edited, str):
+                            if not await self.repository.save_exchange(
+                                user, message_id, text, edited
+                            ):
+                                raise ModelError(
+                                    "Диалог изменился во время ответа. Отправь вопрос ещё раз."
+                                )
+                            return edited
+                        return edited.card_text
+            except ConfirmationError as error:
+                raise ModelError(error.user_message) from None
         if user.mode == "study" and needs_essay_topic(text, history):
             if not await self.repository.save_exchange(
                 user, message_id, text, ESSAY_TOPIC_QUESTION
@@ -167,7 +192,13 @@ class DialogService:
             result = await self.llm.complete(messages, user.temperature)
         if getattr(result, "reminder", None) is not None and self.confirmations is not None:
             try:
-                card = await self.confirmations.prepare(user, message_id, text, result.reminder)
+                card = await self.confirmations.prepare(
+                    user,
+                    message_id,
+                    text,
+                    result.reminder,
+                    **({"expected_epoch": edit_epoch} if edit_epoch is not None else {}),
+                )
             except ConfirmationError as error:
                 raise ModelError(error.user_message) from None
             # prepare saves the action and exact user/card pair in one transaction.

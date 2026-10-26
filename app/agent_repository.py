@@ -423,6 +423,7 @@ class ConfirmationRepository(AgentRepository):
         arguments: ReminderArguments,
         *,
         timezone: str | None = None,
+        expected_epoch: int | None = None,
     ) -> PreparedAction:
         if (
             not _identifier(getattr(user, "user_id", None))
@@ -431,6 +432,10 @@ class ConfirmationRepository(AgentRepository):
             or not question.strip()
             or len(question) > 16000
             or not isinstance(arguments, ReminderArguments)
+            or (
+                expected_epoch is not None
+                and (type(expected_epoch) is not int or not 0 <= expected_epoch <= 2**63 - 1)
+            )
         ):
             raise ConfirmationError("INVALID_ARGUMENTS", "Параметры напоминания некорректны.")
         async with self.pool.acquire() as connection, connection.transaction():
@@ -464,6 +469,10 @@ class ConfirmationRepository(AgentRepository):
             if current["revision"] != user.revision or current["mode"] != "study":
                 raise ConfirmationError(
                     "ACTION_CANCELLED", "Диалог изменился. Отправь новый запрос."
+                )
+            if expected_epoch is not None and current["confirmation_epoch"] != expected_epoch:
+                raise ConfirmationError(
+                    "ACTION_CANCELLED", "Подтверждение отозвано. Отправь новый запрос."
                 )
             if current["timezone"] is None:
                 raise ConfirmationError(
@@ -550,6 +559,70 @@ class ConfirmationRepository(AgentRepository):
                 connection, action, "call_tool", "CLARIFY", "Подготовлена карточка подтверждения."
             )
             return prepared
+
+    async def revoke_for_edit(
+        self, user: "UserSettings", message_id: int
+    ) -> tuple[PreparedAction, int, int] | None:
+        """Capture and revoke an owner's active card before parsing/generation.
+
+        Both callback and edit lock owner before action. A callback which has
+        already committed cannot be undone; otherwise the old capability is
+        revoked here. The returned revision/epoch fence subsequent preparation
+        against /reset, /stop, mode/zone changes and competing edits.
+        """
+        if not _identifier(getattr(user, "user_id", None)) or not _identifier(message_id):
+            raise ConfirmationError("UNAUTHORIZED", "Подтверждение недоступно.")
+        async with self.pool.acquire() as connection, connection.transaction():
+            current = await connection.fetchrow(
+                "SELECT * FROM labbi_users WHERE user_id=$1 FOR UPDATE", user.user_id
+            )
+            if current is None:
+                return None
+            if current["revision"] != user.revision or current["mode"] != "study":
+                raise ConfirmationError(
+                    "ACTION_CANCELLED", "Диалог изменился. Отправь новый запрос."
+                )
+            action = await connection.fetchrow(
+                "SELECT * FROM labbi_actions WHERE user_id=$1 "
+                "AND state IN ('pending', 'approved') "
+                "ORDER BY prepared_at DESC, id DESC LIMIT 1 FOR UPDATE",
+                user.user_id,
+            )
+            if action is None:
+                return None
+            now = await connection.fetchval("SELECT clock_timestamp()")
+            if await self._current(connection, current, action, now) is not None:
+                return None
+            try:
+                validate_reminder_time(
+                    self._arguments(action), now=now, timezone=current["timezone"]
+                )
+                previous = self._prepared(action, replayed=True)
+            except (ValidationError, ReminderTimeError):
+                return None
+            if await connection.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM labbi_agent_requests "
+                "WHERE user_id=$1 AND telegram_message_id=$2 AND status <> 'processing')",
+                user.user_id,
+                message_id,
+            ):
+                raise ConfirmationError("ACTION_CONFLICT", "Этот запрос уже обработан.")
+            await revoke_actions(
+                connection, user.user_id, "Прежняя карточка отозвана перед изменением параметров."
+            )
+            updated = await connection.fetchrow(
+                "UPDATE labbi_users SET confirmation_epoch=confirmation_epoch+1, "
+                "revision=revision+1, updated_at=clock_timestamp() WHERE user_id=$1 "
+                "RETURNING revision, confirmation_epoch",
+                user.user_id,
+            )
+            await connection.execute(
+                "INSERT INTO labbi_agent_requests(user_id, telegram_message_id, telegram_chat_id) "
+                "VALUES ($1, $2, $1) ON CONFLICT (user_id, telegram_message_id) DO NOTHING",
+                user.user_id,
+                message_id,
+            )
+            return previous, updated["revision"], updated["confirmation_epoch"]
 
     async def lookup_card(self, user_id: int, message_id: int) -> PreparedAction | None:
         if not _identifier(user_id) or not _identifier(message_id):

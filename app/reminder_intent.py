@@ -64,6 +64,7 @@ _CLOCK = re.compile(
     r"(?:\s*([ap])\.?m\.?(?!\w))?",
     re.I,
 )
+_CLOCK_CANDIDATE = re.compile(r"(?<![\w:])\d{1,2}:\d{2}(?::\d{2})?(?!\d)")
 _HOUR = re.compile(
     r"(?<![\w:])(?:(?:[вк]|at)\s*|(?=\d{1,2}\s*[ap]\.?m))"
     r"(\d{1,2})(?![\d:.])(?:\s*час(?:а|ов)?)?(?:\s*([ap])\.?m\.?)?(?!\w)",
@@ -135,7 +136,8 @@ _FOLLOWUP_WORDS = (
     set(
         "сегодня завтра послезавтра утром днём днем вечером ночью после обеда занятий "
         "в на к через час часа часов минуту минуты минут секунду секунды секунд день дня дней "
-        "лучше давай тогда нет не а пусть будет пожалуйста восемнадцать девятнадцать "
+        "лучше давай тогда да но только нет не а или либо пусть будет пожалуйста "
+        "восемнадцать девятнадцать "
         "двадцать тридцать полчаса понедельник вторник среду четверг пятницу субботу "
         "воскресенье today tomorrow the day after morning afternoon evening night "
         "at in on am pm a m p hour hours minute minutes second seconds days "
@@ -153,7 +155,83 @@ def _clean(text: str) -> str:
 
 
 def is_confirmation_reply(text: str) -> bool:
-    return bool(re.fullmatch(r"\s*(?:да|давай|ага|ок|окей|okay|ok|yes)[\s.!]*", text, re.I))
+    if re.fullmatch(r"\s*(?:да|давай|ага|ок|окей|okay|ok|yes)[\s.!]*", text, re.I):
+        return True
+    cleaned = _clean(text)
+    # Compound pressure to bypass the button is still textual agreement, not
+    # authorization. A date/time correction must instead replace the card.
+    if len(cleaned) > 500 or any(
+        pattern.search(cleaned)
+        for pattern in (_ISO, _REL_DATE, _ISO_DATE, _MONTH_DATE, _DURATION, _CLOCK_CANDIDATE, _HOUR)
+    ):
+        return False
+    return bool(
+        re.match(
+            r"^(?:да|ага|ок|окей|okay|ok|yes|подтверждаю|согласен|согласна|"
+            r"я\s+(?:владелец|подтверждаю|согласен|согласна)|вызывай\s+add_reminder)\b",
+            cleaned,
+        )
+        and re.search(
+            r"\b(?:подтвержд\w*|соглас\w*|сохран\w*|запис\w*|владелец|кнопк\w*|"
+            r"add_reminder|confirm\w*|save|button\w*|owner)\b",
+            cleaned,
+        )
+    )
+
+
+def is_reminder_edit(text: str) -> bool:
+    """A new request or temporal correction may invalidate an existing card.
+
+    This only identifies intent. An active, owner-bound card must still come
+    from PostgreSQL; arbitrary assistant history never supplies edit parameters.
+    """
+    if is_confirmation_reply(text):
+        return False
+    if _request(text):
+        return True
+    cleaned = _clean(text)
+    temporal = any(
+        pattern.search(cleaned)
+        for pattern in (
+            _ISO,
+            _REL_DATE,
+            _ISO_DATE,
+            _MONTH_DATE,
+            _DURATION,
+            _CLOCK_CANDIDATE,
+            _HOUR,
+            _WEEKDAY,
+        )
+    ) or re.search(
+        r"\b(?:утром|днём|днем|вечером|ночью|morning|afternoon|evening|night)\b", cleaned
+    )
+    if _followup(text) and temporal:
+        return True
+    if (
+        temporal
+        and len(cleaned) <= 500
+        and not _PROGRAMMING.search(cleaned)
+        and re.match(r"^(?:нет[,\s]+давай\s+лучше|да[,\s]+но|лучше|вместо|instead)\b", cleaned)
+    ):
+        return True
+    return bool(
+        len(cleaned) <= 500
+        and not _PROGRAMMING.search(cleaned)
+        and re.search(r"\b(?:измени|поменяй|перенеси|перенести|change|move|reschedule)\b", cleaned)
+        and re.search(
+            r"\b(?:напоминани\w*|время|дату|текст|reminder|time|date|text)\b|\d{1,2}:\d{2}",
+            cleaned,
+        )
+    )
+
+
+def is_temporal_reminder_edit(text: str) -> bool:
+    """Only a short temporal reply can reuse the trusted card's existing task."""
+    return not is_confirmation_reply(text) and _followup(text) and is_reminder_edit(text)
+
+
+def is_reminder_request(text: str) -> bool:
+    return _request(text)
 
 
 def _followup(text: str) -> bool:
@@ -421,3 +499,53 @@ def reminder_context(text: str, history: list[dict[str, str]]) -> ReminderContex
             break
         texts.append(previous)
     return ReminderContext(text, is_orphaned=True) if last_assistant is not None else None
+
+
+def edited_reminder_time(
+    text: str, previous: datetime, *, timezone: str, now: datetime
+) -> datetime | None:
+    """Apply only explicit temporal evidence to a trusted, active DB card.
+
+    Unknown/contradictory clocks do not retain the previous clock silently.
+    The caller still validates DST, future time, epoch and owner transactionally.
+    """
+    if not is_temporal_reminder_edit(text):
+        return None
+    evidence = _evidence([text])
+    try:
+        if any(value.tzinfo is None or value.utcoffset() is None for value in (previous, now)):
+            return None
+        zone = ZoneInfo(timezone)
+        local = previous.astimezone(zone)
+        if evidence._instant is not None:
+            return evidence._instant.astimezone(zone)
+        if evidence._duration is not None:
+            return (now.astimezone(UTC) + evidence._duration).astimezone(zone)
+        cleaned = _clean(text)
+        clock_requested = bool(
+            _CLOCK_CANDIDATE.search(cleaned)
+            or _HOUR.search(cleaned)
+            or re.search(
+                r"\b(?:утром|днём|днем|вечером|ночью|morning|afternoon|evening|night)\b", cleaned
+            )
+        )
+        date_requested = any(
+            pattern.search(cleaned) for pattern in (_REL_DATE, _ISO_DATE, _MONTH_DATE, _WEEKDAY)
+        )
+        if (clock_requested and evidence._clock is None) or (
+            date_requested and evidence._date is None
+        ):
+            return None
+        if not clock_requested and not date_requested:
+            return None
+        day = local.date()
+        if isinstance(evidence._date, int):
+            day = now.astimezone(zone).date() + timedelta(days=evidence._date)
+        elif isinstance(evidence._date, tuple):
+            day = date(now.astimezone(zone).year, *evidence._date)
+        elif evidence._date is not None:
+            day = evidence._date
+        clock = evidence._clock if clock_requested else local.time()
+        return datetime.combine(day, clock, zone)
+    except (ValueError, OverflowError, ZoneInfoNotFoundError):
+        return None

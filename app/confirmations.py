@@ -1,6 +1,7 @@
 """Подтверждения и команды настроек: детерминированные ответы без вызова модели."""
 
 import asyncio
+from dataclasses import replace
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -15,8 +16,8 @@ from app.confirmation_models import (
     PreparedAction,
 )
 from app.mcp.client import MCPClient, MCPClientError
-from app.mcp.contracts import ReminderArguments, TimezoneName
-from app.reminder_intent import BUTTON_REQUIRED
+from app.mcp.contracts import ReminderArguments, ReminderTimeError, TimezoneName
+from app.reminder_intent import BUTTON_REQUIRED, REMINDER_CLARIFY, edited_reminder_time
 from app.time_display import format_date, format_datetime
 
 if TYPE_CHECKING:
@@ -78,6 +79,8 @@ class ConfirmationService:
         message_id: int,
         question: str,
         proposal: "ReminderProposal",
+        *,
+        expected_epoch: int | None = None,
     ) -> PreparedAction:
         try:
             arguments = ReminderArguments.model_validate(proposal.arguments.model_dump(mode="json"))
@@ -88,8 +91,69 @@ class ConfirmationService:
             ) from None
         # Репозиторий повторно проверяет параметры и DB-clock под блокировкой пользователя.
         return await self.repository.prepare(
-            user, message_id, question, arguments, timezone=timezone
+            user,
+            message_id,
+            question,
+            arguments,
+            timezone=timezone,
+            **({"expected_epoch": expected_epoch} if expected_epoch is not None else {}),
         )
+
+    async def begin_edit(
+        self, user: "UserSettings", message_id: int
+    ) -> tuple[PreparedAction, "UserSettings", int] | None:
+        source = await self.repository.revoke_for_edit(user, message_id)
+        if source is None:
+            return None
+        card, revision, epoch = source
+        return card, replace(user, revision=revision), epoch
+
+    async def prepare_time_edit(
+        self,
+        user: "UserSettings",
+        message_id: int,
+        question: str,
+        source: PreparedAction,
+        epoch: int,
+    ) -> PreparedAction | str:
+        moment = edited_reminder_time(
+            question,
+            source.arguments.remind_at,
+            timezone=source.timezone,
+            now=(await self.repository.now()).replace(microsecond=0),
+        )
+        if moment is not None:
+            try:
+                arguments = ReminderArguments(text=source.arguments.text, remind_at=moment)
+                return await self.repository.prepare(
+                    user,
+                    message_id,
+                    question,
+                    arguments,
+                    timezone=source.timezone,
+                    expected_epoch=epoch,
+                )
+            except ValidationError:
+                moment = None
+            except ConfirmationError as error:
+                if error.code not in {"INVALID_ARGUMENTS", "AMBIGUOUS_TIME"}:
+                    raise
+                moment = None
+            except ReminderTimeError:
+                moment = None
+        answer = "Прежняя карточка отменена. " + REMINDER_CLARIFY
+        await self.repository.record(
+            user.user_id,
+            message_id,
+            decision="clarify",
+            target="add_reminder",
+            status="CLARIFY",
+            reason="Прежнее подтверждение отозвано; параметры изменения требуют уточнения.",
+            error_code="INVALID_ARGUMENTS",
+            llm_calls=0,
+            mcp_calls=0,
+        )
+        return answer
 
     @staticmethod
     def _outcome(outcome: Outcome) -> str:
