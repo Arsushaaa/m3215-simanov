@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 
 import pytest
@@ -92,3 +93,39 @@ def test_each_tool_decision_is_valid_in_provider_and_canonical_schema(name, argu
     Draft202012Validator(canonical).validate(decision)
     Draft202012Validator(model_schema(canonical)).validate(decision)
     assert AgentDecision.model_validate(decision).root.name == name
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_inline_native_reminder_schema_requires_objects_without_losing_validation(pending):
+    canonical = ReminderPreparation.model_json_schema()
+    original = deepcopy(canonical)
+    provider = model_schema(canonical, pending=pending, inline_refs=True)
+    assert canonical == original
+    assert "$defs" in canonical
+    nodes = [provider]
+    while nodes:
+        node = nodes.pop()
+        if isinstance(node, dict):
+            assert "$ref" not in node and "$defs" not in node
+            nodes.extend(node.values())
+        elif isinstance(node, list):
+            nodes.extend(node)
+    assert provider["properties"]["arguments"]["type"] == "object"
+    assert provider["properties"]["evidence"]["type"] == "object"
+
+    source = {"source": "user", "message_index": 0, "quote": "Напомни завтра в 11:00"}
+    proposal = {
+        "arguments": {"text": "Пирог", "remind_at": "2030-01-02T11:00:00+03:00"},
+        "evidence": {key: dict(source) for key in ("request", "text", "date", "time")},
+    }
+    if pending:
+        proposal["evidence"]["text"] = {"source": "pending_card"}
+    Draft202012Validator(provider).validate(proposal)
+    Draft202012Validator(canonical).validate(proposal)
+    ReminderPreparation.model_validate(proposal)
+    for name in ("arguments", "evidence"):
+        serialized = {**proposal, name: json.dumps(proposal[name], ensure_ascii=False)}
+        with pytest.raises(ValidationError):
+            Draft202012Validator(provider).validate(serialized)
+        with pytest.raises(ModelValidationError):
+            ReminderPreparation.model_validate(serialized)

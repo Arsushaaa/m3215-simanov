@@ -8,8 +8,8 @@
 
 Для новой сдачи готовится кандидат `lab2-final-v2`; отклонённый `lab2-final`
 остаётся историческим. [Обновление маршрутизации](semantic-routing.md) удаляет
-локальный парсер напоминаний. Последний [полный офлайн-прогон](evaluation/semantic-routing-submit-final-checks.json)
-содержит 1383 успешных теста и все 28 критериев; он не заменяет реальные
+локальный парсер напоминаний. Последний [полный офлайн-прогон](evaluation/lab2-final-v2-checks.json)
+содержит 1388 успешных тестов и все 28 критериев; он не заменяет реальные
 проверки новой модели и схемы, результаты которых фиксируются отдельно.
 
 ## 1. Подготовить запуск
@@ -289,7 +289,7 @@ git show --no-patch lab2-final
 ```
 
 Актуальная сдаваемая версия — `lab2-final`; `lab1` и исходный `lab2` не перемещаются.
-Последний полный офлайн-прогон новой версии — [1383 теста и 28 критериев](evaluation/semantic-routing-submit-final-checks.json).
+Последний полный офлайн-прогон новой версии — [1388 тестов и 28 критериев](evaluation/lab2-final-v2-checks.json).
 Приёмка [1370 тестов](evaluation/lab2-provider-rejection-checks.json) относится к прежнему `lab2-final`.
 Исходная приёмка `lab2` — [lab2-final-checks.json](evaluation/lab2-final-checks.json),
 объяснение процедуры — [lab2-reliability.md](lab2-reliability.md).

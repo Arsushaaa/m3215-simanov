@@ -70,7 +70,7 @@ BotFather можно обновить из [готового списка](docs/
 - [Историческое сравнение двух бесплатных моделей с неизменным промптом](docs/evaluation/lab2-comparison.md): dots T=0,3 — **12/12 действий и 8/9 аргументов**; все 50 попыток сохранены.
 - [История разработки промпта — три прогона](docs/evaluation/lab2-experiment.md): итог **12/12 действий и 9/9 аргументов**, 33 реальных бесплатных LLM-вызова; это предшествующая разработка на известном наборе, а не независимое сравнение моделей.
 - [Сценарий защиты](docs/lab2-defense.md), [карта требований](docs/lab2-acceptance.md).
-- [Последний полный офлайн-прогон семантической версии](docs/evaluation/semantic-routing-submit-final-checks.json): **1383 теста**, без ошибок и пропусков, все 28 критериев, включая PostgreSQL и MCP. После него проекция JSON-схемы проверена отдельно; реальные результаты приведены в [описании обновления](docs/semantic-routing.md).
+- [Последний полный офлайн-прогон семантической версии](docs/evaluation/lab2-final-v2-checks.json): **1388 тестов**, без ошибок и пропусков, все 28 критериев, включая PostgreSQL и MCP. Реальные результаты приведены в [описании обновления](docs/semantic-routing.md).
 - [Историческая приёмка `lab2-final`](docs/evaluation/lab2-provider-rejection-checks.json): **1370 тестов**, все 28 критериев.
 - [Исправления по ручным граничным сценариям](docs/adversarial-fixes.md), [диагностика отказа провайдера](docs/provider-rejections.md).
 - Исторические проверки исходной `lab2`: [1107 тестов](docs/evaluation/lab2-final-checks.json), [независимый MCP](docs/evaluation/lab2-stage7-probe.json), [контейнер](docs/evaluation/lab2-final-container.json), [сверка материалов](docs/evaluation/lab2-artifacts-checks.json).

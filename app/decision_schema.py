@@ -3,7 +3,7 @@
 from copy import deepcopy
 
 
-def model_schema(schema, *, pending=False):
+def model_schema(schema, *, pending=False, inline_refs=False):
     result = deepcopy(schema)
     definitions = result.get("$defs", {})
     if not pending and "ReminderEvidence" in definitions:
@@ -43,4 +43,27 @@ def model_schema(schema, *, pending=False):
             "explicitly supplied country/region before returning this argument. "
             "Do not copy Latin names or invent a country."
         )
-    return result
+    if not inline_refs:
+        return result
+
+    def expand(value, ancestors=()):
+        if isinstance(value, list):
+            return [expand(child, ancestors) for child in value]
+        if not isinstance(value, dict):
+            return value
+        siblings = {k: v for k, v in value.items() if k not in {"$defs", "$ref"}}
+        if "$ref" in value:
+            reference = value["$ref"]
+            prefix = "#/$defs/"
+            if (
+                not isinstance(reference, str)
+                or not reference.startswith(prefix)
+                or reference in ancestors
+                or reference[len(prefix) :] not in definitions
+            ):
+                raise ValueError("Only acyclic local schema references are supported.")
+            resolved = expand(definitions[reference[len(prefix) :]], (*ancestors, reference))
+            return {**resolved, **expand(siblings, ancestors)}
+        return {key: expand(child, ancestors) for key, child in siblings.items()}
+
+    return expand(result)

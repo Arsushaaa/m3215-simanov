@@ -171,7 +171,7 @@ class AgentService:
                 "function": {
                     "name": value["name"],
                     "description": value["description"],
-                    "parameters": model_schema(value["inputSchema"]),
+                    "parameters": model_schema(value["inputSchema"], inline_refs=True),
                 },
             }
             for value in self.mcp.tools.values()
@@ -187,6 +187,7 @@ class AgentService:
                         "parameters": model_schema(
                             ReminderPreparation.model_json_schema(),
                             pending=context is not None and context.pending is not None,
+                            inline_refs=True,
                         ),
                     },
                 }
