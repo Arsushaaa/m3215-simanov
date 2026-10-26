@@ -438,6 +438,9 @@ class AgentService:
                     ).root
             except (ValueError, KeyError, TypeError, ValidationError, RecursionError):
                 raise ModelError(INVALID_DECISION) from None
+        if result.truncated and not isinstance(decision, (RespondDecision, ClarifyDecision)):
+            trace.error_code = "INVALID_RESULT"
+            raise ModelError("Решение модели оборвалось. Уточни запрос и попробуй снова.")
         if isinstance(
             decision, (ReminderDecision, ClarifyReminderDecision, CancelReminderDecision)
         ):
@@ -474,9 +477,6 @@ class AgentService:
                 decision.text if isinstance(decision, RespondDecision) else decision.question,
                 result.truncated,
             )
-        if result.truncated:
-            trace.error_code = "INVALID_RESULT"
-            raise ModelError("Решение модели оборвалось. Уточни запрос и попробуй снова.")
         trace.target = decision.uri if isinstance(decision, ResourceDecision) else decision.name
         if isinstance(decision, ResourceDecision):
             trace.argument_summary = "Текущая неделя расписания."

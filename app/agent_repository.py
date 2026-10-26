@@ -598,6 +598,25 @@ class ConfirmationRepository(AgentRepository):
                 )
                 if not is_proposal:
                     raise ConfirmationError("ACTION_CONFLICT", "Этот запрос уже обработан.")
+            # A later request may claim an empty pending-card snapshot after
+            # this proposal was recorded but before its card is prepared.
+            # Do not publish the older proposal into that newer request's epoch.
+            # Existing-action replay returns above and remains independent of it.
+            if (
+                await connection.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM labbi_agent_requests incoming "
+                    "JOIN labbi_agent_requests original ON original.id=$2 "
+                    "AND original.user_id=$1 WHERE incoming.user_id=$1 "
+                    "AND (incoming.created_at, incoming.telegram_message_id) > "
+                    "(original.created_at, original.telegram_message_id))",
+                    user.user_id,
+                    request["id"],
+                )
+                is True
+            ):
+                raise ConfirmationError(
+                    "ACTION_CANCELLED", "Появился более новый запрос. Отправь новый запрос."
+                )
             await revoke_actions(connection, user.user_id, "Прежняя карточка заменена новой.")
             epoch = await connection.fetchval(
                 "UPDATE labbi_users SET confirmation_epoch=confirmation_epoch+1, "

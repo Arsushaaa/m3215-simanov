@@ -333,3 +333,115 @@ async def test_old_semantic_decision_cannot_revoke_a_newer_card(database):
     finally:
         await other_pool.close()
         await pool.close()
+
+
+@pytest.mark.parametrize("newer_finished", [False, True])
+async def test_recorded_proposal_cannot_publish_after_a_newer_empty_snapshot(
+    database, newer_finished
+):
+    settings, _, _, _ = database
+    pool, other_pool = await create_pool(settings), await create_pool(settings)
+    try:
+        await migrate(pool)
+        dialogs, repository = DialogRepository(pool), ConfirmationRepository(pool)
+        other = ConfirmationRepository(other_pool)
+        await dialogs.user(101)
+        await repository.set_timezone(101, ZONE.key)
+        user = await dialogs.user(101)
+        first_pending, first_epoch = await repository.semantic_request_context(user, 10)
+        assert first_pending is None
+        await repository.record(
+            101,
+            10,
+            decision="call_tool",
+            target="add_reminder",
+            status="CLARIFY",
+            reason="Модель подготовила первую карточку.",
+            llm_calls=1,
+        )
+        second_pending, second_epoch = await other.semantic_request_context(user, 11)
+        assert second_pending is None and second_epoch == first_epoch
+        now = await repository.now()
+        day = now.astimezone(ZONE).date() + timedelta(days=1)
+        first = ReminderArguments(
+            text="Приготовить пирог", remind_at=datetime.combine(day, time(21), ZONE)
+        )
+        second = ReminderArguments(
+            text="Приготовить пирог", remind_at=datetime.combine(day, time(22), ZONE)
+        )
+
+        async def record_second():
+            await other.record(
+                101,
+                11,
+                decision="call_tool",
+                target="add_reminder",
+                status="CLARIFY",
+                reason="Модель подготовила более новое время.",
+                llm_calls=1,
+            )
+
+        if newer_finished:
+            await record_second()
+        before = await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101")
+        with pytest.raises(ConfirmationError) as superseded:
+            await repository.prepare(
+                user,
+                10,
+                "Напомни завтра в 21:00 приготовить пирог",
+                first,
+                timezone=ZONE.key,
+                expected_epoch=first_epoch,
+            )
+        assert superseded.value.code == "ACTION_CANCELLED"
+        assert "более новый запрос" in superseded.value.user_message
+        assert await pool.fetchrow("SELECT * FROM labbi_users WHERE user_id=101") == before
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 0
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        if not newer_finished:
+            await record_second()
+
+        card = await other.prepare(
+            user,
+            11,
+            "Лучше завтра в 22:00 приготовить пирог",
+            second,
+            timezone=ZONE.key,
+            expected_epoch=second_epoch,
+        )
+
+        assert card.arguments == second
+        assert (await repository.current_card(101)).action_id == card.action_id
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+    finally:
+        await other_pool.close()
+        await pool.close()
+
+
+async def test_existing_card_replay_is_not_rejected_by_a_newer_processing_request(database):
+    settings, _, _, _ = database
+    pool, other_pool = await create_pool(settings), await create_pool(settings)
+    try:
+        await migrate(pool)
+        dialogs, repository, original = await seed(pool)
+        user = await dialogs.user(101)
+        await ConfirmationRepository(other_pool).semantic_request_context(user, 11)
+
+        repeated = await repository.prepare(
+            user,
+            10,
+            "Напомни завтра в 19:00 сдать отчёт",
+            original.arguments,
+            timezone=ZONE.key,
+        )
+
+        assert repeated.replayed
+        assert repeated.action_id == original.action_id
+        assert repeated.arguments == original.arguments
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        assert (await repository.approve(101, original.action_id)).message == SEMANTIC_REQUEST_WAIT
+    finally:
+        await other_pool.close()
+        await pool.close()
