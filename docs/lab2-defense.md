@@ -268,15 +268,22 @@ python -m scripts.lab2_reliability --output .deploy/evaluation/lab2-checks.json
 python -m scripts.mcp_probe --date 2026-10-13
 git status --short
 git show --no-patch lab1
-git show --no-patch lab2
+git show --no-patch lab2-final
 ```
 
-Отчёт финальной приёмки — [lab2-final-checks.json](evaluation/lab2-final-checks.json),
+Актуальная сдаваемая версия — `lab2-final`; `lab1` и исходный `lab2` не перемещаются.
+Последняя приёмка — [1370 тестов и 28 критериев](evaluation/lab2-provider-rejection-checks.json).
+Исходная приёмка `lab2` — [lab2-final-checks.json](evaluation/lab2-final-checks.json),
 объяснение процедуры — [lab2-reliability.md](lab2-reliability.md).
 Последняя Git-команда имеет смысл после завершения приёмки и создания тега:
-отсутствующий `lab2` означает, что сдаваемая версия ещё не зафиксирована.
+отсутствующий `lab2-final` означает, что обновлённая сдаваемая версия ещё не получена.
 Локальный тег сам не публикуется в GitHub; для сдачи проверьте доступ
 преподавателя к репозиторию и видимость требуемого тега.
+Для запуска из чистого клона задайте в `.env`
+`OPENROUTER_MODEL=dots-studio/dots-3-note-preview:free` и свои ключи;
+значение модели в `.env.example` осталось первоначальным Nemotron.
+[Отказ dots HTTP 400 на отдельном тестовом тексте](provider-rejections.md)
+нужно показывать как ограничение провайдера, не как доказанную защиту приложения.
 
 Обязательные ограничения, которые нужно назвать: бесплатная модель зависит
 от сети и общей квоты аккаунта, погода только текущая, расписание вымышленное
