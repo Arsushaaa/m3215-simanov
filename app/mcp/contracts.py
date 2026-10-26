@@ -418,9 +418,11 @@ class ScheduleDecision(StrictModel):
     reason: Reason
 
 
-class ReminderDecision(ReminderPreparation):
+class ReminderDecision(StrictModel):
     action: Literal["call_tool"]
     name: Literal["add_reminder"]
+    arguments: ReminderArguments
+    evidence: ReminderEvidence
     reason: Reason
 
 

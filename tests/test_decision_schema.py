@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 from pydantic import ValidationError as ModelValidationError
@@ -42,3 +44,51 @@ def test_provider_hint_does_not_weaken_weather_runtime_contract():
     with pytest.raises(ModelValidationError):
         WeatherArguments(city="Kazan, Russia")
     assert WeatherArguments(city="Казань, Россия").city == "Казань, Россия"
+
+
+def test_provider_routing_union_is_flat_and_keeps_all_tool_branches_selectable():
+    canonical = AgentDecision.model_json_schema()
+    original = deepcopy(canonical)
+    provider = model_schema(canonical, pending=True)
+
+    assert canonical == original
+    assert "discriminator" in canonical
+    assert any("oneOf" in branch for branch in canonical["oneOf"])
+    assert all(set(branch) == {"$ref"} for branch in provider["oneOf"])
+    references = {branch["$ref"] for branch in provider["oneOf"]}
+    for name in ("WeatherDecision", "ScheduleDecision", "ReminderDecision"):
+        assert f"#/$defs/{name}" in references
+        assert list(provider["$defs"][name]["properties"])[:2] == ["action", "name"]
+
+    nodes = [provider]
+    while nodes:
+        node = nodes.pop()
+        if isinstance(node, dict):
+            assert "discriminator" not in node
+            nodes.extend(node.values())
+        elif isinstance(node, list):
+            nodes.extend(node)
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        ("get_weather", {"city": "Казань, Россия"}),
+        ("get_schedule", {"date": "2030-01-02"}),
+        ("add_reminder", {"text": "Пирог", "remind_at": "2030-01-02T11:00:00+03:00"}),
+    ],
+)
+def test_each_tool_decision_is_valid_in_provider_and_canonical_schema(name, arguments):
+    decision = {
+        "action": "call_tool",
+        "name": name,
+        "arguments": arguments,
+        "reason": "Выбрано по просьбе пользователя",
+    }
+    if name == "add_reminder":
+        source = {"source": "user", "message_index": 0, "quote": "Напомни завтра в 11:00"}
+        decision["evidence"] = {key: source for key in ("request", "text", "date", "time")}
+    canonical = AgentDecision.model_json_schema()
+    Draft202012Validator(canonical).validate(decision)
+    Draft202012Validator(model_schema(canonical)).validate(decision)
+    assert AgentDecision.model_validate(decision).root.name == name

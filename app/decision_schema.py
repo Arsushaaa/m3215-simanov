@@ -16,6 +16,18 @@ def model_schema(schema, *, pending=False):
         if isinstance(value, dict):
             # Provider JSON decoders differ; runtime and MCP keep these rules.
             value.pop("pattern", None)
+            # Pydantic's nested discriminator mapping is not a portable decoder
+            # hint. Flatten nested alternatives; local validation keeps the
+            # canonical discriminated union and rejects every invalid result.
+            value.pop("discriminator", None)
+            if "oneOf" in value:
+                branches = []
+                for branch in value["oneOf"]:
+                    if set(branch) <= {"oneOf", "discriminator"} and "oneOf" in branch:
+                        branches.extend(branch["oneOf"])
+                    else:
+                        branches.append(branch)
+                value["oneOf"] = branches
             for child in value.values():
                 hints(child)
         elif isinstance(value, list):
