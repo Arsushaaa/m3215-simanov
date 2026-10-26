@@ -150,6 +150,39 @@ async def test_success_logs_and_result_repr_hide_messages_arguments_and_api_key(
     assert "SECRET" not in repr(result)
 
 
+@pytest.mark.parametrize("status", [404, 429, 503])
+async def test_http_failure_diagnostics_distinguish_provider_status_without_payload(
+    client, caplog, status
+):
+    caplog.set_level("INFO", logger="app.llm")
+    response = Response(status=status, raw=b'{"error":"PRIVATE-body-and-key"}')
+    client.session.responses.append(response)
+
+    with pytest.raises(ModelError) as error:
+        await client.complete([{"role": "user", "content": "PRIVATE-prompt"}], 0.2)
+
+    assert f"http_status={status}" in caplog.text
+    assert "status=failed" in caplog.text
+    assert "PRIVATE" not in caplog.text
+    assert "PRIVATE" not in error.value.user_message
+    assert client.settings.openrouter_api_key not in caplog.text
+    assert response.bytes_read == 0
+    assert response.closed
+    assert len(client.session.requests) == 1
+
+
+async def test_transport_failure_has_no_fabricated_http_status(client, caplog):
+    caplog.set_level("INFO", logger="app.llm")
+    client.session.responses.append(TimeoutError("PRIVATE-transport-details"))
+
+    with pytest.raises(ModelError):
+        await client.complete([{"role": "user", "content": "PRIVATE-prompt"}], 0.2)
+
+    assert "http_status=None" in caplog.text
+    assert "PRIVATE" not in caplog.text
+    assert len(client.session.requests) == 1
+
+
 async def test_structured_request_uses_strict_schema_without_tool_retry(client):
     schema = {
         "type": "object",

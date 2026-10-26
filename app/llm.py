@@ -174,6 +174,7 @@ class OpenRouterClient:
         request_id = uuid.uuid4().hex[:12]
         started = time.monotonic()
         outcome = "failed"
+        http_status = None
         logger.info("LLM начало request=%s model=%s", request_id, self.settings.openrouter_model)
         try:
             async with self.session.post(
@@ -181,6 +182,7 @@ class OpenRouterClient:
                 json=payload,
                 allow_redirects=False,
             ) as response:
+                http_status = response.status
                 if response.status == 429:
                     raise ModelError("Лимит запросов к модели исчерпан. Попробуй позже.")
                 if response.status in {401, 402, 403}:
@@ -217,9 +219,10 @@ class OpenRouterClient:
             raise ModelError("Не удалось связаться с моделью. Попробуй позже.") from None
         finally:
             logger.info(
-                "LLM результат request=%s status=%s duration=%.2f",
+                "LLM результат request=%s status=%s http_status=%s duration=%.2f",
                 request_id,
                 outcome,
+                http_status,
                 time.monotonic() - started,
             )
         return RoutingCompletion(text, calls, truncated=truncated)

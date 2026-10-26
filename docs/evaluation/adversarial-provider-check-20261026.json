@@ -1,0 +1,46 @@
+{
+  "availability": {
+    "checked_at": "2026-10-26T08:06:41.596801+00:00",
+    "model": "dots-studio/dots-3-note-preview:free",
+    "llm_calls": 0,
+    "catalog": {
+      "http_status": 200,
+      "endpoints": [
+        {
+          "provider_name": "AtlasCloud",
+          "name": "AtlasCloud | dots-studio/dots-3-note-preview-20260813:free",
+          "status": 0,
+          "uptime_last_30m": 100,
+          "pricing": {
+            "prompt": "0",
+            "completion": "0",
+            "discount": 0
+          }
+        }
+      ]
+    },
+    "key": {
+      "http_status": 200,
+      "free_model_daily_requests": {
+        "used": 11,
+        "limit": 50,
+        "remaining": 39
+      },
+      "is_free_tier": true
+    }
+  },
+  "single_schema_probe": {
+    "started_at": "2026-10-26T08:08:05.656863+00:00",
+    "model": "dots-studio/dots-3-note-preview:free",
+    "attempted_llm_calls": 1,
+    "status": "passed",
+    "telegram_messages_sent": 0,
+    "http_status": 200,
+    "cost": 0,
+    "finish_reason": "stop",
+    "valid_quiz_dto": true,
+    "kind": "question",
+    "truncated": false,
+    "finished_at": "2026-10-26T08:08:09.891418+00:00"
+  }
+}
