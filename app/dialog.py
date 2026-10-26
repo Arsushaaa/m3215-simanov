@@ -120,6 +120,7 @@ class DialogService:
             self.settings.llm_max_output_tokens,
             previous,
             output_followup=user.mode == "study" and previous == ESSAY_TOPIC_QUESTION,
+            implicit_output=user.mode == "study",
         )
         continuing = bool(CONTINUE.search(text)) and await self.repository.has_incomplete_answer(
             user_id

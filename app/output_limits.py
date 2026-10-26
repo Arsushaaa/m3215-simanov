@@ -77,13 +77,34 @@ RELATIVE_SIZE = re.compile(
     re.IGNORECASE,
 )
 MULTIPLIERS = {"два": 2, "двое": 2, "три": 3, "трое": 3, "четыре": 4, "пять": 5, "десять": 10}
+# Самостоятельное указание продолжать вывод делает фрагмент с темой просьбой
+# о тексте и без «напиши эссе». Программный вывод, перевод и разбор источника
+# при этом не становятся просьбой сгенерировать его целиком.
+AUTO_CONTINUATION = re.compile(
+    r"\b(?:автоматически|самостоятельно)\s+(?:дальше\s+)?"
+    r"(?:продолжай|продолжи|пиши|генерируй)\b|"
+    r"\b(?:продолжай|продолжи|пиши|генерируй)\b[^.!?\n]{0,100}"
+    r"\b(?:автоматически|самостоятельно|без\s+(?:моего\s+)?(?:участия|запроса|подтверждения))\b|"
+    r"\b(?:automatically\s+continue|continue\s+automatically|"
+    r"keep\s+(?:writing|generating)[^.!?\n]{0,100}without\s+(?:my\s+)?(?:input|confirmation))\b",
+    re.IGNORECASE,
+)
+INPUT_REQUEST = re.compile(
+    r"^\s*(?:переведи|перевод|объясни|поясни|проанализируй|разбери|как|почему|"
+    r"translate|translation|explain|analy[sz]e|how|why)\b|"
+    r"^\s*на\s+(?:английский|русский|немецкий|французский|испанский)\b",
+    re.IGNORECASE,
+)
 
 
-def _output_body(text: str, output_followup: bool) -> str | None:
+def _output_body(text: str, output_followup: bool, implicit_output: bool) -> str | None:
     if output_followup:
         return text
     request = OUTPUT_REQUEST.match(text)
     if not request:
+        if implicit_output and AUTO_CONTINUATION.search(text) and not INPUT_REQUEST.match(text):
+            source = INPUT_OBJECT.search(text)
+            return text[: source.start()] if source else text
         return None
     body = text[request.end() :]
     for artifact in OUTPUT_OBJECT.finditer(body):
@@ -105,9 +126,10 @@ def check_output_size(
     previous_answer: str | None = None,
     *,
     output_followup: bool = False,
+    implicit_output: bool = True,
 ) -> None:
     text = QUOTED_INPUT.sub(" ", text)
-    body = _output_body(text, output_followup)
+    body = _output_body(text, output_followup, implicit_output)
     if body is not None:
         for match in OUTPUT_SIZE.finditer(body):
             amount, unit = match.groups()
