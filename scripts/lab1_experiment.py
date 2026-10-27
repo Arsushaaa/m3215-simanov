@@ -26,6 +26,7 @@ from app.llm import OpenRouterClient
 from app.migration import migrate
 from app.prompts import PROMPTS
 from app.repository import DialogRepository
+from app.request_limits import REQUESTS_PER_MINUTE, WINDOW_SECONDS
 
 SYNTHETIC_USER = 899000001
 TEMPERATURES = (0.0, 0.3, 0.7, 1.0)
@@ -54,7 +55,7 @@ def now() -> str:
 def protocol(settings: Settings) -> dict:
     """Public fixed parameters only; credentials and connection details are omitted."""
     return {
-        "version": 1,
+        "version": 2,
         "question": QUESTION,
         "study_prompt": PROMPTS["study"],
         "mode": "study",
@@ -69,6 +70,10 @@ def protocol(settings: Settings) -> dict:
         "repetitions": 3,
         "telegram": "synthetic private updates through actual aiogram handlers; no network",
         "database": "isolated PostgreSQL database named lab1_eval*",
+        "pacing": {
+            "minimum_seconds_after_previous_completion": WINDOW_SECONDS / REQUESTS_PER_MINUTE,
+            "method": "wait before the next generation; ordinary application limits remain enabled",
+        },
         "rubric_before_execution": {
             "format": "Russian; exactly Различия/Пример/Выбор; 120–180 words; Python block",
             "completeness": "mutability; shared sequence properties; two use cases; nested mutable",
@@ -240,7 +245,15 @@ def synthetic_update(text: str, message_id: int) -> Update:
 
 
 async def run_trials(
-    settings, repository, client, output: Path, *, retry_failed=False, max_api_calls=14
+    settings,
+    repository,
+    client,
+    output: Path,
+    *,
+    retry_failed=False,
+    max_api_calls=14,
+    clock=time.monotonic,
+    sleeper=asyncio.sleep,
 ) -> bool:
     expected = protocol(settings)
     document = await asyncio.to_thread(load_checkpoint, output)
@@ -265,9 +278,10 @@ async def run_trials(
         return True
 
     bot.session = AsyncMock(side_effect=fake_telegram)
-    dispatcher.include_router(create_router())
+    dispatcher.include_router(create_router(request_limits_clock=clock))
     service = DialogService(repository, client, settings)
     message_id = len(document["attempts"]) * 10 + 1
+    last_completed = None
 
     async def feed(text):
         nonlocal message_id
@@ -284,6 +298,12 @@ async def run_trials(
                 return False
             if len(document["attempts"]) >= max_api_calls:
                 return False
+            if last_completed is not None:
+                # Pace a legitimate experiment rather than disable the public
+                # handler's rate guard or retry a rejected generation.
+                interval = WINDOW_SECONDS / REQUESTS_PER_MINUTE
+                while (remaining := last_completed + interval - clock()) > 0:
+                    await sleeper(remaining)
             await feed(f"/settings {spec['temperature']}")
             await feed("/reset")
             history = await repository.history(SYNTHETIC_USER, settings.history_max_messages)
@@ -326,6 +346,7 @@ async def run_trials(
                 # Never include exception bodies: remote responses may contain sensitive material.
                 attempt.update(status="failed", error_type=type(exc).__name__, call=client.last)
             finally:
+                last_completed = clock()
                 attempt["finished_at"] = now()
                 checkpoint(output, document)
             if attempt["status"] not in {"ok", "truncated"}:

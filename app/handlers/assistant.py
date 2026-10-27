@@ -70,7 +70,7 @@ async def typing(message: Message) -> None:
         await asyncio.sleep(4)
 
 
-def create_router() -> Router:
+def create_router(*, request_limits_clock=None) -> Router:
     router = Router(name="assistant")
     router.message.filter(F.chat.type == "private", F.from_user, F.text)
     pending: dict[int, set[asyncio.Task]] = {}
@@ -78,7 +78,11 @@ def create_router() -> Router:
     callbacks: set[asyncio.Task] = set()
     commands: set[asyncio.Task] = set()
     closing = False
-    limits = RequestLimits()
+    limits = (
+        RequestLimits()
+        if request_limits_clock is None
+        else RequestLimits(clock=request_limits_clock)
+    )
     command_slots, control_slots = CommandSlots(), ControlSlots()
     controls: set[asyncio.Task] = set()
 
