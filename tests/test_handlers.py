@@ -7,14 +7,15 @@ from unittest.mock import AsyncMock
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
-from aiogram.methods import SendMessage
-from aiogram.types import Chat, Message, PhotoSize, Update, User
+from aiogram.methods import AnswerCallbackQuery, SendMessage
+from aiogram.types import CallbackQuery, Chat, Message, PhotoSize, Update, User
 
 from app.dialog import TRUNCATED_NOTICE
 from app.essay import ESSAY_TOPIC_QUESTION
 from app.formatting import format_reply
 from app.handlers.assistant import DATABASE_ERROR, START_TEXT, create_router, split_text
 from app.llm import Completion, ModelError, RoutingCompletion
+from app.request_limits import RequestLimits
 
 
 def update(text=None, *, user_id=1, message_id=1, chat_type="private", photo=None):
@@ -32,7 +33,10 @@ def update(text=None, *, user_id=1, message_id=1, chat_type="private", photo=Non
 
 
 @pytest.fixture
-def dispatcher_setup(bot_settings):
+def dispatcher_setup(bot_settings, monkeypatch):
+    monkeypatch.setattr(
+        "app.handlers.assistant.RequestLimits", lambda: RequestLimits(clock=lambda: 0.0)
+    )
     bot = Bot(bot_settings.bot_token)
     bot.session = AsyncMock()
     dispatcher = Dispatcher()
@@ -46,6 +50,82 @@ def sent_texts(bot):
         for call in bot.session.call_args_list
         if isinstance(call.args[1], SendMessage)
     ]
+
+
+def reminder_click(number, operation="confirm"):
+    return Update(
+        update_id=number,
+        callback_query=CallbackQuery(
+            id=f"fake-click-{number}",
+            from_user=User(id=1, is_bot=False, first_name="Студент"),
+            chat_instance="fake-chat",
+            data=f"rem:{operation}:b79320a8-a64c-4da1-838f-e2ec93e0d5c1",
+            message=Message(
+                message_id=1,
+                date=datetime.now(UTC),
+                chat=Chat(id=1, type="private"),
+                from_user=User(id=123456789, is_bot=True, first_name="Лабби"),
+                text="Карточка",
+            ),
+        ),
+    )
+
+
+async def test_callback_flood_is_coalesced_before_blocking_ack(dispatcher_setup, dialog_setup):
+    dispatcher, bot = dispatcher_setup
+    service, _, _ = dialog_setup
+    entered, release = asyncio.Event(), asyncio.Event()
+    service.confirm = AsyncMock(return_value="Подтверждено")
+
+    async def send(_bot, method, **_kwargs):
+        if isinstance(method, AnswerCallbackQuery):
+            entered.set()
+            await release.wait()
+
+    bot.session.side_effect = send
+    first = asyncio.create_task(dispatcher.feed_update(bot, reminder_click(1), dialog=service))
+    await asyncio.wait_for(entered.wait(), 2)
+    rest = [
+        asyncio.create_task(dispatcher.feed_update(bot, reminder_click(i), dialog=service))
+        for i in range(2, 32)
+    ]
+    try:
+        # The first duplicate may send one busy ACK; the rest return immediately.
+        await asyncio.wait_for(asyncio.gather(*rest[1:]), 2)
+        acks = [c for c in bot.session.call_args_list if isinstance(c.args[1], AnswerCallbackQuery)]
+        assert len(acks) == 2
+        service.confirm.assert_not_awaited()
+    finally:
+        release.set()
+        await asyncio.gather(first, *rest)
+    service.confirm.assert_awaited_once()
+
+
+async def test_cancel_callback_uses_a_separate_lane_from_busy_confirm(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, _, _ = dialog_setup
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def confirm(*_args):
+        entered.set()
+        await release.wait()
+        return "Подтверждено"
+
+    service.confirm = AsyncMock(side_effect=confirm)
+    service.cancel_confirmation = AsyncMock(return_value="Подтверждение отменено.")
+    first = asyncio.create_task(dispatcher.feed_update(bot, reminder_click(1), dialog=service))
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        await asyncio.wait_for(
+            dispatcher.feed_update(bot, reminder_click(2, "cancel"), dialog=service), 2
+        )
+        service.cancel_confirmation.assert_awaited_once()
+        assert not first.done()
+    finally:
+        release.set()
+        await asyncio.wait_for(first, 2)
 
 
 async def test_start_and_commands_do_not_call_model(dispatcher_setup, dialog_setup):
@@ -301,6 +381,196 @@ async def test_same_user_requests_are_serialized_with_replies(dispatcher_setup, 
     assert sent_texts(bot) == ["Ответ Первый", "Ответ Второй"]
     messages = llm.complete.call_args.args[0]
     assert [m["content"] for m in messages[1:]] == ["Первый", "Ответ Первый", "Второй"]
+
+
+async def test_burst_cannot_build_an_unbounded_generation_or_rejection_reply_queue(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, repo, llm = dialog_setup
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def complete(*_args):
+        entered.set()
+        await release.wait()
+        return Completion("Ответ")
+
+    llm.complete.side_effect = complete
+    first = asyncio.create_task(dispatcher.feed_update(bot, update("Первый"), dialog=service))
+    await asyncio.wait_for(entered.wait(), 2)
+    rest = [
+        asyncio.create_task(
+            dispatcher.feed_update(bot, update("Ещё вопрос", message_id=i), dialog=service)
+        )
+        for i in range(2, 31)
+    ]
+    try:
+        # One request may wait; the other 28 must be rejected while LLM is blocked.
+        await asyncio.wait_for(asyncio.gather(*rest[1:]), 2)
+        assert not rest[0].done()
+        llm.complete.assert_awaited_once()
+        assert len(sent_texts(bot)) == 1
+        assert "/stop" in sent_texts(bot)[0]
+    finally:
+        release.set()
+        await asyncio.gather(first, *rest)
+    assert llm.complete.await_count == 2
+    assert len(await repo.history(1, 100)) == 4
+
+
+async def test_same_owner_waiter_does_not_occupy_a_global_execution_slot(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    entered, queued, release, full = (
+        asyncio.Event(),
+        asyncio.Event(),
+        asyncio.Event(),
+        asyncio.Event(),
+    )
+    active = 0
+    owner_lock = service.lock
+    same_owner_locks = 0
+
+    def observe(owner):
+        nonlocal same_owner_locks
+        if owner == 1:
+            same_owner_locks += 1
+            if same_owner_locks == 2:
+                queued.set()
+        return owner_lock(owner)
+
+    service.lock = observe
+
+    async def complete(*_args):
+        nonlocal active
+        active += 1
+        entered.set()
+        if active == 4:
+            full.set()
+        try:
+            await release.wait()
+            return Completion("Ответ")
+        finally:
+            active -= 1
+
+    llm.complete.side_effect = complete
+    tasks = [asyncio.create_task(dispatcher.feed_update(bot, update("Первый"), dialog=service))]
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        tasks.append(
+            asyncio.create_task(
+                dispatcher.feed_update(bot, update("Второй", message_id=2), dialog=service)
+            )
+        )
+        await asyncio.wait_for(queued.wait(), 2)
+        tasks.extend(
+            asyncio.create_task(
+                dispatcher.feed_update(bot, update("Вопрос", user_id=i), dialog=service)
+            )
+            for i in range(2, 5)
+        )
+        await asyncio.wait_for(full.wait(), 2)
+        assert llm.complete.await_count == 4
+    finally:
+        release.set()
+        await asyncio.gather(*tasks)
+
+
+@pytest.mark.parametrize("command", ["/stop", "/reset", "/translate"])
+async def test_control_commands_bypass_exhausted_generation_rate(
+    dispatcher_setup, dialog_setup, command
+):
+    from app.request_limits import REQUESTS_PER_MINUTE
+
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    for i in range(REQUESTS_PER_MINUTE):
+        await dispatcher.feed_update(bot, update("Вопрос", message_id=i + 1), dialog=service)
+    await dispatcher.feed_update(bot, update("Лишний", message_id=100), dialog=service)
+    assert "Слишком много запросов" in sent_texts(bot)[-1]
+    assert llm.complete.await_count == REQUESTS_PER_MINUTE
+    await dispatcher.feed_update(bot, update(command, message_id=101), dialog=service)
+    assert "Слишком много запросов" not in sent_texts(bot)[-1]
+    assert llm.complete.await_count == REQUESTS_PER_MINUTE
+
+
+async def test_read_command_flood_is_bounded_before_user_lock_and_stop_clears_it(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    entered = asyncio.Event()
+
+    async def blocked(*_args):
+        entered.set()
+        await asyncio.Event().wait()
+
+    llm.complete.side_effect = blocked
+    service.preferences = AsyncMock(wraps=service.preferences)
+    generation = asyncio.create_task(
+        dispatcher.feed_update(bot, update("Вопрос", message_id=1), dialog=service)
+    )
+    await asyncio.wait_for(entered.wait(), 2)
+    tasks = [
+        asyncio.create_task(
+            dispatcher.feed_update(bot, update("/settings", message_id=i), dialog=service)
+        )
+        for i in range(2, 32)
+    ]
+    try:
+        await asyncio.wait_for(asyncio.gather(*tasks[2:]), 2)
+        assert all(not task.done() for task in tasks[:2])
+        service.preferences.assert_not_awaited()
+        assert len(sent_texts(bot)) == 1
+        assert "Команда уже ожидает" in sent_texts(bot)[0]
+        await asyncio.wait_for(
+            dispatcher.feed_update(bot, update("/stop", message_id=33), dialog=service), 2
+        )
+        await asyncio.wait_for(asyncio.gather(generation, *tasks), 2)
+    finally:
+        for task in [generation, *tasks]:
+            task.cancel()
+        await asyncio.gather(generation, *tasks, return_exceptions=True)
+    assert all(task.done() for task in [generation, *tasks])
+    service.preferences.assert_not_awaited()
+    llm.complete.assert_awaited_once()
+
+
+async def test_stop_flood_coalesces_before_database_and_blocks_new_generation(
+    dispatcher_setup, dialog_setup
+):
+    dispatcher, bot = dispatcher_setup
+    service, _, llm = dialog_setup
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def blocked(_owner):
+        entered.set()
+        await release.wait()
+        return False
+
+    service.invalidate_confirmations = AsyncMock(side_effect=blocked)
+    first = asyncio.create_task(
+        dispatcher.feed_update(bot, update("/stop", message_id=1), dialog=service)
+    )
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        await asyncio.wait_for(
+            asyncio.gather(
+                *[
+                    dispatcher.feed_update(bot, update("/stop", message_id=i), dialog=service)
+                    for i in range(2, 32)
+                ]
+            ),
+            2,
+        )
+        await dispatcher.feed_update(bot, update("Новый вопрос", message_id=33), dialog=service)
+        service.invalidate_confirmations.assert_awaited_once()
+        llm.complete.assert_not_awaited()
+    finally:
+        release.set()
+        await asyncio.wait_for(first, 2)
 
 
 async def test_stop_cancels_active_and_queued_requests_and_new_request_still_works(

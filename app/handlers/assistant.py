@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 from contextlib import nullcontext, suppress
+from functools import wraps
 from uuid import UUID
 
 from aiogram import F, Router
@@ -14,6 +15,7 @@ from app.confirmation_models import ConfirmationError, ConfirmationText, Prepare
 from app.dialog import DialogService
 from app.formatting import FormattedText, format_reply, split_formatted
 from app.llm import ModelError
+from app.request_limits import CommandSlots, ControlSlots, RequestLimitError, RequestLimits
 from app.timezone_ui import TimezoneView
 
 logger = logging.getLogger(__name__)
@@ -72,9 +74,13 @@ def create_router() -> Router:
     router = Router(name="assistant")
     router.message.filter(F.chat.type == "private", F.from_user, F.text)
     pending: dict[int, set[asyncio.Task]] = {}
+    readonly_pending: dict[int, set[asyncio.Task]] = {}
     callbacks: set[asyncio.Task] = set()
     commands: set[asyncio.Task] = set()
     closing = False
+    limits = RequestLimits()
+    command_slots, control_slots = CommandSlots(), ControlSlots()
+    controls: set[asyncio.Task] = set()
 
     async def shutdown():
         nonlocal closing
@@ -83,6 +89,7 @@ def create_router() -> Router:
             {task for tasks in pending.values() for task in tasks}
             | callbacks.copy()
             | commands.copy()
+            | controls.copy()
         )
         tasks.discard(asyncio.current_task())
         for task in tasks:
@@ -93,12 +100,56 @@ def create_router() -> Router:
     router.shutdown.register(shutdown)
 
     async def cancel_answers(user_id: int) -> int:
-        tasks = list(pending.get(user_id, ()))
+        tasks = list(pending.get(user_id, set()) | readonly_pending.get(user_id, set()))
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         return len(tasks)
+
+    async def reject(event, text):
+        if limits.notify_rejection(event.from_user.id):
+            if isinstance(event, CallbackQuery):
+                await acknowledge(event, text)
+            else:
+                await event.answer(text, parse_mode=None)
+
+    def bounded_control(lane):
+        def decorate(handler):
+            @wraps(handler)
+            async def wrapped(event, *args, **kwargs):
+                owner = event.from_user.id
+                kind = lane(event) if callable(lane) else lane
+                if kind == "stop":
+                    # Every stop cancels its current snapshot, even when its
+                    # database/reply work is coalesced into an earlier stop.
+                    for task in pending.get(owner, set()) | readonly_pending.get(owner, set()):
+                        task.cancel()
+                if closing:
+                    if isinstance(event, CallbackQuery):
+                        await reject(event, "Бот останавливается. Попробуй позже.")
+                    return
+                admission = control_slots.admit(owner, kind, stop_reserve=bool(pending.get(owner)))
+                if admission is None:
+                    await reject(event, "Предыдущая команда ещё выполняется. Подожди немного.")
+                    return
+                task = asyncio.current_task()
+                controls.add(task)
+                try:
+                    return await handler(event, *args, **kwargs)
+                finally:
+                    controls.discard(task)
+                    admission.release()
+
+            return wrapped
+
+        return decorate
+
+    def callback_lane(query):
+        data = query.data or ""
+        if data.startswith(("rem:cancel:", "tz:cancel:")):
+            return "cancel"
+        return "callback"
 
     async def execute(
         message: Message,
@@ -118,7 +169,10 @@ def create_router() -> Router:
         owner = user_id if user_id is not None else message.from_user.id
 
         async def work():
-            async with dialog.lock(owner) if serialized else nullcontext():
+            async with (
+                dialog.lock(owner) if serialized else nullcontext(),
+                limits.running() if generating else nullcontext(),
+            ):
                 formatted = generating and not literal
                 markup = None
                 dismiss_previous = False
@@ -207,12 +261,44 @@ def create_router() -> Router:
                         await asyncio.gather(indicator, return_exceptions=True)
 
         if not generating:
+            if asyncio.current_task() not in controls:
+                try:
+                    admission = command_slots.admit(owner)
+                except RequestLimitError as error:
+                    await reject(message, error.user_message)
+                    return
+                task = asyncio.create_task(work())
+                commands.add(task)
+                readonly_pending.setdefault(owner, set()).add(task)
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    if asyncio.current_task().cancelling():
+                        raise
+                finally:
+                    admission.release()
+                    commands.discard(task)
+                    readonly_pending[owner].discard(task)
+                    if not readonly_pending[owner]:
+                        readonly_pending.pop(owner)
+                return
             task = asyncio.current_task()
             commands.add(task)
             try:
                 await work()
             finally:
                 commands.discard(task)
+            return
+        if control_slots.active(owner, "stop") or control_slots.active(owner, "change"):
+            await reject(
+                message, "Команда остановки или смены режима ещё выполняется. Подожди немного."
+            )
+            return
+        try:
+            admission = limits.admit(owner)
+        except RequestLimitError as error:
+            if limits.notify_rejection(owner):
+                await message.answer(error.user_message, parse_mode=None)
             return
         task = asyncio.create_task(work())
         pending.setdefault(owner, set()).add(task)
@@ -223,6 +309,7 @@ def create_router() -> Router:
             if asyncio.current_task().cancelling():
                 raise
         finally:
+            admission.release()
             pending[owner].discard(task)
             if not pending[owner]:
                 pending.pop(owner)
@@ -270,6 +357,7 @@ def create_router() -> Router:
         await execute(message, dialog, initialize)
 
     @router.message(Command("study", "translate", "quiz"))
+    @bounded_control("change")
     async def mode(message: Message, command: CommandObject, dialog: DialogService):
         await cancel_answers(message.from_user.id)
         if await invalidate(message, dialog) is None:
@@ -283,6 +371,7 @@ def create_router() -> Router:
         )
 
     @router.message(Command("reset"))
+    @bounded_control("change")
     async def reset(message: Message, dialog: DialogService):
         await cancel_answers(message.from_user.id)
         if await invalidate(message, dialog) is None:
@@ -290,6 +379,7 @@ def create_router() -> Router:
         await execute(message, dialog, lambda: dialog.reset(message.from_user.id))
 
     @router.message(Command("stop"))
+    @bounded_control("stop")
     async def stop(message: Message, dialog: DialogService):
         if closing:
             return
@@ -316,6 +406,7 @@ def create_router() -> Router:
         await execute(message, dialog, lambda: dialog.why(message.from_user.id))
 
     @router.message(Command("timezone"))
+    @bounded_control("timezone")
     async def timezone(message: Message, command: CommandObject, dialog: DialogService):
         setting = dialog.timezone_is_direct(command.args)
         if setting:
@@ -331,6 +422,7 @@ def create_router() -> Router:
         )
 
     @router.callback_query(F.data.startswith("tz:"))
+    @bounded_control(callback_lane)
     async def timezone_callback(query: CallbackQuery, dialog: DialogService):
         message = query.message
         if (
@@ -374,6 +466,7 @@ def create_router() -> Router:
             callbacks.discard(task)
 
     @router.callback_query(F.data.startswith("rem:"))
+    @bounded_control(callback_lane)
     async def reminder_callback(query: CallbackQuery, dialog: DialogService):
         message = query.message
         if (
@@ -421,7 +514,7 @@ def create_router() -> Router:
 
     @router.message(F.text.startswith("/"))
     async def unknown(message: Message):
-        await message.answer("Неизвестная команда. Список команд — /start.", parse_mode=None)
+        await reject(message, "Неизвестная команда. Список команд — /start.")
 
     @router.message()
     async def text(message: Message, dialog: DialogService):
