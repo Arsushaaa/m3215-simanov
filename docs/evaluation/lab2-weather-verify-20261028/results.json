@@ -1,0 +1,112 @@
+{
+  "created_at": "2026-10-28T07:47:02.975274+00:00",
+  "manifest_sha256": "cd27c14cd230b4ea6013aa41a1afe67c684210d228b07331926cdc50c478e946",
+  "status": "completed",
+  "attempts": [
+    {
+      "id": "weather_read",
+      "status": "failed",
+      "maximum_llm_calls": 4,
+      "started_at": "2026-10-28T07:47:08.712990+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-10-28T07:47:09.099538+00:00",
+          "temperature": 0.2,
+          "input_sha256": "a71a92474ece51683ab4e00880246d7c8d8ba1ee4e615cc1b95c3639c845fea5",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 17,
+            "remaining": 33
+          },
+          "wire": {
+            "request_sha256": "630ade203c3f2571fe3cc4af99e5fa93f931a81361c0d8ce2f33877eebf2ac14",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793173629-eezPRAGLA2CNQVnUsIJN",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3638,
+            "completion_tokens": 29,
+            "total_tokens": 3667,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-440b2ee6-543f-48cc-8306-2c357d610ba1",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань, Россия\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-10-28T07:47:10.029832+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Казань, Россия"
+          },
+          "status": "failed",
+          "error_type": "MCPClientError"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 1,
+          "mcp_calls": 1,
+          "text": "What's the weather right now in Kazan, Russia?",
+          "delivered_texts": [
+            "Внешний сервис сейчас недоступен. Попробуй позже."
+          ],
+          "status": "completed"
+        }
+      ],
+      "error_type": "CaseFailure",
+      "failure": "Read did not complete two model phases",
+      "finished_at": "2026-10-28T07:47:16.195522+00:00"
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "passed": 0,
+      "total": 1
+    },
+    "acceptance": "not_passed",
+    "llm_calls": 1,
+    "session_started_llm_calls": 33,
+    "mcp_calls": 1,
+    "api_cost": 0,
+    "real_telegram_http_calls": 0
+  },
+  "finished_at": "2026-10-28T07:47:17.107753+00:00"
+}
