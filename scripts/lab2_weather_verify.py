@@ -2,6 +2,8 @@
 
 This is a separate preregistered regression, not a rescore/replay of either
 previous ten-flow report. Uses its unchanged weather case and isolated runtime.
+The first focused run failed after one real model call because Open-Meteo was
+unreachable. That consumed attempt remains part of the frozen session ledger.
 """
 
 import argparse
@@ -32,14 +34,15 @@ from scripts.lab2_experiment import checkpoint, digest, timestamp
 
 ROOT = base.ROOT
 FOLDERS = (
-    ROOT / "docs/evaluation/lab2-adversarial-live-20261028",
-    ROOT / "docs/evaluation/lab2-adversarial-live-20261028-v2",
+    (ROOT / "docs/evaluation/lab2-adversarial-live-20261028", 15),
+    (ROOT / "docs/evaluation/lab2-adversarial-live-20261028-v2", 17),
+    (ROOT / "docs/evaluation/lab2-weather-verify-20261028", 1),
 )
 CASE = deepcopy(next(case for case in base.CASES if case["id"] == "weather_read"))
-BASELINE_CALLS = 32
+BASELINE_CALLS = 33
 MAXIMUM = 4
 PLAN = {
-    "version": 1,
+    "version": 2,
     "case": CASE,
     "queries": {name: base.QUERIES[name] for name in ("weather_read", "weather_refinement")},
     "maximum_llm_calls": MAXIMUM,
@@ -56,12 +59,21 @@ PLAN = {
 
 def baseline():
     files, total = {}, 0
-    for folder in FOLDERS:
+    for folder, expected in FOLDERS:
         result_path = folder / "results.json"
         result = json.loads(result_path.read_text())
         started = sum(len(row["llm_calls"]) for row in result["attempts"])
-        if result["metrics"]["llm_calls"] != started:
-            raise ValueError("Previous attempt ledger is inconsistent.")
+        if (
+            result.get("status") != "completed"
+            or started != expected
+            or result["metrics"]["llm_calls"] != started
+            or any(
+                row.get("status") == "in_progress"
+                or any(call.get("status") not in {"ok", "failed"} for call in row["llm_calls"])
+                for row in result["attempts"]
+            )
+        ):
+            raise ValueError("Previous attempt ledger is inconsistent or unfinished.")
         total += started
         for path in (folder / "manifest.json", result_path):
             files[str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -88,6 +100,8 @@ async def prepare(settings, folder, *, quota=None, catalog=None):
     if type(quota.get("remaining")) is not int or quota["remaining"] < MAXIMUM:
         raise ValueError("Four remaining requests are required.")
     previous = baseline()
+    if previous["started_llm_calls"] + MAXIMUM > PLAN["maximum_session_llm_calls"]:
+        raise ValueError("The focused verification exceeds the authorized session budget.")
     owned = catalog is None
     source = (
         MCPClient(replace(settings, openrouter_api_key="", postgres_password=""))

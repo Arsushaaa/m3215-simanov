@@ -25,17 +25,43 @@ async def test_weather_verification_refuses_insufficient_quota(bot_settings, tmp
         )
 
 
-async def test_manifest_binds_previous_32_attempts_without_changing_reports(bot_settings, tmp_path):
+async def test_manifest_binds_previous_33_attempts_including_failed_weather(bot_settings, tmp_path):
     settings = replace(bot_settings, llm_tool_mode="native")
     before = verify.baseline()
     catalog = SimpleNamespace(available=True, tools={}, resources={})
     manifest = await verify.prepare(settings, tmp_path, quota={"remaining": 18}, catalog=catalog)
     assert manifest["protocol"]["session_baseline"] == before == verify.baseline()
-    assert before["started_llm_calls"] == 32 and len(before["files_sha256"]) == 4
+    assert before["started_llm_calls"] == 33 and len(before["files_sha256"]) == 6
     assert manifest["plan"]["maximum_llm_calls"] == 4
     assert len(manifest["plan"]["queries"]) == 2
     with pytest.raises(ValueError, match="Never overwrite"):
         await verify.prepare(settings, tmp_path, quota={"remaining": 18}, catalog=catalog)
+
+
+@pytest.mark.parametrize(
+    "failure", ["started_count", "metric_count", "unfinished_run", "unfinished_call"]
+)
+def test_weather_baseline_refuses_changed_or_unresolved_attempts(tmp_path, monkeypatch, failure):
+    folder = tmp_path / "previous"
+    folder.mkdir()
+    row = {"status": "failed", "llm_calls": [{"status": "ok"}]}
+    result = {"status": "completed", "metrics": {"llm_calls": 1}, "attempts": [row]}
+    if failure == "started_count":
+        row["llm_calls"].append({"status": "failed"})
+        result["metrics"]["llm_calls"] = 2
+    elif failure == "metric_count":
+        result["metrics"]["llm_calls"] = 0
+    elif failure == "unfinished_run":
+        result["status"] = "in_progress"
+    else:
+        row["llm_calls"][0]["status"] = "in_progress"
+    (folder / "results.json").write_text(json.dumps(result))
+    (folder / "manifest.json").write_text("{}")
+    monkeypatch.setattr(verify, "ROOT", tmp_path)
+    monkeypatch.setattr(verify, "FOLDERS", ((folder, 1),))
+    monkeypatch.setattr(verify, "BASELINE_CALLS", 1)
+    with pytest.raises(ValueError, match="ledger is inconsistent or unfinished"):
+        verify.baseline()
 
 
 async def test_weather_budget_refuses_fifth_request_before_metadata_or_generation(bot_settings):
@@ -104,5 +130,5 @@ async def test_weather_verification_uses_unchanged_case_real_sql_stdio_and_fake_
     verify.summarize(data)
     assert data["metrics"]["acceptance"] == "passed", data["attempts"]
     assert data["metrics"]["llm_calls"] == 4
-    assert data["metrics"]["session_started_llm_calls"] == 36
+    assert data["metrics"]["session_started_llm_calls"] == 37
     assert data["metrics"]["mcp_calls"] == 2
