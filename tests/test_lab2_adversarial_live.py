@@ -51,11 +51,11 @@ class FakeWireClient:
         return RoutingCompletion("Итог", [])
 
 
-@pytest.mark.parametrize("remaining", [29, 0, None, True, "50"])
+@pytest.mark.parametrize("remaining", [16, 0, None, True, "50"])
 async def test_prepare_refuses_insufficient_quota_before_discovery(
     bot_settings, tmp_path, remaining
 ):
-    with pytest.raises(ValueError, match="30 remaining"):
+    with pytest.raises(ValueError, match="17 remaining"):
         await audit.prepare(
             replace(bot_settings, llm_tool_mode="native"), tmp_path, quota={"remaining": remaining}
         )
@@ -69,9 +69,11 @@ async def test_preregistration_is_immutable_and_contains_no_key(bot_settings, tm
     )
     assert len(frozen["plan"]["cases"]) == 10
     assert frozen["plan"]["limits"] == {
-        "planned_llm_calls": 15,
+        "planned_llm_calls": 17,
         "hard_maximum_llm_calls": 24,
-        "remaining_quota_reserve": 15,
+        "remaining_quota_reserve": 0,
+        "maximum_session_llm_calls": 50,
+        "previous_started_llm_calls": 15,
     }
     content = (tmp_path / "manifest.json").read_text()
     assert settings.openrouter_api_key not in content
@@ -93,7 +95,7 @@ async def test_quota_reserve_blocks_before_consuming_slot(bot_settings):
     data, row = document()
     client = FakeWireClient(bot_settings)
     llm = audit.BudgetLLM(
-        client, data, lambda: None, quota_reader=AsyncMock(return_value={"remaining": 15})
+        client, data, lambda: None, quota_reader=AsyncMock(return_value={"remaining": 0})
     )
     llm.row = row
     llm.step = {"llm_calls": 0, "maximum_llm_calls": 2}
@@ -242,6 +244,16 @@ async def test_existing_checkpoint_never_replays_database_or_api(
 class LocalMCP(MCPClient):
     async def call_tool(self, name, arguments, **kwargs):
         if name == "get_weather":
+            if arguments == {"city": "Казань, Россия"}:
+                return {
+                    "status": "ambiguous",
+                    "query": "Казань, Россия",
+                    "candidates": [
+                        {"name": "Казань", "country": "Россия", "region": "Татарстан"},
+                        {"name": "Казань", "country": "Россия", "region": "Кировская Область"},
+                    ],
+                    "source": "Open-Meteo",
+                }
             return {
                 "status": "ok",
                 "place": {"name": "Казань", "country": "Россия", "region": "Татарстан"},
@@ -267,15 +279,25 @@ class SyntheticAuditClient(audit.AuditClient):
     async def _request(self, payload):
         self.capture(payload)
         query = payload["messages"][-1]["content"]
+        if payload.get("tool_choice") == "auto":
+            try:
+                current = json.loads(query)
+            except (TypeError, ValueError):
+                current = None
+            if isinstance(current, dict) and current.get("message_index") == 0:
+                query = current["text"]
         text, calls = "Пирог готовят из теста и начинки.", []
         if payload.get("tool_choice") == "none":
             result = json.loads(payload["messages"][-1]["content"])
             if result["source"] == "Open-Meteo":
-                moment = datetime.fromisoformat(result["observed_at"])
-                text = (
-                    f"Казань: {result['temperature_c']:g} °C. "
-                    f"{format_date(moment.date())}, {moment:%H:%M}. Источник: Open-Meteo."
-                )
+                if result["status"] == "ambiguous":
+                    text = "Уточните: Казань в Татарстане или Кировской области?"
+                else:
+                    moment = datetime.fromisoformat(result["observed_at"])
+                    text = (
+                        f"Казань: {result['temperature_c']:g} °C. "
+                        f"{format_date(moment.date())}, {moment:%H:%M}. Источник: Open-Meteo."
+                    )
             else:
                 day = datetime.fromisoformat(result["date"]).date()
                 text = f"{format_date(day)}. Источник: локальное расписание.\n" + "\n".join(
@@ -297,6 +319,8 @@ class SyntheticAuditClient(audit.AuditClient):
             function, arguments = None, None
             if query == audit.QUERIES["weather_read"]:
                 function, arguments = "get_weather", {"city": "Казань, Россия"}
+            elif query == audit.QUERIES["weather_refinement"]:
+                function, arguments = "get_weather", {"city": "Казань, Татарстан, Россия"}
             elif query == audit.QUERIES["schedule_read"]:
                 function, arguments = "get_schedule", {"date": "2026-10-13"}
             elif query == audit.QUERIES["reminder_bypass"]:
@@ -386,6 +410,6 @@ async def test_all_ten_flows_use_dispatcher_real_sql_and_stdio_without_model_or_
         (r["id"], r.get("failure"), r.get("error_type")) for r in data["attempts"]
     ]
     assert data["metrics"]["cases"] == {"passed": 10, "total": 10}
-    assert data["metrics"]["llm_calls"] == 15
-    assert data["metrics"]["mcp_calls"] == 4
+    assert data["metrics"]["llm_calls"] == 17
+    assert data["metrics"]["mcp_calls"] == 5
     assert data["metrics"]["real_telegram_http_calls"] == 0
