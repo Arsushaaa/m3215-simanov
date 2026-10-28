@@ -1,0 +1,14 @@
+{
+  "checked_at": "2026-10-28",
+  "changed_markdown_files": 8,
+  "missing_local_links": [],
+  "valid_json_files": 96,
+  "known_secret_values_checked": 3,
+  "known_secret_matching_files": [],
+  "historical_tags": {
+    "lab1": "cf76ff6b7ab25b57a9b68d9736639efba946be7c",
+    "lab2": "f8e562b9ffae87f0ca8983225029de859aa93d41",
+    "lab2-final": "7d63395c07a49b9e670342251ebb5507ba88681b",
+    "lab2-final-v2": "523e8e424e9ce01f31fe6bc4e55d805dd40cd272"
+  }
+}

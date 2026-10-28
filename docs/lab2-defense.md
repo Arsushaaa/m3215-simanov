@@ -6,7 +6,16 @@
 сдаваемой версии находятся в [плане](../plan.md), а требования — в
 [спецификации](../spec.md) и [методичке](labs-guide.md#lab2).
 
-Новая версия для сдачи — `lab2-final-v2`; отклонённый `lab2-final`
+Обновление от 28 октября 2026 года — [`lab2-final-v3`](https://github.com/Arsushaaa/m3215-simanov/tree/lab2-final-v3).
+[Полная приёмка](evaluation/lab2-adversarial-release-20261028.json): **1505 passed,
+0 failed, 0 skipped, 28/28 критериев**. [Проверки устойчивости](adversarial-testing.md)
+фиксируют 50 реальных LLM-вызовов с сохранением всех неуспехов и стоимостью API 0.
+На окончательном коде прошли отдельный погодный поток и восемь новых сценариев;
+прежний полный набор из десяти потоков на этом коде повторно не запускался.
+Использованы настоящие OpenRouter, MCP stdio и изолированный PostgreSQL,
+транспорт Telegram подменён. Все прежние теги и результаты сохраняются.
+
+Исторический срез 26 октября — `lab2-final-v2`; отклонённый `lab2-final`
 остаётся историческим. [Обновление маршрутизации](semantic-routing.md) удаляет
 локальный парсер напоминаний. [Полный офлайн-протокол](evaluation/lab2-final-v2-release-checks.json)
 и [реальный ограниченный прогон](evaluation/semantic-routing-smoke-20261026-native-inline/results.json)
@@ -289,16 +298,16 @@ python -m scripts.lab2_reliability --output .deploy/evaluation/lab2-checks.json
 python -m scripts.mcp_probe --date 2026-10-13
 git status --short
 git show --no-patch lab1
-git show --no-patch lab2-final-v2
+git show --no-patch lab2-final-v3
 ```
 
-Актуальная сдаваемая версия — `lab2-final-v2`; `lab1`, исходный `lab2` и `lab2-final` не перемещаются.
-Полный офлайн-протокол новой версии — [lab2-final-v2-release-checks.json](evaluation/lab2-final-v2-release-checks.json).
+Актуальная сдаваемая версия — `lab2-final-v3`; `lab1`, исходный `lab2` и `lab2-final` не перемещаются.
+Полный офлайн-протокол новой версии — [lab2-adversarial-release-20261028.json](evaluation/lab2-adversarial-release-20261028.json).
 Приёмка [1370 тестов](evaluation/lab2-provider-rejection-checks.json) относится к прежнему `lab2-final`.
 Исходная приёмка `lab2` — [lab2-final-checks.json](evaluation/lab2-final-checks.json),
 объяснение процедуры — [lab2-reliability.md](lab2-reliability.md).
 Последняя Git-команда имеет смысл после завершения приёмки и создания тега:
-отсутствующий `lab2-final-v2` означает, что новая сдаваемая версия ещё не зафиксирована.
+отсутствующий `lab2-final-v3` означает, что новая сдаваемая версия ещё не зафиксирована.
 Локальный тег сам не публикуется в GitHub; для сдачи проверьте доступ
 преподавателя к репозиторию и видимость требуемого тега.
 Для запуска из чистого клона задайте в `.env`
