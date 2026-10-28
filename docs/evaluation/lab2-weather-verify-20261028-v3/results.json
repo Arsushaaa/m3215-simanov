@@ -1,0 +1,321 @@
+{
+  "created_at": "2026-10-28T14:39:26.329452+00:00",
+  "manifest_sha256": "cdd2da47adabf16b1d9ca1eb5f61537b298176642fff92ee9d115d3004e5f281",
+  "status": "completed",
+  "attempts": [
+    {
+      "id": "weather_read",
+      "status": "passed",
+      "maximum_llm_calls": 4,
+      "started_at": "2026-10-28T14:39:30.682240+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-10-28T14:39:30.765748+00:00",
+          "temperature": 0.2,
+          "input_sha256": "22bc97f00d60eb601e2f79838517960e818952f98cb8b070f9c678f743a0b9a6",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 22,
+            "remaining": 28
+          },
+          "wire": {
+            "request_sha256": "a01a47fa88ce0c2cdb66e4e0a04b49573a6fe0baa3e07d18c36734099b836d90",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793198370-PStWkIzSFYRnWPCDtUBI",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3859,
+            "completion_tokens": 29,
+            "total_tokens": 3888,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-9ddafbb9-b74b-442a-9695-068453a36e6b",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань, Россия\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-10-28T14:39:31.567882+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-10-28T14:39:31.875369+00:00",
+          "temperature": 0.2,
+          "input_sha256": "4ce49748cbe41741bb20e9c7fc472948ef08f6b12078ea7ed1f816960e8ab858",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 22,
+            "remaining": 28
+          },
+          "wire": {
+            "request_sha256": "3c2d883e9ab045fe36a204ecada126d05904bb677ad91a2a54d78e5a23e7d75d",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793198371-dZN8PQkFr4XYi1WHRtca",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1088,
+            "completion_tokens": 80,
+            "total_tokens": 1168,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "В запросе «Казань, Россия» нашлось несколько вариантов:\n\n1. Казань — Татарстан, Городской округ Казань\n2. Казань — Кировская область\n3. Казань-Омга — Кировская область\n\nУточните, какой населённый пункт вы имели в виду, чтобы я мог показать точную погоду.",
+          "finished_at": "2026-10-28T14:39:32.852854+00:00"
+        },
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-10-28T14:39:32.936611+00:00",
+          "temperature": 0.2,
+          "input_sha256": "9c32a977460c94a1d5d9440b9f694ec5d3c0fb4b2e1228acbe473b518f307a7b",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 22,
+            "remaining": 28
+          },
+          "wire": {
+            "request_sha256": "05366346eb2bd4a6aa532d07484d3541ed4cba27b4b2173647e7d8ff5a3117d4",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793198372-oDAaEoUBvjSwyHW2F9tb",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3975,
+            "completion_tokens": 33,
+            "total_tokens": 4008,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-19e30f05-4b50-4add-a0fd-07bf16ef975c",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань, Россия, Татарстан\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-10-28T14:39:33.722336+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-10-28T14:39:34.070147+00:00",
+          "temperature": 0.2,
+          "input_sha256": "08b794b6f6dbbdba72a4782e4d9f2c89d3e5e7870baca98afd578e5cb9fa361d",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 22,
+            "remaining": 28
+          },
+          "wire": {
+            "request_sha256": "9c1e744492b471bd1b499415f41f8b613736a5ca1e30cbf0ac2943e7fcc557ff",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793198374-FvCVsjzGRypbex6fFwI0",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1201,
+            "completion_tokens": 67,
+            "total_tokens": 1268,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "В Казани, Татарстан, сейчас **7,4 °C**, преимущественно ясно. Ветер **3,6 км/ч**.\n\nИсточник: Open-Meteo, данные на 28 октября 2026, 17:30 (UTC+03:00).",
+          "finished_at": "2026-10-28T14:39:34.961829+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Казань, Россия"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ambiguous",
+            "query": "Казань, Россия",
+            "candidates": [
+              {
+                "name": "Казань",
+                "country": "Россия",
+                "region": "Татарстан, Gorodskoy Okrug Kazan’"
+              },
+              {
+                "name": "Казань",
+                "country": "Россия",
+                "region": "Кировская Область"
+              },
+              {
+                "name": "Казань-Омга",
+                "country": "Россия",
+                "region": "Кировская Область"
+              }
+            ],
+            "source": "Open-Meteo"
+          }
+        },
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Казань, Россия, Татарстан"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ok",
+            "place": {
+              "name": "Казань",
+              "country": "Россия",
+              "region": "Татарстан, Gorodskoy Okrug Kazan’"
+            },
+            "temperature_c": 7.4,
+            "condition": {
+              "code": 1,
+              "description": "Преимущественно ясно"
+            },
+            "wind": {
+              "speed": 3.6,
+              "unit": "km/h"
+            },
+            "observed_at": "2026-10-28T17:30:00+03:00",
+            "timezone": "Europe/Moscow",
+            "source": "Open-Meteo"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "What's the weather right now in Kazan, Russia?",
+          "delivered_texts": [
+            "Найдено несколько мест. Уточни страну или регион:\n\n1. Казань, Россия, Татарстан, Gorodskoy Okrug Kazan’\n2. Казань, Россия, Кировская Область\n3. Казань-Омга, Россия, Кировская Область\n\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        },
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "В Татарстане",
+          "delivered_texts": [
+            "Место: Казань, Россия, Татарстан, Gorodskoy Okrug Kazan’.\nТемпература: 7.4 °C. Преимущественно ясно.\nВетер: 3.6 км/ч.\n\nНаблюдение: 28 октября 2026, 17:30 (UTC+03:00).\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        }
+      ],
+      "finished_at": "2026-10-28T14:39:34.971047+00:00"
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "passed": 1,
+      "total": 1
+    },
+    "acceptance": "passed",
+    "llm_calls": 4,
+    "session_started_llm_calls": 41,
+    "mcp_calls": 2,
+    "api_cost": 0,
+    "real_telegram_http_calls": 0
+  },
+  "finished_at": "2026-10-28T14:39:35.751443+00:00"
+}
