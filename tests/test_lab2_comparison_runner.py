@@ -78,7 +78,7 @@ async def test_two_free_models_and_temperatures_receive_identical_inputs(bot_set
         assert b"expected_action" not in serialized
         assert b"expected_arguments" not in serialized
         assert all("expected" not in payload for payload in payloads)
-        assert [call[0][-1]["content"] for call in client.calls] == [
+        assert [json.loads(call[0][-1]["content"])["text"] for call in client.calls] == [
             case["query"] for case in dataset["cases"]
         ]
         recorded_calls = [call for row in report["attempts"] for call in row["calls"]]
