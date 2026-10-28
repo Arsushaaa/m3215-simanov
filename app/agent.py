@@ -28,7 +28,7 @@ from app.mcp.contracts import (
     ReminderTimeError,
     ResourceDecision,
     RespondDecision,
-    WeatherOk,
+    WeatherResult,
     validate_reminder_time,
 )
 from app.reminder_grounding import indexed_history, indexed_message, user_sources, validate_evidence
@@ -58,7 +58,9 @@ FINAL_RULES = (
     "конкретной даты; не выводи ISO с T и не меняй фактический момент. "
     "outside_coverage означает отсутствие данных, а пустой lessons при status=ok — "
     "известный свободный день. "
-    "ambiguous требует уточнения места, not_found означает отсутствие города. "
+    "ambiguous требует уточнения места: названия, страны и регионы вариантов "
+    "передавай дословно, без новых административных слов или иных дополнений. "
+    "not_found означает отсутствие города. "
     "Верни обычный ответ пользователю, без JSON решения и новых вызовов."
 )
 
@@ -617,12 +619,16 @@ class AgentService:
         if (
             not isinstance(decision, ResourceDecision)
             and decision.name == "get_weather"
-            and raw.get("status") == "ok"
+            and raw.get("status") in {"ok", "ambiguous"}
         ):
             checked = checked_weather_reply(
-                final.text, WeatherOk.model_validate(raw), truncated=final.truncated
+                final.text, WeatherResult.model_validate(raw).root, truncated=final.truncated
             )
             if checked.replaced:
-                trace.reason = "Погодный итог заменён точными наблюдениями проверенного MCP."
+                trace.reason = (
+                    "Уточнение места содержит точные варианты проверенного MCP."
+                    if raw["status"] == "ambiguous"
+                    else "Погодный итог заменён точными наблюдениями проверенного MCP."
+                )
             return AgentReply(checked.text, checked.truncated)
         return AgentReply(final.text, final.truncated)

@@ -2,7 +2,9 @@
 
 The LLM still produces a real tool-disabled final. Unsupported numeric/date
 formatting, missing facts or truncation select a complete deterministic card
-from the validated WeatherOk instead of another LLM request. This is a bounded
+from validated weather data instead of another LLM request. Ambiguous searches
+always use their exact candidate labels: the next user reply relies on these
+names, so model paraphrases must not become new place facts. This is a bounded
 fact/format check, not a proof of all possible natural-language assertions.
 """
 
@@ -12,7 +14,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from app.formatting import format_reply
-from app.mcp.contracts import WeatherOk
+from app.mcp.contracts import WeatherAmbiguous, WeatherOk
 from app.time_display import format_date, format_datetime, format_utc_offset
 
 _NUMBER = r"(?<![\d.,])([+\-−]?\d+(?:[.,]\d+)?)"
@@ -52,13 +54,29 @@ def canonical_weather(observation: WeatherOk) -> str:
     )
 
 
+def canonical_weather_clarification(observation: WeatherAmbiguous) -> str:
+    labels = [
+        ", ".join(dict.fromkeys(part for part in (place.name, place.country, place.region) if part))
+        for place in observation.candidates
+    ]
+    choices = "\n".join(f"{index}. {_literal(label)}" for index, label in enumerate(labels, 1))
+    return (
+        f"Найдено несколько мест. Уточни страну или регион:\n\n{choices}\n\nИсточник: Open-Meteo."
+    )
+
+
 def _values(pattern, text):
     return [Decimal(value.replace(",", ".").replace("−", "-")) for value in pattern.findall(text)]
 
 
-def checked_weather_reply(text: str, observation: WeatherOk, *, truncated=False) -> WeatherReply:
+def checked_weather_reply(
+    text: str, observation: WeatherOk | WeatherAmbiguous, *, truncated=False
+) -> WeatherReply:
+    if isinstance(observation, WeatherAmbiguous):
+        clarification = canonical_weather_clarification(observation)
+        return WeatherReply(clarification, replaced=clarification != text or truncated)
     if not isinstance(observation, WeatherOk):
-        raise TypeError("A validated WeatherOk is required.")
+        raise TypeError("A validated WeatherOk or WeatherAmbiguous is required.")
     valid = False
     if isinstance(text, str) and text.strip() and not truncated:
         try:

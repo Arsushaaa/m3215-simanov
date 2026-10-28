@@ -56,6 +56,11 @@ def model_schema(schema, *, pending=False, inline_refs=False, message_indices=No
             "Do not copy Latin names or invent a country."
             " For a short clarification retain the city and ALL country/region qualifiers "
             "the user explicitly supplied earlier; add the new qualifier without dropping any."
+            " When choosing an offered candidate after a short clarification, return its "
+            "COMPLETE Russian label: city, country, matching Russian region. Keep the offered "
+            "Russian spelling; do not add administrative words or omit the country. "
+            "An API-added Latin secondary administrative fragment is not a user qualifier: "
+            "exclude it instead of copying Latin into city or inventing a translation."
         )
     if not inline_refs:
         return result

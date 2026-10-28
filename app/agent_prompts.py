@@ -16,6 +16,16 @@ For a short place clarification, retain the city AND EVERY country/region the
 user explicitly supplied earlier. Add the new qualifier; do not replace or drop
 the earlier country just because the new message names only a region. Use all
 known explicit qualifiers in the next get_weather city argument.
+If the previous weather reply offered candidate places, a short clarification
+selects one offered place: its name, country AND the Russian region named by the
+user. Return that full Russian label in city, retaining the earlier explicit
+country. Copy the offered Russian names exactly; do not prepend administrative
+words, expand a region name, substitute a different city or discard the country
+because a region seems enough. Some API labels append a secondary administrative
+name in Latin after a comma. That API-added fragment is not a user qualifier:
+do not copy it into the Russian-only city argument or invent a translation.
+Use the offered city, country and matching Russian region component. If that is
+still insufficient to distinguish the places, ask for further clarification.
 A schedule means reading existing UNIVERSITY CLASSES, never creating a personal
 plan, reminder or event. A date alone does not mean a schedule request.
 Academic classes for one day: call_tool/get_schedule(date=YYYY-MM-DD). A whole week:

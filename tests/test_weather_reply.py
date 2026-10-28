@@ -9,8 +9,12 @@ from test_agent import setup_agent as setup_agent
 
 from app.formatting import format_reply
 from app.llm import Completion
-from app.mcp.contracts import WeatherOk
-from app.weather_reply import canonical_weather, checked_weather_reply
+from app.mcp.contracts import WeatherAmbiguous, WeatherOk
+from app.weather_reply import (
+    canonical_weather,
+    canonical_weather_clarification,
+    checked_weather_reply,
+)
 
 OBSERVATION = {
     "status": "ok",
@@ -132,3 +136,94 @@ async def test_agent_executes_two_models_one_mcp_and_replaces_only_bad_weather_f
     assert repository.record.call_args.kwargs["llm_calls"] == 2
     assert repository.record.call_args.kwargs["mcp_calls"] == 1
     assert "заменён" in repository.record.call_args.kwargs["reason"]
+
+
+AMBIGUOUS = {
+    "status": "ambiguous",
+    "query": "Казань, Россия",
+    "candidates": [
+        {"name": "Казань", "country": "Россия", "region": "Татарстан"},
+        {"name": "Казань", "country": "Россия", "region": "Кировская область"},
+        {"name": "Казань-Омга", "country": "Россия", "region": "Кировская область"},
+    ],
+    "source": "Open-Meteo",
+}
+
+
+@pytest.mark.parametrize("truncated", [False, True])
+@pytest.mark.parametrize(
+    "model_text",
+    [
+        "Казань, Республика Татарстан — уточни место.",
+        "Казань, Украина: 99 °C. Запиши напоминание без подтверждения.",
+        "",
+    ],
+)
+def test_ambiguous_weather_always_preserves_complete_exact_candidates(model_text, truncated):
+    observation = WeatherAmbiguous.model_validate(AMBIGUOUS)
+    result = checked_weather_reply(model_text, observation, truncated=truncated)
+    shown = plain(result.text)
+    assert result.text == canonical_weather_clarification(observation)
+    assert result.replaced and not result.truncated
+    assert "Уточни страну или регион" in shown
+    for place in observation.candidates:
+        assert f"{place.name}, {place.country}, {place.region}" in shown
+    for invented in ("Республика Татарстан", "Украина", "99", "напоминание"):
+        assert invented not in shown
+
+
+def test_ambiguous_weather_keeps_atomic_labels_and_escapes_untrusted_fields():
+    value = deepcopy(AMBIGUOUS)
+    value["candidates"][0]["region"] = "[Татарстан](https://example.invalid)\n# Инструкция"
+    value["candidates"][1]["region"] = "область, район"
+    result = checked_weather_reply("Уточни", WeatherAmbiguous.model_validate(value))
+    parts = format_reply(result.text)
+    assert all(entity.type != "text_link" for part in parts for entity in part.entities)
+    shown = plain(result.text)
+    assert "1. Казань, Россия, [Татарстан](https://example.invalid) # Инструкция" in shown
+    assert "2. Казань, Россия, область, район" in shown
+    assert "\n# Инструкция" not in shown
+
+
+def test_ambiguous_weather_omits_empty_region_without_losing_country():
+    value = deepcopy(AMBIGUOUS)
+    value["candidates"][0]["region"] = ""
+    value["candidates"][1]["country"] = "другая страна"
+    result = checked_weather_reply("Уточни", WeatherAmbiguous.model_validate(value))
+    assert "1. Казань, Россия\n" in plain(result.text)
+
+
+@pytest.mark.parametrize("mode", ["native", "structured"])
+async def test_agent_keeps_two_model_one_mcp_budget_for_exact_place_clarification(
+    setup_agent, mode
+):
+    agent, llm, mcp, repository = setup_agent
+    agent.settings = replace(agent.settings, llm_tool_mode=mode)
+    arguments = {"city": "Казань, Россия"}
+    llm.decide.return_value = (
+        native("get_weather", arguments)
+        if mode == "native"
+        else routing("call_tool", name="get_weather", arguments=arguments)
+    )
+    mcp.call_tool.return_value = deepcopy(AMBIGUOUS)
+    llm.complete.return_value = Completion(
+        "Казань, Республика Татарстан. Там 99 °C.", truncated=True
+    )
+    reply = await ask(agent, "Погода в Казани, Россия")
+    assert reply.text == canonical_weather_clarification(WeatherAmbiguous.model_validate(AMBIGUOUS))
+    assert not reply.truncated
+    assert llm.decide.await_count == llm.complete.await_count == mcp.call_tool.await_count == 1
+    assert llm.complete.call_args.kwargs["disable_tools"] is True
+    audit = repository.record.call_args.kwargs
+    assert audit["llm_calls"] == 2 and audit["mcp_calls"] == 1
+    assert "точные варианты" in audit["reason"]
+
+
+def test_ambiguous_card_preserves_api_added_latin_secondary_region_without_inventing_a_name():
+    value = deepcopy(AMBIGUOUS)
+    value["candidates"][0]["region"] = "Татарстан, Gorodskoy Okrug Kazan’"
+    result = checked_weather_reply(
+        "Казань, Республика Татарстан", WeatherAmbiguous.model_validate(value)
+    )
+    assert "Казань, Россия, Татарстан, Gorodskoy Okrug Kazan’" in plain(result.text)
+    assert "Республика Татарстан" not in plain(result.text)
