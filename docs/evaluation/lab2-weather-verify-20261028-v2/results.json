@@ -1,0 +1,308 @@
+{
+  "created_at": "2026-10-28T14:33:11.807306+00:00",
+  "manifest_sha256": "c9acbfb5cab058a2ed5665ff1ced533c99df43095eac039c354117cc5000e281",
+  "status": "completed",
+  "attempts": [
+    {
+      "id": "weather_read",
+      "status": "failed",
+      "maximum_llm_calls": 4,
+      "started_at": "2026-10-28T14:33:16.011875+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-10-28T14:33:16.101214+00:00",
+          "temperature": 0.2,
+          "input_sha256": "3dfbdbb64f72e3d8cfadc9d90153e54454bc4fb864ba6e2b015d594b43758d02",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 18,
+            "remaining": 32
+          },
+          "wire": {
+            "request_sha256": "cec1161b2b4f25193fc31c966c565814fcb12b2f08ecab04aeea4414eed3c979",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793197996-fQnS8IFtqiQjxFW8WdWC",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3638,
+            "completion_tokens": 29,
+            "total_tokens": 3667,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-188ec613-f390-4185-8dac-61c9801629ea",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань, Россия\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-10-28T14:33:17.430507+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-10-28T14:33:18.231740+00:00",
+          "temperature": 0.2,
+          "input_sha256": "74cc908408aa3221f9e187518167b61266d81eaf0de0e6fc7a49b0b34b8ec35b",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 18,
+            "remaining": 32
+          },
+          "wire": {
+            "request_sha256": "5cdeba876abf365475b57cba2e2b70c6248455af0eda254fcc45a597ee6f670a",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793197998-uHoG7Ucs1Ju9ohnNqxMQ",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1061,
+            "completion_tokens": 96,
+            "total_tokens": 1157,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "Я нашёл несколько населённых пунктов с названием Казань в России. Чтобы точно сказать погоду, уточните, какую именно Казань вы имеете в виду:\n\n1. Казань, Республика Татарстан (город)\n2. Казань, Кировская область\n3. Казань-Омга, Кировская область\n\nНапишите номер или уточните регион, и я покажу текущую погоду.",
+          "finished_at": "2026-10-28T14:33:19.437408+00:00"
+        },
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-10-28T14:33:19.766466+00:00",
+          "temperature": 0.2,
+          "input_sha256": "b927878f71a23baa7fae859f6248046d81285bbe003e9aa73ab137d52800376e",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 18,
+            "remaining": 32
+          },
+          "wire": {
+            "request_sha256": "7c4fb94055ff3823f224beaa741bb05bf1cac32b216f06ee6c72966e50969c93",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793197999-XqubaaZsdNOLENwK0Uo6",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3775,
+            "completion_tokens": 32,
+            "total_tokens": 3807,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-41e89872-00fb-4ea1-8d5a-44207acbbfcb",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань, Республика Татарстан\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-10-28T14:33:20.672915+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-10-28T14:33:21.068123+00:00",
+          "temperature": 0.2,
+          "input_sha256": "f0fe569426a989ab62fc56d4ee4b94af9a225a7bbb09a43d856cc2fe23c2fa0a",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 18,
+            "remaining": 32
+          },
+          "wire": {
+            "request_sha256": "de1a63f2ed08a5ef36a8834701d306683b78faaff04270845f91a99dd672ec1c",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793198001-PLFli7pDF1ZyotcT0Yqs",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1102,
+            "completion_tokens": 60,
+            "total_tokens": 1162,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "Не удалось найти погоду для Казани, Республика Татарстан — источник данных не вернул результат по этому запросу.\n\nПопробуйте уточнить запрос (например, просто «Казань» или другой вариант названия), и я повторю поиск.",
+          "finished_at": "2026-10-28T14:33:22.630175+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Казань, Россия"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ambiguous",
+            "query": "Казань, Россия",
+            "candidates": [
+              {
+                "name": "Казань",
+                "country": "Россия",
+                "region": "Татарстан, Gorodskoy Okrug Kazan’"
+              },
+              {
+                "name": "Казань",
+                "country": "Россия",
+                "region": "Кировская Область"
+              },
+              {
+                "name": "Казань-Омга",
+                "country": "Россия",
+                "region": "Кировская Область"
+              }
+            ],
+            "source": "Open-Meteo"
+          }
+        },
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Казань, Республика Татарстан"
+          },
+          "status": "ok",
+          "result": {
+            "status": "not_found",
+            "query": "Казань, Республика Татарстан",
+            "source": "Open-Meteo"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "What's the weather right now in Kazan, Russia?",
+          "delivered_texts": [
+            "Я нашёл несколько населённых пунктов с названием Казань в России. Чтобы точно сказать погоду, уточните, какую именно Казань вы имеете в виду:\n\n1. Казань, Республика Татарстан (город)\n2. Казань, Кировская область\n3. Казань-Омга, Кировская область\n\nНапишите номер или уточните регион, и я покажу текущую погоду."
+          ],
+          "status": "completed"
+        },
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "В Татарстане",
+          "delivered_texts": [
+            "Не удалось найти погоду для Казани, Республика Татарстан — источник данных не вернул результат по этому запросу.\n\nПопробуйте уточнить запрос (например, просто «Казань» или другой вариант названия), и я повторю поиск."
+          ],
+          "status": "completed"
+        }
+      ],
+      "error_type": "CaseFailure",
+      "failure": "Refinement did not select Kazan in Tatarstan, Russia",
+      "finished_at": "2026-10-28T14:33:22.649688+00:00"
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "passed": 0,
+      "total": 1
+    },
+    "acceptance": "not_passed",
+    "llm_calls": 4,
+    "session_started_llm_calls": 37,
+    "mcp_calls": 2,
+    "api_cost": 0,
+    "real_telegram_http_calls": 0
+  },
+  "finished_at": "2026-10-28T14:33:23.386466+00:00"
+}
