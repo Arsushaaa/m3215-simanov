@@ -54,6 +54,8 @@ def model_schema(schema, *, pending=False, inline_refs=False, message_indices=No
             "City name IN RUSSIAN (на русском), Cyrillic only. Translate city and "
             "explicitly supplied country/region before returning this argument. "
             "Do not copy Latin names or invent a country."
+            " For a short clarification retain the city and ALL country/region qualifiers "
+            "the user explicitly supplied earlier; add the new qualifier without dropping any."
         )
     if not inline_refs:
         return result

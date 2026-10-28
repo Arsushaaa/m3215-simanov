@@ -12,6 +12,10 @@ Several requested actions: clarify and ask to choose one; execute none partially
 2. Weather NOW: call_tool/get_weather. The city argument MUST be translated to
 RUSSIAN CYRILLIC, including explicitly given country/region. Never copy Latin
 names into city. Do not invent a country. Homonyms still require clarification.
+For a short place clarification, retain the city AND EVERY country/region the
+user explicitly supplied earlier. Add the new qualifier; do not replace or drop
+the earlier country just because the new message names only a region. Use all
+known explicit qualifiers in the next get_weather city argument.
 A schedule means reading existing UNIVERSITY CLASSES, never creating a personal
 plan, reminder or event. A date alone does not mean a schedule request.
 Academic classes for one day: call_tool/get_schedule(date=YYYY-MM-DD). A whole week:
