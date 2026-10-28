@@ -165,6 +165,17 @@ def _normalized(value: str) -> str:
     return " ".join(re.sub(r"[-‐‑‒–—]", " ", value).split())
 
 
+def _administrative_name(value: str) -> str:
+    """Compare whole region labels with an optional Russian formal prefix.
+
+    Open-Meteo can call a region «Татарстан» while a qualified argument says
+    «Республика Татарстан». This is label normalization, not user-intent
+    parsing; city and country matching keep their existing rules.
+    """
+    normalized = _normalized(value)
+    return normalized.removeprefix("республика ")
+
+
 def _locations(value: dict, name: str, qualifiers: list[str]) -> list[_Location]:
     if "results" not in value and "generationtime_ms" not in value:
         raise ValueError("Нет результата геокодирования.")
@@ -186,20 +197,24 @@ def _locations(value: dict, name: str, qualifiers: list[str]) -> list[_Location]
     selected = []
     seen = {}
     for location in locations:
-        accepted = {
+        countries = {
             _normalized(part)
             for part in (
                 location.country,
                 _RUSSIAN_COUNTRIES.get(location.country_code, ""),
                 location.country_code,
-                location.admin1,
-                location.admin2,
-                location.admin3,
-                location.admin4,
             )
             if part
         }
-        if not all(_normalized(qualifier) in accepted for qualifier in qualifiers):
+        regions = {
+            _administrative_name(part)
+            for part in (location.admin1, location.admin2, location.admin3, location.admin4)
+            if part
+        }
+        if not all(
+            _normalized(qualifier) in countries or _administrative_name(qualifier) in regions
+            for qualifier in qualifiers
+        ):
             continue
         if location.id in seen:
             if seen[location.id] != location:

@@ -213,17 +213,71 @@ async def test_real_kazan_geocoding_groups_labels_without_choosing_a_location(
     assert len(session.calls) == 1
 
 
+@pytest.mark.parametrize("qualifier", ["Татарстан", "Республика Татарстан"])
 async def test_real_kazan_geocoding_explicit_tatarstan_uses_only_matching_coordinates(
-    kazan_geocoding,
+    kazan_geocoding, qualifier
 ):
     session = FakeSession(FakeResponse(kazan_geocoding), FakeResponse(weather()))
-    result = await WeatherService(session).get_weather("Казань, Татарстан")
+    result = await WeatherService(session).get_weather(f"Казань, Россия, {qualifier}")
     assert result.root.status == "ok"
     assert result.root.place.region == "Татарстан, Gorodskoy Okrug Kazan’"
     assert session.calls[1][1]["params"]["latitude"] == 55.78874
     assert session.calls[1][1]["params"]["longitude"] == 49.12214
     assert session.calls[1][1]["params"]["timezone"] == "Europe/Moscow"
     assert [url for url, _ in session.calls] == [GEOCODING_URL, WEATHER_URL]
+
+
+@pytest.mark.parametrize(
+    "region,qualifier",
+    [
+        ("Татарстан", "РЕСПУБЛИКА   ТАТАРСТАН"),
+        ("Республика Татарстан", "Татарстан"),
+    ],
+)
+async def test_republic_prefix_is_an_optional_whole_administrative_label(region, qualifier):
+    session = session_for([location(admin1=region)])
+    result = await WeatherService(session).get_weather(f"Казань, Россия, {qualifier}")
+    assert result.root.status == "ok"
+    assert result.root.place.region == region
+    assert session.calls[0][1]["params"]["name"] == "Казань"
+    assert len(session.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "qualifier",
+    ["Татар", "Республика Татар", "Татарстана", "Республика Татарстанская", "Республика"],
+)
+async def test_administrative_prefix_normalization_does_not_allow_partial_names(qualifier):
+    session = session_for([location(admin1="Республика Татарстан")])
+    result = await WeatherService(session).get_weather(f"Казань, {qualifier}")
+    assert result.root.status == "not_found"
+    assert len(session.calls) == 1
+
+
+async def test_administrative_prefix_is_not_removed_from_country_names():
+    session = session_for([location(country="Республика Конго", country_code="CG", admin1="")])
+    result = await WeatherService(session).get_weather("Казань, Конго")
+    assert result.root.status == "not_found"
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize("second_region", ["Татарстан", "Республика Татарстан"])
+async def test_administrative_label_equivalence_does_not_merge_different_location_ids(
+    second_region,
+):
+    session = session_for(
+        [
+            location(population=99999999),
+            location(id=2, admin1=second_region, latitude=40.0, population=1),
+        ]
+    )
+    result = await WeatherService(session).get_weather("Казань, Россия, Республика Татарстан")
+    if second_region == "Татарстан":
+        assert result.root.status == "error"
+        assert result.root.error.code == "AMBIGUOUS_PLACE"
+    else:
+        assert result.root.status == "ambiguous"
+    assert len(session.calls) == 1
 
 
 async def test_real_kazan_geocoding_group_does_not_become_a_unique_location(kazan_geocoding):
