@@ -3,7 +3,8 @@
 This is a separate preregistered regression, not a rescore/replay of either
 previous ten-flow report. Uses its unchanged weather case and isolated runtime.
 The first focused run failed after one real model call because Open-Meteo was
-unreachable. That consumed attempt remains part of the frozen session ledger.
+unreachable. The second used four calls and exposed changed place labels and a
+lost country qualifier. Both failures remain part of the frozen session ledger.
 """
 
 import argparse
@@ -37,12 +38,13 @@ FOLDERS = (
     (ROOT / "docs/evaluation/lab2-adversarial-live-20261028", 15),
     (ROOT / "docs/evaluation/lab2-adversarial-live-20261028-v2", 17),
     (ROOT / "docs/evaluation/lab2-weather-verify-20261028", 1),
+    (ROOT / "docs/evaluation/lab2-weather-verify-20261028-v2", 4),
 )
 CASE = deepcopy(next(case for case in base.CASES if case["id"] == "weather_read"))
-BASELINE_CALLS = 33
+BASELINE_CALLS = 37
 MAXIMUM = 4
 PLAN = {
-    "version": 2,
+    "version": 3,
     "case": CASE,
     "queries": {name: base.QUERIES[name] for name in ("weather_read", "weather_refinement")},
     "maximum_llm_calls": MAXIMUM,

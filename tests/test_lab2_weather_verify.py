@@ -25,13 +25,13 @@ async def test_weather_verification_refuses_insufficient_quota(bot_settings, tmp
         )
 
 
-async def test_manifest_binds_previous_33_attempts_including_failed_weather(bot_settings, tmp_path):
+async def test_manifest_binds_previous_37_attempts_including_failed_weather(bot_settings, tmp_path):
     settings = replace(bot_settings, llm_tool_mode="native")
     before = verify.baseline()
     catalog = SimpleNamespace(available=True, tools={}, resources={})
     manifest = await verify.prepare(settings, tmp_path, quota={"remaining": 18}, catalog=catalog)
     assert manifest["protocol"]["session_baseline"] == before == verify.baseline()
-    assert before["started_llm_calls"] == 33 and len(before["files_sha256"]) == 6
+    assert before["started_llm_calls"] == 37 and len(before["files_sha256"]) == 8
     assert manifest["plan"]["maximum_llm_calls"] == 4
     assert len(manifest["plan"]["queries"]) == 2
     with pytest.raises(ValueError, match="Never overwrite"):
@@ -130,5 +130,5 @@ async def test_weather_verification_uses_unchanged_case_real_sql_stdio_and_fake_
     verify.summarize(data)
     assert data["metrics"]["acceptance"] == "passed", data["attempts"]
     assert data["metrics"]["llm_calls"] == 4
-    assert data["metrics"]["session_started_llm_calls"] == 37
+    assert data["metrics"]["session_started_llm_calls"] == 41
     assert data["metrics"]["mcp_calls"] == 2
