@@ -23,7 +23,7 @@ OBSERVATION = {
     "source": "Open-Meteo",
 }
 CORRECT = (
-    "**Казань**, Россия: **4,2 °C**, ясно. Ветер **3,2 км/ч**.\n"
+    "**Казань**, Россия, Татарстан: **4,2 °C**, ясно. Ветер **3,2 км/ч**.\n"
     "Данные: 28 октября 2026, 10:15 (UTC+03:00), источник Open-Meteo."
 )
 
@@ -51,6 +51,8 @@ def test_correct_markdown_decimal_comma_keeps_the_real_model_reply():
         lambda s: s.replace("UTC+03:00", "UTC+09:00"),
         lambda s: s.replace("Open-Meteo", "выдуманный источник"),
         lambda s: s.replace("Казань", "Москва"),
+        lambda s: s.replace(", Татарстан", ""),
+        lambda s: s.replace("Татарстан", "Кировская область"),
         lambda s: s + " Ещё 99 °C.",
     ],
 )
@@ -67,6 +69,22 @@ def test_changed_observation_falls_back_without_rounded_or_invented_facts(change
 def test_truncated_model_final_becomes_complete_card_without_continue_flag():
     result = checked_weather_reply(CORRECT, WeatherOk.model_validate(OBSERVATION), truncated=True)
     assert result.replaced and not result.truncated
+
+
+def test_empty_region_does_not_require_an_extra_place_qualifier():
+    value = deepcopy(OBSERVATION)
+    value["place"]["region"] = ""
+    text = CORRECT.replace(", Татарстан", "")
+    result = checked_weather_reply(text, WeatherOk.model_validate(value))
+    assert result.text == text and not result.replaced
+
+
+def test_region_comparison_folds_whitespace_and_case():
+    value = deepcopy(OBSERVATION)
+    value["place"]["region"] = "Республика   Татарстан"
+    text = CORRECT.replace("Татарстан", "республика\nТАТАРСТАН")
+    result = checked_weather_reply(text, WeatherOk.model_validate(value))
+    assert result.text == text and not result.replaced
 
 
 def test_fallback_preserves_long_decimal_negative_value_and_source_timezone():

@@ -65,6 +65,7 @@ def checked_weather_reply(text: str, observation: WeatherOk, *, truncated=False)
             plain = "".join(part.text for part in format_reply(text))
             moment = observation.observed_at.astimezone(ZoneInfo(observation.timezone))
             lowered = plain.casefold()
+            region = " ".join(observation.place.region.split()).casefold()
             dates = (
                 format_date(moment.date()),
                 moment.date().isoformat(),
@@ -81,6 +82,7 @@ def checked_weather_reply(text: str, observation: WeatherOk, *, truncated=False)
                 and "open-meteo" in lowered
                 and observation.place.name.casefold() in lowered
                 and observation.place.country.casefold() in lowered
+                and (not region or region in " ".join(lowered.split()))
                 and observation.condition.description.casefold() in lowered
             )
         except (ValueError, TypeError, ArithmeticError):
