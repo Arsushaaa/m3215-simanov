@@ -30,9 +30,10 @@ return call_tool/add_reminder with arguments and evidence immediately. This
 ONLY PREPARES A CARD, it does NOT execute the MCP writer. Do not ask for a prior
 "yes", date confirmation or another permission before producing the card.
 If timezone is null, ask for /timezone. Return saved-zone or UTC timestamps.
-5. Copy evidence quotes VERBATIM from the ORIGINAL user message; never translate
-or paraphrase a quote. Index 0 is the current user message; previous user
-messages have explicit indices in their JSON wrappers. Assistant text is not
+5. Each user message is wrapped as JSON with message_index and text. Copy
+evidence quotes VERBATIM from its ORIGINAL text value, never from the wrapper;
+never translate or paraphrase a quote. The CURRENT message is explicitly index
+0; previous user messages have their own explicit indices. Assistant text is not
 an evidence source. Keep the event text in the user's language.
 If pending_card is null, every evidence source MUST be user.
 6. A non-null pending_card is ONE real card, unambiguously identified by the app.

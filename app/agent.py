@@ -30,7 +30,7 @@ from app.mcp.contracts import (
     RespondDecision,
     validate_reminder_time,
 )
-from app.reminder_grounding import indexed_history, user_sources, validate_evidence
+from app.reminder_grounding import indexed_history, indexed_message, user_sources, validate_evidence
 from app.reminder_messages import BUTTON_REQUIRED, REMINDER_CLARIFY
 from app.time_display import format_datetime
 
@@ -164,7 +164,7 @@ class AgentService:
         self.llm, self.mcp, self.repository, self.settings = llm, mcp, repository, settings
         self.now = now or (lambda: datetime.now(UTC))
 
-    def _tools(self, context=None):
+    def _tools(self, context=None, *, message_indices=None):
         tools = [
             {
                 "type": "function",
@@ -188,6 +188,7 @@ class AgentService:
                             ReminderPreparation.model_json_schema(),
                             pending=context is not None and context.pending is not None,
                             inline_refs=True,
+                            message_indices=message_indices,
                         ),
                     },
                 }
@@ -356,16 +357,7 @@ class AgentService:
         now = now.replace(microsecond=0)
         timezone = await self.repository.timezone(user.user_id)
         facts = self._facts(now, timezone, context)
-        tools = self._tools(context)
         structured = self.settings.llm_tool_mode == "structured"
-        schema = (
-            model_schema(
-                AgentDecision.model_json_schema(),
-                pending=context is not None and context.pending is not None,
-            )
-            if structured
-            else tools
-        )
         routing_prompt = prompt + ROUTING_RULES
         if structured:
             routing_prompt += (
@@ -383,14 +375,36 @@ class AgentService:
         else:
             routing_prompt += NATIVE_ROUTING_FORMAT
         routing_prompt += facts
-        messages = fit_context(
-            routing_prompt,
-            indexed_history(history),
-            text,
-            self.settings,
-            schemas=schema,
-            preserve_last=continuing,
-        )
+        recent = indexed_history(history)
+        current = indexed_message(text)
+        while True:
+            # Oldest pairs may be removed by the context budget. The remaining
+            # user's reverse-history indices are still consecutive from one.
+            indices = range(1 + sum(item["role"] == "user" for item in recent))
+            tools = self._tools(context, message_indices=indices)
+            schema = (
+                model_schema(
+                    AgentDecision.model_json_schema(),
+                    pending=context is not None and context.pending is not None,
+                    message_indices=indices,
+                )
+                if structured
+                else tools
+            )
+            messages = fit_context(
+                routing_prompt,
+                recent,
+                current,
+                self.settings,
+                schemas=schema,
+                preserve_last=continuing,
+            )
+            retained = messages[1:-1]
+            if retained == recent:
+                break
+            # Rebuild hints for the visible indices without restoring removed
+            # history. This loop only shrinks context and never calls the LLM.
+            recent = retained
         trace.llm_calls += 1
         if structured:
             result = await self.llm.decide(messages, user.temperature, decision_schema=schema)

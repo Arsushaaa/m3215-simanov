@@ -125,7 +125,9 @@ async def test_unfamiliar_word_order_reaches_one_model_and_prepares_without_mcp(
     assert reply.reminder.arguments.text == REMINDER_ARGUMENTS["text"]
     assert reply.reminder.arguments.remind_at.isoformat() == REMINDER_ARGUMENTS["remind_at"]
     assert "требуется подтверждение" in reply.text
-    assert reminder_agent.llm.decide.call_args.args[0][-1] == {"role": "user", "content": question}
+    current = reminder_agent.llm.decide.call_args.args[0][-1]
+    assert current["role"] == "user"
+    assert json.loads(current["content"]) == {"message_index": 0, "text": question}
     assert_preparation_only(reminder_agent)
     if mode == "native":
         names = {
@@ -207,7 +209,51 @@ async def test_followup_sources_reference_only_indexed_user_messages(reminder_ag
         "text": history[0]["content"],
     }
     assert messages[2]["content"] == history[1]["content"]
+    assert json.loads(messages[-1]["content"]) == {"message_index": 0, "text": "В 11:00"}
     assert_preparation_only(reminder_agent)
+
+
+@pytest.mark.parametrize("mode", ["structured", "native"])
+async def test_current_wrapper_and_schema_only_expose_history_retained_in_context(
+    reminder_agent, mode
+):
+    reminder_agent.agent.settings = replace(
+        reminder_agent.agent.settings, llm_tool_mode=mode, history_max_messages=4
+    )
+    reminder_agent.llm.decide.return_value = (
+        structured(text="Ответ") if mode == "structured" else RoutingCompletion("Ответ", [])
+    )
+    history = [
+        {"role": "user", "content": "Старая просьба"},
+        {"role": "assistant", "content": "Старый ответ"},
+        {"role": "user", "content": "Последняя просьба"},
+        {"role": "assistant", "content": "Последний ответ"},
+    ]
+    assert (await ask(reminder_agent, "Нет, лучше в 21:00", history=history)).text == "Ответ"
+    call = reminder_agent.llm.decide.call_args
+    messages = call.args[0]
+    assert json.loads(messages[-1]["content"]) == {
+        "message_index": 0,
+        "text": "Нет, лучше в 21:00",
+    }
+    assert json.loads(messages[1]["content"]) == {
+        "message_index": 1,
+        "text": "Последняя просьба",
+    }
+    if mode == "structured":
+        schema = call.kwargs["decision_schema"]
+        indices = schema["$defs"]["UserQuote"]["properties"]["message_index"]
+    else:
+        schema = next(
+            tool["function"]["parameters"]
+            for tool in call.kwargs["tools"]
+            if tool["function"]["name"] == "prepare_reminder"
+        )
+        indices = schema["properties"]["evidence"]["properties"]["request"]["properties"][
+            "message_index"
+        ]
+    assert indices["enum"] == [0, 1]
+    assert not any("Старая просьба" in message["content"] for message in messages)
 
 
 @pytest.mark.parametrize("bad_source", [quote("18:00", 1), quote("11:00", 19)])

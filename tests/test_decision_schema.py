@@ -47,6 +47,27 @@ def test_provider_hint_does_not_weaken_weather_runtime_contract():
     assert WeatherArguments(city="Казань, Россия").city == "Казань, Россия"
 
 
+@pytest.mark.parametrize("inline_refs", [False, True])
+def test_provider_indices_only_offer_visible_messages_without_changing_canonical(inline_refs):
+    canonical = ReminderPreparation.model_json_schema()
+    original = deepcopy(canonical)
+    provider = model_schema(canonical, inline_refs=inline_refs, message_indices=[0, 1])
+    source = {"source": "user", "message_index": 0, "quote": "В 21:00"}
+    proposal = {
+        "arguments": {"text": "Пирог", "remind_at": "2030-01-02T21:00:00+03:00"},
+        "evidence": {key: dict(source) for key in ("request", "text", "date", "time")},
+    }
+    Draft202012Validator(provider).validate(proposal)
+    proposal["evidence"]["time"]["message_index"] = 2
+    with pytest.raises(ValidationError):
+        Draft202012Validator(provider).validate(proposal)
+    # The runtime validator still validates quoted source existence and contents;
+    # this decoder hint does not rewrite or weaken its canonical DTO.
+    ReminderPreparation.model_validate(proposal)
+    assert canonical == original
+    assert "enum" not in canonical["$defs"]["UserQuote"]["properties"]["message_index"]
+
+
 def test_provider_routing_union_is_flat_and_keeps_all_tool_branches_selectable():
     canonical = AgentDecision.model_json_schema()
     original = deepcopy(canonical)

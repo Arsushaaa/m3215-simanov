@@ -16,15 +16,18 @@ def user_sources(history, text):
     return {0: text, **{i: value for i, value in enumerate(reversed(previous), 1)}}
 
 
+def indexed_message(text, index=0):
+    """Label the original user text without letting it supply its own index."""
+    return json.dumps({"message_index": index, "text": text}, ensure_ascii=False)
+
+
 def indexed_history(history):
     result = [dict(item) for item in history]
     index = 0
     for item in reversed(result):
         if item["role"] == "user":
             index += 1
-            item["content"] = json.dumps(
-                {"message_index": index, "text": item["content"]}, ensure_ascii=False
-            )
+            item["content"] = indexed_message(item["content"], index)
     return result
 
 

@@ -40,7 +40,9 @@ class FakeClient(RecordingClient):
 
     async def _request(self, payload):
         self.requests.append(deepcopy(payload))
-        case = next(c for c in smoke.CASES if c["query"] == payload["messages"][-1]["content"])
+        current = json.loads(payload["messages"][-1]["content"])
+        assert current["message_index"] == 0
+        case = next(c for c in smoke.CASES if c["query"] == current["text"])
         if self.before_dispatch:
             await self.before_dispatch(case)
         decision = {"action": case["expected_action"], "reason": "Synthetic fixture."}
@@ -149,7 +151,7 @@ async def test_all_six_cases_use_production_routing_and_preserve_only_safe_evide
     assert client.started == client.closed == 1
     assert report["attempts"][2]["status"] == "captured_before_mcp"
     assert report["attempts"][-1]["former_card_revoked"] is True
-    assert [p["messages"][-1]["content"] for p in client.requests] == [
+    assert [json.loads(p["messages"][-1]["content"])["text"] for p in client.requests] == [
         c["query"] for c in smoke.CASES
     ]
     for payload in client.requests:
@@ -290,7 +292,10 @@ async def test_started_slot_is_durable_and_cancelled_case_is_not_replayed(
     assert report["metrics"]["llm_calls"] == 6
     assert report["metrics"]["cases"] == {"correct": 5, "total": 6}
     assert report["attempts"][0]["error"]["type"] == "CancelledError"
-    assert all(p["messages"][-1]["content"] != smoke.CASES[0]["query"] for p in resumed.requests)
+    assert all(
+        json.loads(p["messages"][-1]["content"])["text"] != smoke.CASES[0]["query"]
+        for p in resumed.requests
+    )
     assert interrupted.closed == 1
 
 

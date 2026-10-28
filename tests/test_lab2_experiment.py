@@ -47,7 +47,8 @@ class Answers:
 
     async def decide(self, messages, temperature, **kwargs):
         self.calls.append((deepcopy(messages), temperature, deepcopy(kwargs)))
-        case = next(c for c in load_dataset()["cases"] if c["query"] == messages[-1]["content"])
+        query = json.loads(messages[-1]["content"])["text"]
+        case = next(c for c in load_dataset()["cases"] if c["query"] == query)
         if case["id"] in self.overrides:
             result = self.overrides[case["id"]]
             if isinstance(result, BaseException):

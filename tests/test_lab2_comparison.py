@@ -225,7 +225,8 @@ class ExtraAnswers:
 
     async def decide(self, messages, temperature, **kwargs):
         self.calls.append((deepcopy(messages), temperature, deepcopy(kwargs)))
-        case = next(case for case in comparison.EXTRA if case["query"] == messages[-1]["content"])
+        query = json.loads(messages[-1]["content"])["text"]
+        case = next(case for case in comparison.EXTRA if case["query"] == query)
         if case["id"] == self.wrong_case:
             return RoutingCompletion("WRONG RAW OUTPUT", [])
         decision = {"action": "respond", "reason": "Fixture result.", "text": "Answer."}

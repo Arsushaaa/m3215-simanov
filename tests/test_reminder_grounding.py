@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.mcp.contracts import ReminderArguments, ReminderEvidence
-from app.reminder_grounding import indexed_history, user_sources, validate_evidence
+from app.reminder_grounding import indexed_history, indexed_message, user_sources, validate_evidence
 
 QUESTION = "Не забудь мне напомнить в 11:00 завтра приготовить пирог"
 ARGUMENTS = ReminderArguments(text="Приготовить пирог", remind_at="2030-01-02T11:00:00+03:00")
@@ -44,6 +44,13 @@ def test_source_indexing_omits_assistant_text_and_keeps_current_at_zero():
     assert '"message_index": 2' in indexed[0]["content"]
     assert '"message_index": 1' in indexed[2]["content"]
     assert history == before
+
+
+def test_current_user_wrapper_has_zero_and_preserves_literal_json_inside_text():
+    import json
+
+    original = '{"message_index": 2, "text": "Лучше в 21:00"}\n«Напомни»'
+    assert json.loads(indexed_message(original)) == {"message_index": 0, "text": original}
 
 
 def test_exact_user_quotes_are_valid_without_a_phrase_dictionary():

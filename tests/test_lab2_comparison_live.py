@@ -116,7 +116,10 @@ async def test_live_read_uses_real_production_flow_and_saves_public_evidence(
     mcp.call_tool.assert_awaited_once_with("get_schedule", {"date": EXPECTED_DATE})
     mcp.read_resource.assert_not_awaited()
     assert [item["role"] for item in fake_http.payloads[0]["messages"]] == ["system", "user"]
-    assert fake_http.payloads[0]["messages"][-1]["content"] == QUERY
+    assert json.loads(fake_http.payloads[0]["messages"][-1]["content"]) == {
+        "message_index": 0,
+        "text": QUERY,
+    }
     assert all(payload["temperature"] == 0 for payload in fake_http.payloads)
     assert "tools" not in fake_http.payloads[0]
     assert fake_http.payloads[1]["tools"] == []

@@ -3,9 +3,21 @@
 from copy import deepcopy
 
 
-def model_schema(schema, *, pending=False, inline_refs=False):
+def model_schema(schema, *, pending=False, inline_refs=False, message_indices=None):
     result = deepcopy(schema)
     definitions = result.get("$defs", {})
+    if message_indices is not None and "UserQuote" in definitions:
+        index = definitions["UserQuote"]["properties"]["message_index"]
+        allowed = sorted(
+            {
+                value
+                for value in message_indices
+                if type(value) is int and index["minimum"] <= value <= index["maximum"]
+            }
+        )
+        if not allowed or 0 not in allowed:
+            raise ValueError("The current user message must have index zero.")
+        index["enum"] = allowed
     if not pending and "ReminderEvidence" in definitions:
         properties = definitions["ReminderEvidence"]["properties"]
         for name in ("text", "date", "time"):
