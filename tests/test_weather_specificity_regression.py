@@ -17,11 +17,11 @@ from scripts import weather_specificity_regression as verify
 from scripts.lab2_experiment import digest
 
 
-@pytest.mark.parametrize("remaining", [15, 0, True, None])
-async def test_prepare_checks_joint_sixteen_call_budget_before_discovery(
+@pytest.mark.parametrize("remaining", [7, 0, True, None])
+async def test_prepare_checks_focused_eight_call_budget_before_discovery(
     bot_settings, tmp_path, remaining
 ):
-    with pytest.raises(ValueError, match="Sixteen"):
+    with pytest.raises(ValueError, match="Eight"):
         await verify.prepare(
             replace(bot_settings, llm_tool_mode="native"), tmp_path, quota={"remaining": remaining}
         )
@@ -37,7 +37,7 @@ async def test_preregistration_survives_json_roundtrip_and_binds_related_smoke(
     manifest = await verify.prepare(settings, tmp_path, quota={"remaining": 50}, catalog=catalog)
     restored = json.loads((tmp_path / "manifest.json").read_text())
     assert digest(restored["plan"]) == digest(verify.PLAN)
-    assert manifest["plan"]["maximum_llm_calls"] == 10
+    assert manifest["plan"]["maximum_llm_calls"] == 8
     assert restored["protocol"]["related_smoke"]["path"] == "fixture"
     with pytest.raises(ValueError, match="Never overwrite"):
         await verify.prepare(settings, tmp_path, quota={"remaining": 50}, catalog=catalog)
@@ -46,21 +46,21 @@ async def test_preregistration_survives_json_roundtrip_and_binds_related_smoke(
         verify.validate(settings, tmp_path)
 
 
-async def test_budget_refuses_eleventh_call_before_http_or_quota(bot_settings, monkeypatch):
+async def test_budget_refuses_ninth_call_before_http_or_quota(bot_settings, monkeypatch):
     monkeypatch.setattr(verify, "smoke_calls", lambda: 6)
-    row = {"maximum_llm_calls": 10, "llm_calls": []}
+    row = {"maximum_llm_calls": 8, "llm_calls": []}
     data = {"attempts": [row]}
     client = FakeWireClient(bot_settings)
     quota = AsyncMock(return_value={"remaining": 50})
     llm = verify.WeatherBudget(client, data, lambda: None, quota_reader=quota)
     llm.row = row
-    for _ in range(5):
+    for _ in range(4):
         llm.step = {"maximum_llm_calls": 2, "llm_calls": 0}
         await llm.decide([], 0.2, tools=[])
         await llm.complete([], 0.2, disable_tools=True, tools=[])
     with pytest.raises(ModelError, match="session budget"):
         await llm.decide([], 0.2, tools=[])
-    assert len(client.calls) == quota.await_count == 10
+    assert len(client.calls) == quota.await_count == 8
 
 
 def test_failures_and_unstarted_flows_stay_in_denominator(monkeypatch):
@@ -72,7 +72,7 @@ def test_failures_and_unstarted_flows_stay_in_denominator(monkeypatch):
         ],
     }
     verify.summarize(result)
-    assert result["metrics"]["cases"] == {"passed": 1, "total": 3}
+    assert result["metrics"]["cases"] == {"passed": 1, "total": 2}
     assert result["metrics"]["acceptance"] == "not_passed"
 
 
@@ -207,9 +207,9 @@ async def test_all_flows_use_real_sql_discovery_and_substituted_weather_llm(
     data["status"] = "completed"
     verify.summarize(data)
     assert data["metrics"]["acceptance"] == "passed", data["attempts"]
-    assert data["metrics"]["llm_calls"] == 10
-    assert data["metrics"]["session_started_llm_calls"] == 48
-    assert data["metrics"]["mcp_calls"] == 5
+    assert data["metrics"]["llm_calls"] == 8
+    assert data["metrics"]["session_started_llm_calls"] == 49
+    assert data["metrics"]["mcp_calls"] == 4
 
 
 @pytest.mark.parametrize(

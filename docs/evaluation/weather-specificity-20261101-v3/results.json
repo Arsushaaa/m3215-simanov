@@ -1,0 +1,296 @@
+{
+  "created_at": "2026-11-01T13:35:16.174425+00:00",
+  "manifest_sha256": "62395a9448e5305aa82b94c76db686c2f82acd0aa7857c87ad6b87025cbb5ca2",
+  "status": "completed",
+  "attempts": [
+    {
+      "id": "rostov_followup",
+      "status": "failed",
+      "maximum_llm_calls": 6,
+      "started_at": "2026-11-01T13:35:20.916067+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:35:21.000179+00:00",
+          "temperature": 0.2,
+          "input_sha256": "e9261a1f57b7a4736ab77e2c0a44859f8e8b0efa9349d5f46eb5d7af4e673e87",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 32,
+            "remaining": 18
+          },
+          "wire": {
+            "request_sha256": "da31b880421d9d96692a7ab611bf4f1e5343ec105d6cf13d6ec27798fab700ce",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793540121-enANZkaeoyjzgqC7Je29",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4068,
+            "completion_tokens": 27,
+            "total_tokens": 4095,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-cf5adb8a-59ac-453a-8380-90f83359133f",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:35:21.793294+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов"
+          },
+          "status": "failed",
+          "error_type": "MCPClientError"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 1,
+          "mcp_calls": 1,
+          "text": "Какая сейчас погода в Ростове?",
+          "delivered_texts": [
+            "Внешний сервис сейчас недоступен. Попробуй позже."
+          ],
+          "status": "completed"
+        }
+      ],
+      "error_type": "CaseFailure",
+      "failure": "Read did not finish two successful model phases",
+      "finished_at": "2026-11-01T13:35:28.068286+00:00"
+    },
+    {
+      "id": "english_rostov",
+      "status": "failed",
+      "maximum_llm_calls": 2,
+      "started_at": "2026-11-01T13:35:28.068524+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:35:28.392893+00:00",
+          "temperature": 0.2,
+          "input_sha256": "1e2e6da08df7e668014d10f57189f5825989ec9f92d697129dab41319723dfe8",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 38,
+            "remaining": 12
+          },
+          "wire": {
+            "request_sha256": "a05c71aa0eeca564c5adf256456aee98ebb413d87f8a987e3c1d427de1771c64",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793540128-0qnDGjmR2Qtpe5VoQ5iV",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4066,
+            "completion_tokens": 27,
+            "total_tokens": 4093,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-5e51e2d0-46f1-4657-90ac-ae0c65dd4070",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:35:30.601117+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов"
+          },
+          "status": "failed",
+          "error_type": "MCPClientError"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 1,
+          "mcp_calls": 1,
+          "text": "What's the weather in Rostov?",
+          "delivered_texts": [
+            "Внешний сервис сейчас недоступен. Попробуй позже."
+          ],
+          "status": "completed"
+        }
+      ],
+      "error_type": "CaseFailure",
+      "failure": "Read did not finish two successful model phases",
+      "finished_at": "2026-11-01T13:35:30.616065+00:00"
+    },
+    {
+      "id": "explicit_full_name",
+      "status": "failed",
+      "maximum_llm_calls": 2,
+      "started_at": "2026-11-01T13:35:30.616411+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:35:30.690703+00:00",
+          "temperature": 0.2,
+          "input_sha256": "a461ee044bdb685f4ef54547e9b15d88ecb724cd703165b9ce15fb8aafda918e",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 38,
+            "remaining": 12
+          },
+          "wire": {
+            "request_sha256": "bec29843f9a373cfecba7ea90bb2694cbe900ee108df3938b3dc4d67fc7509ee",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793540130-wvMPuEtqXnDg7fVX2F6Q",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4068,
+            "completion_tokens": 30,
+            "total_tokens": 4098,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-c114e143-4b8d-4a21-afaa-289f19503716",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов-на-Дону\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:35:31.635594+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов-на-Дону"
+          },
+          "status": "failed",
+          "error_type": "MCPClientError"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 1,
+          "mcp_calls": 1,
+          "text": "Погода в Ростове-на-Дону",
+          "delivered_texts": [
+            "Внешний сервис сейчас недоступен. Попробуй позже."
+          ],
+          "status": "completed"
+        }
+      ],
+      "error_type": "CaseFailure",
+      "failure": "Read did not finish two successful model phases",
+      "finished_at": "2026-11-01T13:35:31.646357+00:00"
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "passed": 0,
+      "total": 3
+    },
+    "acceptance": "not_passed",
+    "llm_calls": 3,
+    "session_started_llm_calls": 41,
+    "mcp_calls": 3,
+    "api_cost": 0,
+    "real_telegram_http_calls": 0
+  },
+  "finished_at": "2026-11-01T13:35:32.481385+00:00"
+}

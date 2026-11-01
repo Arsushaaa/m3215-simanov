@@ -1,7 +1,7 @@
 """New-session regression for place specificity after the teacher's feedback.
 
-Third frozen round: ten weather calls plus six unchanged semantic cases.
-The previous32attempts remain frozen; this task has a maximum48attempts.
+Focused network-recovery check: eight weather calls, no new semantic calls.
+All41startedattempts remain counted; this task has a maximum49attempts.
 Uses real model/MCP/isolated PostgreSQL; Telegram transport is substituted.
 Prepare/commit fresh manifests before API. Never overwrite or replay attempts.
 """
@@ -35,7 +35,7 @@ from scripts.lab2_experiment import checkpoint, digest, timestamp
 
 ROOT = base.ROOT
 SMOKE_FOLDER = ROOT / "docs/evaluation/semantic-routing-smoke-20261101-v4"
-MAXIMUM, COHORT_MAXIMUM, PRIOR_CALLS, SESSION_MAXIMUM = 10, 16, 32, 48
+MAXIMUM, COHORT_MAXIMUM, PRIOR_CALLS, SESSION_MAXIMUM = 8, 8, 35, 49
 PRIOR_SMOKE = ROOT / "docs/evaluation/semantic-routing-smoke-20261101"
 PRIOR_WEATHER = ROOT / "docs/evaluation/weather-specificity-20261101"
 CASES = (
@@ -66,8 +66,9 @@ CASES = (
         "steps": ({"query": "Погода в Ростове-на-Дону", "city": "Ростов-на-Дону", "status": "ok"},),
     },
 )
+CASES = CASES[:2]  # Before preregistration: only the two ambiguity/clarification flows.
 PLAN = {
-    "version": 3,
+    "version": 4,
     "session": "teacher-feedback-20261101",
     "cases": CASES,
     "maximum_llm_calls": MAXIMUM,
@@ -78,8 +79,8 @@ PLAN = {
     "maximum_llm_calls_per_message": 2,
     "automatic_retries": False,
     "acceptance": (
-        "All three flows and five messages pass exact city arguments and actual MCP status; "
-        "failed/unstarted flows stay in denominator three."
+        "Both flows and four messages pass city arguments and actual MCP status; "
+        "failed/unstarted flows stay in denominator two."
     ),
     "boundaries": deepcopy(base.PLAN["boundaries"]),
 }
@@ -99,6 +100,7 @@ def previous_runs():
         (PRIOR_WEATHER, "llm_calls"),
         (ROOT / "docs/evaluation/semantic-routing-smoke-20261101-v3", "calls"),
         (ROOT / "docs/evaluation/weather-specificity-20261101-v2", "llm_calls"),
+        (ROOT / "docs/evaluation/weather-specificity-20261101-v3", "llm_calls"),
     )
     count, files = 0, {}
     for folder, key in folders:
@@ -140,7 +142,7 @@ async def prepare(settings, folder, *, quota=None, catalog=None):
         raise ValueError("Never overwrite a verification manifest.")
     quota = await base.quota_status(settings) if quota is None else quota
     if type(quota.get("remaining")) is not int or quota["remaining"] < COHORT_MAXIMUM:
-        raise ValueError("Sixteen remaining requests are required before this new session.")
+        raise ValueError("Eight remaining requests are required for this focused check.")
     previous = related_smoke()
     owned = catalog is None
     source = (
