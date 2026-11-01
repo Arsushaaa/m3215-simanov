@@ -189,7 +189,11 @@ class AgentService:
                     "type": "function",
                     "function": {
                         "name": "prepare_reminder",
-                        "description": "Подготовить карточку с источниками; без записи.",
+                        "description": (
+                            "Подготовить новую или изменённую карточку с источниками; без записи. "
+                            "При единственной pending_card точный относительный перенос относится "
+                            "к ней: вычисли новые параметры и подготовь карточку без лишнего вопроса."
+                        ),
                         "parameters": model_schema(
                             ReminderPreparation.model_json_schema(),
                             pending=context is not None and context.pending is not None,
@@ -200,7 +204,12 @@ class AgentService:
                 }
             )
         for model, name, description in (
-            (ClarifyReminderDecision, "clarify_reminder", "Уточнить параметры напоминания/правки."),
+            (
+                ClarifyReminderDecision,
+                "clarify_reminder",
+                "Уточнить действительно неизвестные параметры. Единственная pending_card "
+                "уже определяет цель относительного переноса; не спрашивай, какую карточку менять.",
+            ),
             (
                 ConfirmReminderDecision,
                 "use_confirmation",
