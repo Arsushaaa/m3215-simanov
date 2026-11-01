@@ -153,7 +153,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 8
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 9
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
@@ -315,7 +315,7 @@ async def test_agent_migration_upgrades_lab1_and_preserves_history_and_registry(
         )
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 8
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 9
         assert (
             await pool.fetch(
                 "SELECT version, applied_at FROM labbi_schema_migrations "
@@ -1635,7 +1635,7 @@ async def test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_mod
         answer = await dialog.confirm(101, str(card.action_id))
         assert "Напоминание сохранено." in answer
         assert format_datetime(moment, "Europe/Moscow") in answer and "Europe/Moscow" in answer
-        assert "пока не подключена" in answer
+        assert "Доставка выполняется из очереди" in answer
         assert llm.decide.await_count == 3
         llm.complete.assert_not_awaited()
         mcp.call_tool.assert_awaited_once()
@@ -2620,5 +2620,467 @@ async def test_lab3_profile_change_cancels_prepared_briefing_but_not_started_sen
         ):
             with pytest.raises(asyncpg.CheckViolationError):
                 await pool.execute(statement, second)
+    finally:
+        await pool.close()
+
+
+class DeliveryClock:
+    def __init__(self, now):
+        self.value = now
+
+    def __call__(self):
+        return self.value
+
+
+async def _delivery_seed(pool, owner=101, *, due=None):
+    from app.notifications.repository import NotificationRepository
+
+    due = due or ((await pool.fetchval("SELECT clock_timestamp()")) + timedelta(minutes=2))
+    await NotificationRepository(pool).register_destination(owner, owner)
+    _, arguments, context = await _confirmed_reminder(pool, owner, remind_at=due)
+    result = (await ReminderRepository(pool).add_reminder(arguments, context)).root
+    assert result.status == "ok"
+    row = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE reminder_id=$1", result.reminder_id)
+    return row, DeliveryClock(due)
+
+
+async def test_reminder_delivery_real_db_once_no_connection_during_http_and_durable_receipt(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+    from app.tracing.repository import TraceRepository
+    from app.tracing.runtime import TraceManager
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+
+        async def send(**kwargs):
+            assert pool.get_idle_size() == pool.get_size()
+            assert kwargs["chat_id"] == row["destination_chat_id"]
+            assert kwargs["parse_mode"] is None
+            return SimpleNamespace(message_id=99)
+
+        bot = SimpleNamespace(send_message=AsyncMock(side_effect=send))
+        worker = ReminderWorker(
+            DeliveryRepository(pool, clock=clock), bot, traces=TraceManager(TraceRepository(pool))
+        )
+        await worker.tick()
+        await worker.tick()
+        bot.send_message.assert_awaited_once()
+        saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert (
+            saved["state"] == "sent"
+            and saved["attempts"] == 1
+            and saved["telegram_message_id"] == 99
+        )
+        assert saved["body"] == bot.send_message.call_args.kwargs["text"]
+        assert saved["llm_reserved"] == saved["mcp_reserved"] == 0
+        attempts = await pool.fetch(
+            "SELECT * FROM labbi_delivery_attempts WHERE event_id=$1", row["id"]
+        )
+        assert len(attempts) == 1 and attempts[0]["outcome"] == "sent"
+        assert attempts[0]["trace_id"] is not None
+        await pool.close()
+        pool = await create_pool(settings)
+        await ReminderWorker(DeliveryRepository(pool, clock=clock), bot).tick()
+        bot.send_message.assert_awaited_once()
+        _, spans = await TraceRepository(pool).read(101, attempts[0]["trace_id"])
+        assert any(s.operation == "send_message" and s.status == "ok" for s in spans)
+        assert not any(s.operation.startswith("model_") for s in spans)
+        assert await TraceRepository(pool).read(202, attempts[0]["trace_id"]) is None
+    finally:
+        await pool.close()
+
+
+@pytest.mark.parametrize(
+    "microseconds,expected",
+    [(0, "pending"), (1, "sent"), (900_000_000, "sent"), (900_000_001, "missed")],
+)
+async def test_reminder_delivery_never_early_and_fifteen_minute_deadline_is_inclusive(
+    database, microseconds, expected
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        clock.value = (
+            row["due_at"] - timedelta(microseconds=1)
+            if microseconds == 0
+            else row["due_at"] + timedelta(microseconds=microseconds)
+        )
+        bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=1)))
+        await ReminderWorker(DeliveryRepository(pool, clock=clock), bot).tick()
+        saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert saved["state"] == expected
+        assert bot.send_message.await_count == (1 if expected == "sent" else 0)
+        if expected == "sent":
+            assert "с задержкой" in saved["body"]
+        else:
+            assert saved["attempts"] == 0
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_two_workers_claim_one_send_and_stale_preparation_is_fenced(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        repo = DeliveryRepository(pool, clock=clock)
+        first = (await repo.claim_preparations())[0]
+        clock.value += timedelta(seconds=151)
+        await repo.recover()
+        second = (await repo.claim_preparations())[0]
+        assert second.version > first.version
+        assert not await repo.prepare(first)
+        assert await repo.prepare(second)
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def send(**kwargs):
+            started.set()
+            await release.wait()
+            return SimpleNamespace(message_id=8)
+
+        bot = SimpleNamespace(send_message=AsyncMock(side_effect=send))
+        a = ReminderWorker(repo, bot)
+        b = ReminderWorker(DeliveryRepository(pool, clock=clock), bot)
+        tasks = [asyncio.create_task(w.tick()) for w in (a, b)]
+        try:
+            await asyncio.wait_for(started.wait(), 2)
+            await asyncio.sleep(0.02)
+            assert bot.send_message.await_count == 1
+        finally:
+            release.set()
+            await asyncio.gather(*tasks)
+        assert await pool.fetchval("SELECT attempts FROM labbi_outbox WHERE id=$1", row["id"]) == 1
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_network_failures_wait_thirty_then_one_twenty_and_stop_at_three(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        bot = SimpleNamespace(send_message=AsyncMock(side_effect=TimeoutError()))
+        await ReminderWorker(DeliveryRepository(pool, clock=clock), bot).tick()
+        first = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert first["state"] == "retry_wait" and first["uncertain"]
+        assert first["next_attempt_at"] - clock.value == timedelta(seconds=30)
+        payload = first["body"]
+        await pool.close()
+        pool = await create_pool(settings)
+        worker = ReminderWorker(DeliveryRepository(pool, clock=clock), bot)
+        clock.value = first["next_attempt_at"] - timedelta(microseconds=1)
+        await worker.tick()
+        assert bot.send_message.await_count == 1
+        clock.value = first["next_attempt_at"]
+        await worker.tick()
+        second = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert second["next_attempt_at"] - clock.value == timedelta(seconds=120)
+        assert second["body"] == payload
+        clock.value = second["next_attempt_at"]
+        await worker.tick()
+        await worker.tick()
+        saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert (
+            saved["state"] == "failed"
+            and saved["attempts"] == 3
+            and saved["error_code"] == "ATTEMPTS_EXHAUSTED"
+        )
+        assert bot.send_message.await_count == 3
+        assert all(c.kwargs["text"] == payload for c in bot.send_message.call_args_list)
+        assert (
+            await pool.fetchval(
+                "SELECT count(*) FROM labbi_delivery_attempts WHERE event_id=$1", row["id"]
+            )
+            == 3
+        )
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_http_policy_handles_rate_limit_deadline_and_permanent_errors(
+    database,
+):
+    from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
+    from aiogram.methods import SendMessage
+
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        due = (await pool.fetchval("SELECT clock_timestamp()")) + timedelta(minutes=2)
+        rows = {}
+        for owner in (101, 102, 103, 104):
+            rows[owner], clock = await _delivery_seed(pool, owner, due=due)
+        method = SendMessage(chat_id=101, text="private")
+        errors = {
+            101: TelegramRetryAfter(method, "rate", 90),
+            102: TelegramRetryAfter(method, "rate", 1000),
+            103: TelegramForbiddenError(method, "blocked"),
+            104: TelegramBadRequest(method, "bad"),
+        }
+
+        async def send(**kwargs):
+            raise errors[kwargs["chat_id"]]
+
+        bot = SimpleNamespace(send_message=AsyncMock(side_effect=send))
+        await ReminderWorker(DeliveryRepository(pool, clock=clock), bot).tick()
+        for owner, expected in (
+            (101, "retry_wait"),
+            (102, "missed"),
+            (103, "failed"),
+            (104, "failed"),
+        ):
+            saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", rows[owner]["id"])
+            assert saved["state"] == expected and saved["attempts"] == 1 and not saved["uncertain"]
+            if owner == 101:
+                assert saved["next_attempt_at"] - clock.value == timedelta(seconds=90)
+        assert bot.send_message.await_count == 4
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_late_receipt_cannot_mutate_new_lease_and_prevents_known_duplicate(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        repo = DeliveryRepository(pool, clock=clock)
+        await repo.prepare((await repo.claim_preparations())[0])
+        old = await repo.begin_send(row["id"], 101)
+        clock.value += timedelta(seconds=61)
+        await repo.recover()
+        interrupted = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert interrupted["uncertain"] and interrupted["state"] == "retry_wait"
+        clock.value = interrupted["next_attempt_at"]
+        newer = await repo.begin_send(row["id"], 101)
+        assert newer.version > old.version and newer.attempt == 2
+        assert not await repo.sent(old, 777)
+        unchanged = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert unchanged["state"] == "sending" and unchanged["lease_token"] == newer.token
+        assert not await repo.preflight(newer)  # Earlier successful ACK is now durable.
+        saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert saved["state"] == "sent" and saved["telegram_message_id"] == 777
+        assert (
+            await pool.fetchval(
+                "SELECT outcome FROM labbi_delivery_attempts WHERE event_id=$1 AND attempt=1",
+                row["id"],
+            )
+            == "sent"
+        )
+        assert not await repo.sent(old, 888)
+        assert (
+            await pool.fetchval(
+                "SELECT telegram_message_id FROM labbi_delivery_attempts "
+                "WHERE event_id=$1 AND attempt=1",
+                row["id"],
+            )
+            == 777
+        )
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_unknown_commit_may_duplicate_but_keeps_payload(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        repo = DeliveryRepository(pool, clock=clock)
+        repo.sent = AsyncMock(side_effect=ConnectionError("ACK store offline"))
+        bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=1)))
+        await ReminderWorker(repo, bot).tick()
+        assert bot.send_message.await_count == 1
+        first = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert first["state"] == "sending"
+        await pool.close()
+        pool = await create_pool(settings)
+        clock.value += timedelta(seconds=61)
+        repo = DeliveryRepository(pool, clock=clock)
+        await repo.recover()
+        pending = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        clock.value = pending["next_attempt_at"]
+        bot.send_message.return_value = SimpleNamespace(message_id=2)
+        await ReminderWorker(repo, bot).tick()
+        saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        assert saved["state"] == "sent" and saved["attempts"] == 2 and saved["uncertain"]
+        assert bot.send_message.await_count == 2
+        assert saved["body"] == first["body"]
+        assert (
+            bot.send_message.call_args_list[0].kwargs["text"]
+            == bot.send_message.call_args_list[1].kwargs["text"]
+        )
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_ready_survives_reset_and_restart_without_sending_briefings(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        repo = DeliveryRepository(pool, clock=clock)
+        await repo.prepare((await repo.claim_preparations())[0])
+        payload = await pool.fetchval("SELECT body FROM labbi_outbox WHERE id=$1", row["id"])
+        await DialogRepository(pool).reset(101)
+        await DialogRepository(pool).change_mode(101, "translate")
+        await pool.execute(
+            "INSERT INTO labbi_outbox(user_id,kind,local_date,destination_chat_id,"
+            "profile_version,timezone,due_at,deadline_at,next_attempt_at) "
+            "VALUES(101,'briefing',$1,101,0,'Europe/Moscow',$2::timestamptz,"
+            "$2::timestamptz+INTERVAL '60 minutes',$2::timestamptz)",
+            clock.value.date(),
+            clock.value,
+        )
+        await pool.close()
+        pool = await create_pool(settings)
+        bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=1)))
+        await ReminderWorker(DeliveryRepository(pool, clock=clock), bot).tick()
+        bot.send_message.assert_awaited_once()
+        assert bot.send_message.call_args.kwargs["text"] == payload
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_outbox WHERE kind='briefing'") == "pending"
+        )
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_expired_backlog_does_not_starve_current_reminder(database):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        due = (await pool.fetchval("SELECT clock_timestamp()")) + timedelta(minutes=2)
+        for owner in range(301, 326):
+            await _delivery_seed(pool, owner, due=due)
+        clock = DeliveryClock(due)
+        repo = DeliveryRepository(pool, clock=clock)
+        for _ in range(3):
+            for lease in await repo.claim_preparations():
+                await repo.prepare(lease)
+        newer, clock = await _delivery_seed(pool, 999, due=due + timedelta(days=1))
+        bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=5)))
+        await ReminderWorker(DeliveryRepository(pool, clock=clock), bot).tick()
+        bot.send_message.assert_awaited_once()
+        assert bot.send_message.call_args.kwargs["chat_id"] == 999
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_outbox WHERE id=$1", newer["id"]) == "sent"
+        )
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_preflight_checks_current_destination_lease_and_trace_owner(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.tracing.repository import TraceRepository
+    from app.tracing.runtime import TraceManager
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        repo = DeliveryRepository(pool, clock=clock)
+        await repo.prepare((await repo.claim_preparations())[0])
+        async with TraceManager(TraceRepository(pool)).request(202) as foreign:
+            pass
+        with pytest.raises(ValueError, match="Foreign"):
+            await repo.begin_send(row["id"], 101, trace_id=foreign.trace_id)
+        assert await pool.fetchval("SELECT attempts FROM labbi_outbox WHERE id=$1", row["id"]) == 0
+        lease = await repo.begin_send(row["id"], 101)
+        clock.value += timedelta(seconds=61)
+        assert not await repo.preflight(lease)
+        await repo.recover()
+        saved = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", row["id"])
+        clock.value = saved["next_attempt_at"]
+        newer = await repo.begin_send(row["id"], 101)
+        await pool.execute(
+            "UPDATE labbi_notification_profiles SET destination_chat_id=999 WHERE user_id=101"
+        )
+        assert not await repo.preflight(newer)
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_outbox WHERE id=$1", row["id"])
+            == "cancelled"
+        )
+    finally:
+        await pool.close()
+
+
+async def test_reminder_delivery_success_ack_after_deadline_is_recorded_without_another_send(
+    database,
+):
+    from app.notifications.delivery_repository import DeliveryRepository
+    from app.notifications.repository import NotificationRepository
+    from app.notifications.worker import ReminderWorker
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        row, clock = await _delivery_seed(pool)
+        clock.value += timedelta(seconds=899)
+
+        async def send(**kwargs):
+            clock.value += timedelta(seconds=2)
+            return SimpleNamespace(message_id=50)
+
+        bot = SimpleNamespace(send_message=AsyncMock(side_effect=send))
+        worker = ReminderWorker(DeliveryRepository(pool, clock=clock), bot)
+        await worker.tick()
+        await worker.tick()
+        bot.send_message.assert_awaited_once()
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_outbox WHERE id=$1", row["id"]) == "sent"
+        )
+        counts, uncertain = await NotificationRepository(pool).delivery_status(101)
+        assert counts == {"sent": 1} and uncertain == 0
+        assert await NotificationRepository(pool).delivery_status(202) == ({}, 0)
     finally:
         await pool.close()

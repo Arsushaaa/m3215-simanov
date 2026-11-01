@@ -34,7 +34,8 @@ class NotificationService:
             "Ежедневная сводка включена. Ближайшее плановое время: "
             + format_datetime(moment, profile["timezone"])
             + ".\n"
-            "Служба отправки ещё не подключена; сейчас сохраняются настройки и задания."
+            "Подготовка ежедневной сводки ещё не подключена. "
+            "Напоминания уже доставляются из очереди."
         )
 
     async def status(self, owner):
@@ -57,8 +58,21 @@ class NotificationService:
         if profile["briefing_enabled"] and profile["timezone"]:
             moment = next_briefing(await self.repository.now(), profile["timezone"])
             lines.append("Плановое время: " + format_datetime(moment, profile["timezone"]))
+        counts, uncertain = await self.repository.delivery_status(owner)
+        waiting = sum(
+            counts.get(key, 0) for key in ("pending", "preparing", "ready", "sending", "retry_wait")
+        )
         lines.append(
-            "Служба отправки ещё не подключена. /city — город, /timezone — пояс, "
+            f"Напоминания: ожидают {waiting}; доставлено {counts.get('sent', 0)}; "
+            f"пропущено {counts.get('missed', 0)}; ошибок {counts.get('failed', 0)}."
+        )
+        if uncertain:
+            lines.append(
+                f"Сетевая неопределённость у {uncertain} заданий: возможны дубли доставки."
+            )
+        lines.append(
+            "Напоминания доставляются из очереди; ежедневная сводка ещё не подключена. "
+            "/city — город, /timezone — пояс, "
             "/briefing_on и /briefing_off — согласие на сводку."
         )
         return "\n".join(lines)

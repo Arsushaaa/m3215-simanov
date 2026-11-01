@@ -75,7 +75,7 @@ class Trace:
                     **finish_fields,
                     "status": (
                         finish_fields.get("status", self.status)
-                        if operation == "receive"
+                        if value.parent_span_id is None
                         else finish_fields.get("status", status)
                     )
                     if status == "ok"
@@ -114,13 +114,13 @@ class TraceManager:
         self.repository = repository
 
     @asynccontextmanager
-    async def request(self, owner):
+    async def request(self, owner, *, component="supervisor", operation="receive"):
         trace = Trace(self.repository)
         await trace.persist("start", owner, trace.trace_id, trace.request_id, datetime.now(UTC))
         token = current_trace.set(trace)
         parent_token = parent_span.set(None)
         try:
-            async with trace.span("supervisor", "receive"):
+            async with trace.span(component, operation):
                 yield trace
         finally:
             parent_span.reset(parent_token)

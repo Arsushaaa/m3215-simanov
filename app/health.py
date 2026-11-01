@@ -10,6 +10,7 @@ class HealthState:
     pool: asyncpg.Pool | None = None
     initialized: bool = False
     polling_task: asyncio.Task | None = None
+    delivery_task: asyncio.Task | None = None
 
 
 async def health_result(state: HealthState) -> tuple[int, dict[str, str]]:
@@ -21,12 +22,16 @@ async def health_result(state: HealthState) -> tuple[int, dict[str, str]]:
             # Не возвращаем клиенту исключения драйвера и параметры подключения.
             pass
     polling_ok = state.polling_task is not None and not state.polling_task.done()
-    ready = state.initialized and polling_ok and database_ok
-    return (200 if ready else 503), {
+    delivery_ok = state.delivery_task is None or not state.delivery_task.done()
+    ready = state.initialized and polling_ok and database_ok and delivery_ok
+    body = {
         "status": "ok" if ready else "not_ready",
         "database": "ok" if database_ok else "unavailable",
         "polling": "running" if polling_ok else "stopped",
     }
+    if state.delivery_task is not None:
+        body["reminders"] = "running" if delivery_ok else "stopped"
+    return (200 if ready else 503), body
 
 
 async def start_health_server(state: HealthState, port: int) -> web.AppRunner:

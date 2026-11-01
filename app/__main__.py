@@ -18,8 +18,10 @@ from app.logging_setup import configure_logging
 from app.mcp.client import MCPClient
 from app.migration import migrate
 from app.notifications.city import CityLookup
+from app.notifications.delivery_repository import DeliveryRepository
 from app.notifications.repository import NotificationRepository
 from app.notifications.service import NotificationService
+from app.notifications.worker import ReminderWorker
 from app.repository import DialogRepository
 from app.routing.policy import ScopedMCP
 from app.routing.supervisor import Supervisor
@@ -32,9 +34,9 @@ from app.tracing.runtime import TraceManager
 logger = logging.getLogger("app")
 
 
-async def _close_resource(label, close, *, terminate=None):
+async def _close_resource(label, close, *, terminate=None, deadline_seconds=10):
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(deadline_seconds):
             await close()
     except (Exception, asyncio.CancelledError) as error:
         logger.error("Завершение %s: ошибка %s.", label, type(error).__name__)
@@ -45,12 +47,14 @@ async def _close_resource(label, close, *, terminate=None):
                 logger.error("Завершение %s: ошибка %s.", label, type(fallback_error).__name__)
 
 
-async def _shutdown(state, runner, bot, timezone_session, mcp, llm):
+async def _shutdown(state, runner, bot, timezone_session, mcp, llm, delivery=None):
     if state.polling_task and not state.polling_task.done():
         state.polling_task.cancel()
         await asyncio.gather(state.polling_task, return_exceptions=True)
     if runner:
         await _close_resource("healthcheck", runner.cleanup)
+    if delivery is not None:
+        await _close_resource("напоминаний", delivery.close, deadline_seconds=45)
     await _close_resource("Telegram", bot.session.close)
     if timezone_session:
         await _close_resource("поиска часового пояса", timezone_session.close)
@@ -69,6 +73,7 @@ async def run(settings: Settings) -> None:
     llm = None
     mcp = None
     timezone_session = None
+    delivery = None
     try:
         state.pool = await create_pool(settings)
         logger.info("PostgreSQL подключён: SELECT 1 выполнен.")
@@ -109,6 +114,10 @@ async def run(settings: Settings) -> None:
         dispatcher = Dispatcher()
         dispatcher.include_router(create_router())
         runner = await start_health_server(state, settings.health_port)
+        delivery = ReminderWorker(
+            DeliveryRepository(state.pool), bot, traces=TraceManager(TraceRepository(state.pool))
+        )
+        state.delivery_task = delivery.start()
         state.polling_task = asyncio.create_task(
             dispatcher.start_polling(
                 bot,
@@ -119,10 +128,18 @@ async def run(settings: Settings) -> None:
             )
         )
         state.initialized = True
+        done, _ = await asyncio.wait(
+            {state.polling_task, state.delivery_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if state.delivery_task in done and state.polling_task not in done:
+            await state.delivery_task
+            raise RuntimeError("Служба напоминаний неожиданно завершилась.")
         await state.polling_task
     finally:
         state.initialized = False
-        cleanup = asyncio.create_task(_shutdown(state, runner, bot, timezone_session, mcp, llm))
+        cleanup = asyncio.create_task(
+            _shutdown(state, runner, bot, timezone_session, mcp, llm, delivery)
+        )
         interrupted = False
         while not cleanup.done():
             try:

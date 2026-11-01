@@ -119,7 +119,8 @@ class ConfirmationService:
         return ConfirmationText(
             f"Напоминание сохранено.\nID: {outcome.reminder_id}\n"
             f"Когда: {moment}\nЧасовой пояс: {timezone}\n"
-            "Отправка уведомлений по времени пока не подключена.",
+            "Доставка выполняется из очереди в указанное время, если личный чат зарегистрирован. "
+            "Состояние настроек: /notifications.",
             dismiss_card=True,
         )
 

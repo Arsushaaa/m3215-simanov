@@ -286,3 +286,13 @@ class NotificationRepository:
             "SELECT * FROM labbi_outbox WHERE user_id=$1 AND id=$2", owner, event_id
         )
         return dict(row) if row is not None else None
+
+    async def delivery_status(self, owner):
+        _owner(owner)
+        rows = await self.pool.fetch(
+            "SELECT state,count(*) AS total,count(*) FILTER (WHERE uncertain) AS uncertain "
+            "FROM labbi_outbox WHERE user_id=$1 AND kind='reminder' GROUP BY state",
+            owner,
+        )
+        counts = {row["state"]: row["total"] for row in rows}
+        return counts, sum(row["uncertain"] for row in rows)

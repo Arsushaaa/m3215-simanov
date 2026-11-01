@@ -310,7 +310,9 @@ class DialogService:
             lines.append(f"{name} ({kind}) — {metadata['description']}")
         for uri, metadata in mcp.resources.items():
             lines.append(f"{uri} (чтение) — {metadata['description']}")
-        lines.append("Напоминания сохраняются; отправка по времени пока не выполняется.")
+        lines.append(
+            "Напоминания отправляются из очереди после подтверждения; сводка ещё не подключена."
+        )
         return "\n".join(lines)
 
     async def mode(self, user_id: int, mode: str) -> str:
