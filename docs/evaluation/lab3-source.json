@@ -1,0 +1,25 @@
+{
+  "retrieved_at": "2026-11-01T16:06:51.555625+00:00",
+  "repository": "https://github.com/LegionerSV/itmo-tg-template",
+  "commit": "8346faedd1a4b7ab1a47419065da5a89ea7474fd",
+  "files": {
+    "docs/labs-guide.md": {
+      "git_blob": "cb29e0caaf357fe6bdd83f689f6f33da168cf015",
+      "sha256": "779d795e9f4c68824f3d2ed5cb2472c5e0f599a84a4d6f6bc11201a615e51aeb"
+    },
+    "docs/evaluation/lab3-routing.json": {
+      "git_blob": "e9ce1c8447f1bc6d5c670b1fe9912d515d2722c4",
+      "sha256": "3a1e058d8f5c467eb84ac775f886b148b14a74c326015ebda9d175e26fb39236"
+    }
+  },
+  "review": {
+    "lab1_and_lab2_sections_byte_identical": true,
+    "outside_lab3_additions": [
+      "navigation anchors for general rules",
+      "report template link",
+      "appendices on commands, reports, diagrams and troubleshooting"
+    ],
+    "application_imported": false,
+    "llm_calls": 0
+  }
+}
