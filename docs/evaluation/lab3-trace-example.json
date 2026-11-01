@@ -1,0 +1,55 @@
+{
+  "kind": "controlled_application_trace_example",
+  "note": "Real application spans with fake LLM/MCP and in-memory trace repository; not a user conversation or live experiment. IDs, text, timestamps and destinations removed.",
+  "real_llm_calls": 0,
+  "telegram_http": false,
+  "spans": [
+    {
+      "component": "supervisor",
+      "operation": "receive",
+      "status": "ok",
+      "duration_ms": 6
+    },
+    {
+      "component": "router",
+      "operation": "route",
+      "status": "ok",
+      "duration_ms": 0,
+      "target": "schedule",
+      "confidence": 0.9
+    },
+    {
+      "component": "router",
+      "operation": "model_decide",
+      "status": "ok",
+      "duration_ms": 0
+    },
+    {
+      "component": "schedule",
+      "operation": "agent",
+      "status": "ok",
+      "duration_ms": 5,
+      "target": "schedule",
+      "confidence": 0.9
+    },
+    {
+      "component": "schedule",
+      "operation": "model_decide",
+      "status": "ok",
+      "duration_ms": 0
+    },
+    {
+      "component": "schedule",
+      "operation": "tool_call",
+      "status": "ok",
+      "duration_ms": 0,
+      "tool_name": "get_schedule"
+    },
+    {
+      "component": "schedule",
+      "operation": "model_final",
+      "status": "ok",
+      "duration_ms": 0
+    }
+  ]
+}

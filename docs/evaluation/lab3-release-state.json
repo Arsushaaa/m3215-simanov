@@ -1,0 +1,41 @@
+{
+  "kind": "lab3_release_state",
+  "generated_at": "2026-11-01T22:09:46.542951+00:00",
+  "status": "awaiting_free_llm_quota",
+  "implementation": "ready",
+  "automated_acceptance": {
+    "report": "docs/evaluation/lab3-final-checks.json",
+    "sha256": "202001e705a70bdee81530b342c603d7e8dee460e5db0e45d6903f8ad5d2f903",
+    "suite": {
+      "passed": 1851,
+      "failed": 0,
+      "skipped": 0
+    },
+    "criteria_passed": 33,
+    "criteria_total": 34
+  },
+  "progress": {
+    "completed_stages": 6,
+    "total_stages": 8,
+    "completed_percent": 75,
+    "remaining_percent": 25,
+    "method": "Equal weight by closed stages, not an estimate of remaining effort. Stage7 real experiment and stage8 final release stay open."
+  },
+  "protocol_commit": "a7cd98f",
+  "live_protocol": "docs/evaluation/lab3-experiment-v2-protocol.json",
+  "live_results": "docs/evaluation/lab3-experiment-v2-results.json",
+  "requested_tag": "lab3",
+  "tag_created": false,
+  "release_ready": false,
+  "runtime_smoke": "docs/evaluation/lab3-runtime-smoke.json",
+  "container_check": "docs/evaluation/lab3-container-checks.json",
+  "report": "docs/lab3-report.md",
+  "defense": "docs/lab3-defense.md",
+  "manual_llm_generations_during_implementation": 0,
+  "remaining": [
+    "Run all15 immutable real Router cases when quota allows. Preserve every failure and original denominators.",
+    "Fill all15 actual outcomes and analysis in report/table; if necessary preregister one justified correction separately.",
+    "Re-run final gate after live results. Only after release_ready=true commit report, create annotated lab3 and publish requested release."
+  ],
+  "old_tags_unchanged": true
+}

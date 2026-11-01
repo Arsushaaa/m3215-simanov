@@ -1,0 +1,318 @@
+{
+  "kind": "lab3_executable_acceptance_matrix",
+  "cases": [
+    {
+      "id": "routing_targets",
+      "implementation_stage": 2,
+      "expected": "Known targets dispatch once; unknown/invalid routes clarify before any tool.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_schedule_routes_once_and_restricts_schema_and_model_context",
+        "tests/test_supervisor.py::test_invalid_route_safe_clarification_no_retry_no_tool"
+      ]
+    },
+    {
+      "id": "legacy_modes",
+      "implementation_stage": 2,
+      "expected": "General study remains available; translate/quiz stay isolated and preserve history/reset behavior.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_non_tool_routes_do_not_fall_back_to_combined_agent",
+        "tests/test_quiz_transitions.py::test_rejected_personal_topic_then_python_starts_question_one"
+      ]
+    },
+    {
+      "id": "request_identity",
+      "implementation_stage": 2,
+      "expected": "Model output and foreign agent results cannot replace actor, request, trace or origin.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_routing_contracts.py::test_router_cannot_return_host_identity_delivery_or_authority_fields",
+        "tests/test_routing_contracts.py::test_result_rejects_untyped_facts_false_success_and_unbounded_operations"
+      ]
+    },
+    {
+      "id": "tool_allowlist",
+      "implementation_stage": 2,
+      "expected": "Every call intersects current discovery and fixed component policy; unknown tools are denied.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_scoped_mcp_denies_actual_calls_even_if_catalog_advertises_them"
+      ]
+    },
+    {
+      "id": "resource_allowlist",
+      "implementation_stage": 2,
+      "expected": "Schedule/Knowledge resources are read and passed only to the permitted component.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_other_roles_never_receive_or_read_materials_catalog"
+      ]
+    },
+    {
+      "id": "source_grounding",
+      "implementation_stage": 2,
+      "expected": "Pending reminder edits retain evidence/epoch/revision checks before and after Router.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_supervisor_keeps_confirmation_guard_during_router_and_callback_has_no_llm"
+      ]
+    },
+    {
+      "id": "call_budget",
+      "implementation_stage": 2,
+      "expected": "Router/specialist/global budgets are enforced; no hidden model or MCP retries.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_budget_is_reserved_before_fourth_llm_and_second_mcp"
+      ]
+    },
+    {
+      "id": "trace_privacy",
+      "implementation_stage": 2,
+      "expected": "Trace contains fixed metadata only; no messages/prompts/env/capability.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_routing_contracts.py::test_trace_has_closed_safe_fields_and_checked_running_state",
+        "tests/test_tracing.py::test_handler_records_delivered_reply_without_message_contents"
+      ]
+    },
+    {
+      "id": "trace_ownership",
+      "implementation_stage": 2,
+      "expected": "Only own last/requested trace is visible; trace failure cannot show an earlier decision as current.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_traces_survive_pool_restart_isolate_owners_and_reject_foreign_parents"
+      ]
+    },
+    {
+      "id": "material_search",
+      "implementation_stage": 3,
+      "expected": "Search returns bounded fragments from at least three registered documents, with stable IDs.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_local_search_finds_the_registered_source_deterministically"
+      ]
+    },
+    {
+      "id": "catalog_context",
+      "implementation_stage": 3,
+      "expected": "Discovery is followed by resource read; validated catalogue enters only Knowledge context.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_real_sdk_reads_catalog_and_searches_without_weather_or_database"
+      ]
+    },
+    {
+      "id": "materials_absent",
+      "implementation_stage": 3,
+      "expected": "No matches, missing corpus and source failure remain distinct; no invented citations.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_no_hits_does_not_call_final_model_or_answer_from_memory",
+        "tests/test_materials.py::test_bootstrap_rejects_self_consistent_but_substituted_catalog"
+      ]
+    },
+    {
+      "id": "city_confirmation",
+      "implementation_stage": 4,
+      "expected": "Ambiguous lookup preserves alternatives; city coordinates are saved only after owner confirmation.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_city_menu_ownership_restart_expiry_and_no_connection_during_lookup"
+      ]
+    },
+    {
+      "id": "notification_preferences",
+      "implementation_stage": 4,
+      "expected": "Briefing defaults off; enabling requires zone/city; notifications view exposes no internal IDs.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_briefing_opt_in_requires_confirmed_profile_and_outbox_is_unique_and_revocable"
+      ]
+    },
+    {
+      "id": "delivery_destination",
+      "implementation_stage": 4,
+      "expected": "Chat destination comes from trusted private update, not actor inference or model/tool/document fields.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_notifications.py::test_commands_register_destination_from_actual_private_update_without_llm",
+        "tests/test_integration.py::test_lab3_reminder_outbox_is_atomic_idempotent_and_legacy_addresses_are_not_guessed"
+      ]
+    },
+    {
+      "id": "outbox_uniqueness",
+      "implementation_stage": 4,
+      "expected": "Two sequential and two concurrent preparations create one event job in real PostgreSQL.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_local_eight_unique_concurrent_scheduler_and_restart"
+      ]
+    },
+    {
+      "id": "reminder_misfire",
+      "implementation_stage": 5,
+      "expected": "Future reminders do not send; delay through15minutes is marked; older becomes missed.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_never_early_and_fifteen_minute_deadline_is_inclusive"
+      ]
+    },
+    {
+      "id": "delivery_retry",
+      "implementation_stage": 5,
+      "expected": "Temporary failures have at most3 total attempts; permanent failures stop; payload is reused.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_network_failures_wait_thirty_then_one_twenty_and_stop_at_three",
+        "tests/test_integration.py::test_reminder_delivery_http_policy_handles_rate_limit_deadline_and_permanent_errors"
+      ]
+    },
+    {
+      "id": "delivery_recovery",
+      "implementation_stage": 5,
+      "expected": "Restart at preparation/claim/send/commit resumes the same job with lease fencing and bounded attempts.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_two_workers_claim_one_send_and_stale_preparation_is_fenced",
+        "tests/test_integration.py::test_reminder_delivery_real_db_once_no_connection_during_http_and_durable_receipt"
+      ]
+    },
+    {
+      "id": "delivery_unknown",
+      "implementation_stage": 5,
+      "expected": "Failure after external send does not claim exactly-once; duplicate risk is explicit and tested.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_unknown_commit_may_duplicate_but_keeps_payload"
+      ]
+    },
+    {
+      "id": "briefing_content",
+      "implementation_stage": 6,
+      "expected": "08:00 local briefing includes date schedule, reminders, confirmed-point weather and cited study focus.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_real_db_reservations_cache_delivery_no_held_connection"
+      ]
+    },
+    {
+      "id": "briefing_misfire",
+      "implementation_stage": 6,
+      "expected": "One local-date event; catch-up through60minutes; no backlog of older daily briefings.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_window_no_old_day_catchup_and_no_consent_retroactivity"
+      ]
+    },
+    {
+      "id": "briefing_partial",
+      "implementation_stage": 6,
+      "expected": "One source failure leaves other sections and preparation timestamp/timezone visible.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_briefing.py::test_daily_partial_sources_still_deliver_sections_with_bounded_reserved_calls"
+      ]
+    },
+    {
+      "id": "briefing_consent_race",
+      "implementation_stage": 6,
+      "expected": "Latest consent/profile checked before starting send; off/change blocks unsent stale jobs.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_consent_revoked_during_preparation_and_before_send"
+      ]
+    },
+    {
+      "id": "dst_and_clock",
+      "implementation_stage": 6,
+      "expected": "IANA/DST, local-day boundaries and absent/nonportable zones are tested with fake clock.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_notifications.py::test_next_eight_is_computed_from_local_date_and_dst_not_a_fixed_utc_interval",
+        "tests/test_notifications.py::test_skipped_calendar_day_and_naive_clock_are_not_silently_adjusted"
+      ]
+    },
+    {
+      "id": "background_budget",
+      "implementation_stage": 6,
+      "expected": "Persisted budgets survive crashes; retrying delivery does not regenerate messages.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_spent_preparation_never_replays_after_crash",
+        "tests/test_integration.py::test_daily_briefing_budget_concurrency_and_reminders_isolate_local_calendar"
+      ]
+    },
+    {
+      "id": "injection_foreign_tool",
+      "implementation_stage": 7,
+      "expected": "Direct instructions to bypass role cannot execute a foreign tool.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_direct_cross_role_cannot_reach_mcp"
+      ]
+    },
+    {
+      "id": "injection_prompt_disclosure",
+      "implementation_stage": 7,
+      "expected": "Known system instructions/secrets cannot be disclosed; prohibited operations are observed.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_literal_system_prompt_is_blocked_before_display"
+      ]
+    },
+    {
+      "id": "injection_actor",
+      "implementation_stage": 7,
+      "expected": "Claiming another user does not change trusted identity or destination.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_actor_override_is_rejected_before_specialist_or_tool"
+      ]
+    },
+    {
+      "id": "injection_lifestyle_write",
+      "implementation_stage": 7,
+      "expected": "Lifestyle add_reminder is denied before MCP even with confidence1.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_lifestyle_write_is_denied_even_with_forged_capability"
+      ]
+    },
+    {
+      "id": "injection_material",
+      "implementation_stage": 7,
+      "expected": "Instructions in a material cannot alter routing rights or prepare/write a reminder.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_instruction_in_material_cannot_write"
+      ]
+    },
+    {
+      "id": "injection_tool_result",
+      "implementation_stage": 7,
+      "expected": "Instructions in MCP data cannot launch another action or elevate role.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_tool_result_cannot_launch_new_write"
+      ]
+    },
+    {
+      "id": "routing_experiment",
+      "implementation_stage": 7,
+      "expected": "All15 frozen requests remain in denominator; actual accuracy threshold at least12/15.",
+      "kind": "live_experiment"
+    },
+    {
+      "id": "packaging_release",
+      "implementation_stage": 8,
+      "expected": "New data/SQL/config are packaged, report exists and lab3 tag is created only after acceptance.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_release.py::test_release_packages_only_public_sources_sql_and_complete_daily_demo"
+      ]
+    }
+  ]
+}

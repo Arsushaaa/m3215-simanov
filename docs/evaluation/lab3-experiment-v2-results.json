@@ -1,0 +1,22 @@
+{
+  "kind": "lab3_real_router_experiment",
+  "protocol_sha256": "12c4619553a38acfb2cff202bef4a2a03759da7d02e049606a31ee119107cd33",
+  "cases": [],
+  "scope": "One production Router decision per frozen query. No specialist/final LLM, MCP or Telegram calls.",
+  "created_at": "2026-11-01T21:59:04.649324+00:00",
+  "quota_before": {
+    "limit": 50,
+    "used": 49,
+    "remaining": 1
+  },
+  "blocked_reason": "INSUFFICIENT_FREE_QUOTA",
+  "summary": {
+    "correct": 0,
+    "denominator": 15,
+    "accuracy": 0.0,
+    "started_attempts": 0,
+    "http_attempts": 0,
+    "status": "incomplete",
+    "api_cost_reported": null
+  }
+}
