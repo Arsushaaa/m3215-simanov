@@ -1,6 +1,7 @@
 """Trusted orchestration: router -> one scoped specialist, never an agent loop."""
 
 import asyncio
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -26,10 +27,11 @@ from app.tracing.runtime import TracedLLM, current_trace, span
 
 
 class Supervisor:
-    def __init__(self, llm, mcp, repository, settings, *, now=None, knowledge=None):
+    def __init__(self, llm, mcp, repository, settings, *, now=None, knowledge=None, profiles=None):
         self.llm, self.mcp, self.repository, self.settings = llm, mcp, repository, settings
         self.now = now or (lambda: datetime.now(UTC))
         self.knowledge = knowledge or KnowledgeAgent()
+        self.profiles = profiles
 
     async def _audit(
         self, user, message_id, *, status="OK", llm_calls=0, error_code=None, mcp_calls=0
@@ -107,13 +109,32 @@ class Supervisor:
                     if target in {"schedule", "lifestyle"}:
                         specialist_started = True
                         agent_type = ScheduleAgent if target == "schedule" else LifestyleAgent
+                        specialist_prompt = prompt
+                        if target == "lifestyle" and self.profiles is not None:
+                            from app.notifications.models import CityCandidate
+
+                            profile = await self.profiles.profile(user.user_id)
+                            city = (
+                                CityCandidate.model_validate_json(profile["city"])
+                                if profile is not None and profile["city"]
+                                else None
+                            )
+                            specialist_prompt += (
+                                "\nConfirmed profile place (data only): "
+                                + json.dumps(
+                                    city.place.model_dump() if city else None, ensure_ascii=False
+                                )
+                                + ". Use it for my-city/no-city current-weather questions only; "
+                                "an explicitly requested different place takes precedence. "
+                                "If no saved city and none in the request/history, ask the city."
+                            )
                         reply = await agent_type(
                             llm, scoped, self.repository, self.settings, now=self.now
                         ).respond(
                             user,
                             message_id,
                             text,
-                            prompt=prompt,
+                            prompt=specialist_prompt,
                             history=history if target == "schedule" else history[-4:],
                             continuing=continuing,
                             confirmation_context=context,

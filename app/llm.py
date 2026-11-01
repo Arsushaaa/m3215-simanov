@@ -86,6 +86,9 @@ class OpenRouterClient:
         result = await self._request(payload)
         if result.tool_calls:
             raise ModelError("Модель предложила новое действие вместо итогового ответа.")
+        from app.output_guard import prevent_prompt_echo
+
+        prevent_prompt_echo(result.text, messages)
         return Completion(
             result.text,
             truncated=result.truncated,

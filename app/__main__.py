@@ -95,7 +95,14 @@ async def run(settings: Settings) -> None:
         mcp = MCPClient(settings)
         await mcp.start()
         knowledge = await KnowledgeAgent.initialize(mcp)
-        agent = Supervisor(llm, mcp, AgentRepository(state.pool), settings, knowledge=knowledge)
+        agent = Supervisor(
+            llm,
+            mcp,
+            AgentRepository(state.pool),
+            settings,
+            knowledge=knowledge,
+            profiles=NotificationRepository(state.pool),
+        )
         confirmations = ConfirmationService(
             ConfirmationRepository(state.pool), ScopedMCP(mcp, "schedule", confirmation=True)
         )
