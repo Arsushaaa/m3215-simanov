@@ -21,10 +21,12 @@ from babel import Locale
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from app.mcp.contracts import (
+    Coordinates,
     ErrorCode,
     ErrorDetails,
     ErrorResult,
     Place,
+    PointWeatherResult,
     ShortText,
     TimezoneName,
     WeatherAmbiguous,
@@ -32,6 +34,7 @@ from app.mcp.contracts import (
     WeatherCondition,
     WeatherNotFound,
     WeatherOk,
+    WeatherPointOk,
     WeatherResult,
     Wind,
 )
@@ -389,5 +392,66 @@ class WeatherService:
         return WeatherResult(
             ErrorResult(
                 status="error", error=ErrorDetails(code=code, message=message, retryable=retryable)
+            )
+        )
+
+    async def get_weather_point(self, point: Coordinates) -> PointWeatherResult:
+        """Public point read: no profile ID, caller label or geocoding/guessing."""
+        try:
+            point = Coordinates.model_validate(point)
+            async with asyncio.timeout(self.timeout_seconds):
+                raw = await self._json(
+                    WEATHER_URL,
+                    {
+                        "latitude": point.latitude,
+                        "longitude": point.longitude,
+                        "current": "temperature_2m,weather_code,wind_speed_10m",
+                        "temperature_unit": "celsius",
+                        "wind_speed_unit": "kmh",
+                        "timeformat": "unixtime",
+                        "timezone": point.timezone,
+                        "forecast_days": 1,
+                    },
+                )
+                weather = _Weather.model_validate(raw)
+                if weather.timezone != point.timezone:
+                    raise ValueError("Point timezone mismatch")
+                current = weather.current
+                return PointWeatherResult(
+                    WeatherPointOk(
+                        status="ok",
+                        point=point,
+                        timezone=weather.timezone,
+                        temperature_c=current.temperature_2m,
+                        condition=WeatherCondition(
+                            code=current.weather_code,
+                            description=WMO_CONDITIONS[current.weather_code],
+                        ),
+                        wind=Wind(speed=current.wind_speed_10m, unit="km/h"),
+                        observed_at=datetime.fromtimestamp(current.time, UTC).astimezone(
+                            ZoneInfo(point.timezone)
+                        ),
+                        source="Open-Meteo",
+                    )
+                )
+        except TimeoutError as error:
+            code, retryable = "TIMEOUT", True
+            _log_failure("point", code, error)
+        except aiohttp.ClientError as error:
+            code, retryable = "UPSTREAM_ERROR", True
+            _log_failure("point", code, error)
+        except _FetchError as error:
+            code, retryable = error.code, error.retryable
+            _log_failure("point", code, error)
+            return PointWeatherResult.model_validate(
+                self._error(code, error.message, retryable=retryable).model_dump(mode="json")
+            )
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as error:
+            code, retryable = "INVALID_RESULT", False
+            _log_failure("point", code, error)
+        # Exception bodies and coordinates must not enter diagnostics.
+        return PointWeatherResult.model_validate(
+            self._error(code, "Не удалось получить погоду точки.", retryable=retryable).model_dump(
+                mode="json"
             )
         )

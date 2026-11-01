@@ -5,6 +5,7 @@ from copy import deepcopy
 from app.agent_repository import valid_capability_context
 from app.llm import ModelError
 from app.mcp.client import MCPClientError
+from app.mcp.contracts import WeatherArguments
 from app.tracing.runtime import span
 
 TOOLS = {
@@ -43,11 +44,16 @@ class Budget:
 
 
 class ScopedMCP:
-    def __init__(self, mcp, component, *, budget=None, confirmation=False):
+    def __init__(self, mcp, component, *, budget=None, confirmation=False, allow_point=False):
         if confirmation and component != "schedule":
             raise ValueError("Only a Schedule callback may write")
         self._mcp, self.component = mcp, component
         self.budget, self.confirmation = budget, confirmation
+        if type(allow_point) is not bool or (
+            allow_point and (component != "lifestyle" or confirmation)
+        ):
+            raise ValueError("Point weather is a host-owned Lifestyle read")
+        self.allow_point = allow_point
         self.observation = None
 
     @property
@@ -120,6 +126,11 @@ class ScopedMCP:
 
     async def call_tool(self, name, arguments, **kwargs):
         allowed = name in self.tools and (name != "add_reminder" or self.confirmation)
+        if name == "get_weather" and not self.allow_point:
+            try:
+                WeatherArguments.model_validate(arguments)
+            except ValueError:
+                await self._deny()
         if name == "add_reminder":
             allowed = allowed and valid_capability_context(kwargs.get("action_context"))
         if not allowed:

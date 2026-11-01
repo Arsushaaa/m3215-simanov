@@ -81,12 +81,14 @@ class DialogService:
         confirmations=None,
         timezone_ui=None,
         traces=None,
+        notifications=None,
     ):
         self.repository, self.llm, self.settings = repository, llm, settings
         self.agent = agent
         self.confirmations = confirmations
         self.timezone_ui = timezone_ui
         self.traces = traces
+        self.notifications = notifications
         self.locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
 
     def lock(self, user_id: int) -> asyncio.Lock:
@@ -245,6 +247,8 @@ class DialogService:
         return await self.confirmations.cancel(user_id, action_id)
 
     async def invalidate_confirmations(self, user_id: int) -> bool:
+        if self.notifications is not None:
+            await self.notifications.clear_menu(user_id)
         if self.timezone_ui is not None:
             self.timezone_ui.clear(user_id)
         if self.confirmations is None:

@@ -64,12 +64,20 @@ async def test_discovery_exposes_exact_contracts_and_read_only_resource(mcp_sett
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         resources = (await client.list_resources()).resources
     assert set(tools) == {"get_weather", "get_schedule", "add_reminder", "search_materials"}
-    assert set(tools["get_weather"].input_schema["properties"]) == {"city"}
+    weather_schema = tools["get_weather"].input_schema
+    assert set(weather_schema["$defs"]["WeatherArguments"]["properties"]) == {"city"}
+    assert set(weather_schema["$defs"]["WeatherPointArguments"]["properties"]) == {"point"}
     assert set(tools["get_schedule"].input_schema["properties"]) == {"date"}
     assert set(tools["add_reminder"].input_schema["properties"]) == {"text", "remind_at"}
     for name, tool in tools.items():
         assert tool.description
-        assert tool.input_schema["additionalProperties"] is False
+        if name == "get_weather":
+            assert all(
+                tool.input_schema["$defs"][branch]["additionalProperties"] is False
+                for branch in ("WeatherArguments", "WeatherPointArguments")
+            )
+        else:
+            assert tool.input_schema["additionalProperties"] is False
         assert tool.output_schema
         Draft202012Validator.check_schema(tool.input_schema)
         Draft202012Validator.check_schema(tool.output_schema)

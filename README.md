@@ -6,6 +6,9 @@
 версионированным документам через `search_materials` и `materials://catalog`.
 [Поиск и источники](docs/lab3-materials.md), [устройство агентов](docs/lab3-orchestration.md),
 [план](docs/lab3-plan.md). Доставка напоминаний и сводка остаются следующими этапами.
+Добавлены `/city`, `/briefing_on`, `/briefing_off`, `/notifications` и постоянная
+[очередь заданий](docs/lab3-notification-settings.md). Город требует подтверждения;
+подписка на сводку по умолчанию выключена. Отправка по времени ещё не подключена.
 
 Версия для сдачи — **[`lab2-final-v4`](https://github.com/Arsushaaa/m3215-simanov/tree/lab2-final-v4)**, 1 ноября 2026 года.
 Исправлено замечание преподавателя: неоднозначный «Ростов» не превращается

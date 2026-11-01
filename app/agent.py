@@ -28,6 +28,7 @@ from app.mcp.contracts import (
     ReminderTimeError,
     ResourceDecision,
     RespondDecision,
+    WeatherArguments,
     WeatherResult,
     validate_reminder_time,
 )
@@ -180,7 +181,12 @@ class AgentService:
                 "function": {
                     "name": value["name"],
                     "description": value["description"],
-                    "parameters": model_schema(value["inputSchema"], inline_refs=True),
+                    "parameters": model_schema(
+                        WeatherArguments.model_json_schema()
+                        if value["name"] == "get_weather"
+                        else value["inputSchema"],
+                        inline_refs=True,
+                    ),
                 },
             }
             for value in self.mcp.tools.values()

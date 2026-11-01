@@ -39,8 +39,9 @@ from app.mcp.contracts import (
     ReminderResult,
     ScheduleArguments,
     ScheduleResult,
-    WeatherArguments,
-    WeatherResult,
+    WeatherPointArguments,
+    WeatherToolArguments,
+    WeatherToolResult,
     WeekResult,
     tool_schemas,
 )
@@ -60,8 +61,8 @@ TOOLS = {
         "Пустая выдача означает отсутствие ответа в материалах.",
     ),
     "get_weather": (
-        WeatherArguments,
-        WeatherResult,
+        WeatherToolArguments,
+        WeatherToolResult,
         "Текущая погода в городе. city принимает только название на русском языке; "
         "переведи иностранное название города и указанные страну/регион на русский до вызова. "
         "Не расширяй короткое имя и не дополняй неуказанную страну/регион. "
@@ -223,7 +224,13 @@ def create_server(
             async with asyncio.timeout(settings.mcp_timeout_seconds):
                 runtime = ctx.lifespan_context
                 if params.name == "get_weather":
-                    result = await (await runtime.get_weather()).get_weather(arguments.city)
+                    value = arguments.root
+                    weather = await runtime.get_weather()
+                    result = (
+                        await weather.get_weather_point(value.point)
+                        if isinstance(value, WeatherPointArguments)
+                        else await weather.get_weather(value.city)
+                    )
                 elif params.name == "get_schedule":
                     result = (await runtime.get_schedule()).get_schedule(arguments.date)
                 elif params.name == "search_materials":

@@ -119,6 +119,15 @@ RussianPlace = Annotated[
 ]
 
 
+class Coordinates(StrictModel):
+    model_config = ConfigDict(
+        extra="forbid", strict=True, frozen=True, revalidate_instances="always"
+    )
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    timezone: TimezoneName
+
+
 class WeatherArguments(StrictModel):
     city: RussianPlace = Field(
         description=(
@@ -140,6 +149,14 @@ class WeatherArguments(StrictModel):
 
 class ScheduleArguments(StrictModel):
     date: IsoDate
+
+
+class WeatherPointArguments(StrictModel):
+    point: Coordinates
+
+
+class WeatherToolArguments(RootModel[WeatherArguments | WeatherPointArguments]):
+    model_config = ConfigDict(strict=True, frozen=True, json_schema_extra={"type": "object"})
 
 
 class ReminderArguments(StrictModel):
@@ -224,6 +241,37 @@ class WeatherResult(
         ]
     ]
 ):
+    model_config = ConfigDict(strict=True, frozen=True, json_schema_extra={"type": "object"})
+
+
+class WeatherPointOk(StrictModel):
+    status: Literal["ok"]
+    point: Coordinates
+    temperature_c: float = Field(ge=-100, le=100, allow_inf_nan=False)
+    condition: WeatherCondition
+    wind: Wind
+    observed_at: AwareDateTime
+    timezone: TimezoneName
+    source: Literal["Open-Meteo"]
+
+    @model_validator(mode="after")
+    def matching_point(self):
+        if (
+            self.point.timezone != self.timezone
+            or self.observed_at.utcoffset()
+            != self.observed_at.astimezone(ZoneInfo(self.timezone)).utcoffset()
+        ):
+            raise ValueError("Point observation timezone mismatch")
+        return self
+
+
+class PointWeatherResult(
+    RootModel[Annotated[WeatherPointOk | ErrorResult, Field(discriminator="status")]]
+):
+    pass
+
+
+class WeatherToolResult(RootModel[WeatherResult | PointWeatherResult]):
     model_config = ConfigDict(strict=True, frozen=True, json_schema_extra={"type": "object"})
 
 
@@ -466,7 +514,7 @@ def tool_schemas(name: str) -> dict[str, dict]:
     from app.materials.contracts import SearchArguments, SearchResult
 
     models = {
-        "get_weather": (WeatherArguments, WeatherResult),
+        "get_weather": (WeatherToolArguments, WeatherToolResult),
         "get_schedule": (ScheduleArguments, ScheduleResult),
         "add_reminder": (ReminderArguments, ReminderResult),
         "search_materials": (SearchArguments, SearchResult),

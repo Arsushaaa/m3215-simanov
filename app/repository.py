@@ -113,6 +113,7 @@ class DialogRepository:
                 mode,
             )
             await revoke_actions(connection, user_id, "Смена режима отозвала подтверждение.")
+            await connection.execute("DELETE FROM labbi_city_menus WHERE user_id=$1", user_id)
             await connection.execute("DELETE FROM labbi_messages WHERE user_id=$1", user_id)
 
     async def reset(self, user_id: int) -> None:
@@ -124,6 +125,7 @@ class DialogRepository:
                 user_id,
             )
             await revoke_actions(connection, user_id, "Сброс диалога отозвал подтверждение.")
+            await connection.execute("DELETE FROM labbi_city_menus WHERE user_id=$1", user_id)
             await connection.execute("DELETE FROM labbi_messages WHERE user_id=$1", user_id)
 
     async def set_temperature(self, user_id: int, temperature: float) -> None:

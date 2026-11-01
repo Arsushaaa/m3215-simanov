@@ -17,6 +17,9 @@ from app.llm import OpenRouterClient
 from app.logging_setup import configure_logging
 from app.mcp.client import MCPClient
 from app.migration import migrate
+from app.notifications.city import CityLookup
+from app.notifications.repository import NotificationRepository
+from app.notifications.service import NotificationService
 from app.repository import DialogRepository
 from app.routing.policy import ScopedMCP
 from app.routing.supervisor import Supervisor
@@ -99,6 +102,9 @@ async def run(settings: Settings) -> None:
             confirmations=confirmations,
             timezone_ui=timezone_ui,
             traces=TraceManager(TraceRepository(state.pool)),
+            notifications=NotificationService(
+                NotificationRepository(state.pool), CityLookup(timezone_session)
+            ),
         )
         dispatcher = Dispatcher()
         dispatcher.include_router(create_router())

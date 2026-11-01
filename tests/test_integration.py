@@ -153,7 +153,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 7
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 8
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
@@ -315,7 +315,7 @@ async def test_agent_migration_upgrades_lab1_and_preserves_history_and_registry(
         )
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 7
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 8
         assert (
             await pool.fetch(
                 "SELECT version, applied_at FROM labbi_schema_migrations "
@@ -2327,4 +2327,298 @@ async def test_lab3_knowledge_real_stdio_and_postgres_persist_grounded_answer_an
         assert await TraceRepository(pool).read(202, trace.trace_id) is None
     finally:
         await mcp.close()
+        await pool.close()
+
+
+async def test_lab3_city_menu_ownership_restart_expiry_and_no_connection_during_lookup(
+    database,
+):
+    from test_notifications import CITY
+
+    from app.notifications.city import EXPIRED, CityUI
+    from app.notifications.repository import NotificationRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        await pool.close()
+        pool = await asyncpg.create_pool(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            min_size=1,
+            max_size=1,
+            command_timeout=5,
+        )
+        repo = NotificationRepository(pool)
+        await DialogRepository(pool).user(101)
+        assert await repo.profile(101) is None  # Migration never guesses a private destination.
+        with pytest.raises(ValueError):
+            await repo.register_destination(101, 202)
+        await repo.register_destination(101, 101)
+        await ConfirmationRepository(pool).set_timezone(101, "Europe/Moscow")
+        token, version = await repo.start_menu(101)
+        assert await repo.fill_menu(101, token, version, [CITY])
+        assert (await repo.profile(101))["city"] is None
+        assert await repo.choose(101, token, 0) == CITY
+        assert (await repo.profile(101))["city"] is None
+        assert await repo.confirm_city(202, token, 0) is None
+        assert await asyncio.wait_for(repo.confirm_city(101, token, 0), 2) == CITY
+        assert await repo.confirm_city(101, token, 0) is None
+        profile = await repo.profile(101)
+        assert json.loads(profile["city"]) == CITY.model_dump(mode="json")
+        assert profile["timezone"] == "Europe/Moscow" and not profile["briefing_enabled"]
+        assert profile["version"] > version
+        await pool.close()
+        pool = await create_pool(settings)
+        repo = NotificationRepository(pool)
+        assert (await repo.profile(101))["city"] == profile["city"]
+        old, v = await repo.start_menu(101)
+        assert await repo.fill_menu(101, old, v, [CITY])
+        await repo.choose(101, old, 0)
+        await ConfirmationRepository(pool).set_timezone(101, "Asia/Tokyo")
+        assert await repo.confirm_city(101, old, 0) is None
+        expired, v = await repo.start_menu(101)
+        await repo.fill_menu(101, expired, v, [CITY])
+        await repo.choose(101, expired, 0)
+        await pool.execute(
+            "UPDATE labbi_city_menus SET expires_at=clock_timestamp()-INTERVAL '1 second' "
+            "WHERE user_id=101"
+        )
+        assert await repo.confirm_city(101, expired, 0) is None
+        assert not await repo.fill_menu(101, expired, v, [CITY])
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def lookup(query):
+            started.set()
+            await release.wait()
+            return [CITY]
+
+        task = asyncio.create_task(CityUI(repo, SimpleNamespace(search=lookup)).open(101, "Казань"))
+        await asyncio.wait_for(started.wait(), 2)
+        assert pool.get_idle_size() == pool.get_size()
+        await repo.clear_menu(101)
+        release.set()
+        assert await task == EXPIRED
+        assert json.loads((await repo.profile(101))["city"]) == CITY.model_dump(mode="json")
+    finally:
+        await pool.close()
+
+
+async def test_lab3_briefing_opt_in_requires_confirmed_profile_and_outbox_is_unique_and_revocable(
+    database,
+):
+    from test_notifications import CITY
+
+    from app.notifications.repository import NotificationRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo = NotificationRepository(pool)
+        await repo.register_destination(101, 101)
+        with pytest.raises(ConfirmationError) as missing:
+            await repo.set_briefing(101, True)
+        assert missing.value.code == "TIMEZONE_REQUIRED"
+        await ConfirmationRepository(pool).set_timezone(101, "Europe/Moscow")
+        with pytest.raises(ConfirmationError):
+            await repo.set_briefing(101, True)
+        token, v = await repo.start_menu(101)
+        await repo.fill_menu(101, token, v, [CITY])
+        assert await repo.confirm_city(101, token, 0) is None  # Preview selection is mandatory.
+        await repo.choose(101, token, 0)
+        await repo.confirm_city(101, token, 0)
+        moment = await repo.set_briefing(101, True)
+        profile = await repo.profile(101)
+        assert moment > profile["consented_at"]
+        await repo.set_briefing(101, True)
+        assert (await repo.profile(101))["version"] == profile["version"]
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox") == 0
+        day = moment.astimezone(ZoneInfo(profile["timezone"])).date()
+        events = await asyncio.gather(
+            *(
+                repo.enqueue_briefing(101, day, expected_version=profile["version"])
+                for _ in range(12)
+            )
+        )
+        assert len(set(events)) == 1 and events[0] is not None
+        assert (
+            await repo.enqueue_briefing(101, day, expected_version=profile["version"]) == events[0]
+        )
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox") == 1
+        event = await repo.event(101, events[0])
+        assert event["state"] == "pending" and event["body"] is None and event["attempts"] == 0
+        assert event["deadline_at"] - event["due_at"] == timedelta(hours=1)
+        assert await repo.event(202, events[0]) is None
+        assert (
+            await repo.enqueue_briefing(101, day, expected_version=profile["version"] - 1) is None
+        )
+        # Turning off cancels an in-progress preparation and fences its old lease.
+        await pool.execute(
+            "UPDATE labbi_outbox SET state='preparing',"
+            "lease_until=clock_timestamp()+INTERVAL '150 seconds',"
+            "lease_token=$2,llm_reserved=1 WHERE id=$1",
+            events[0],
+            uuid4(),
+        )
+        await repo.set_briefing(101, False)
+        cancelled = await repo.event(101, events[0])
+        assert cancelled["state"] == "cancelled" and cancelled["lease_token"] is None
+        assert cancelled["llm_reserved"] == 1
+        assert await repo.enqueue_briefing(101, day, expected_version=profile["version"]) is None
+        await repo.set_briefing(101, True)
+        updated = await repo.profile(101)
+        assert (
+            await repo.enqueue_briefing(101, day, expected_version=updated["version"]) == events[0]
+        )
+        assert (await repo.event(101, events[0]))[
+            "state"
+        ] == "cancelled"  # A spent budget is never reset.
+    finally:
+        await pool.close()
+
+
+async def test_lab3_reminder_outbox_is_atomic_idempotent_and_legacy_addresses_are_not_guessed(
+    database,
+):
+    from app.notifications.repository import NotificationRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo = NotificationRepository(pool)
+        action, arguments, capability = await _confirmed_reminder(pool, 101)
+        writer = ReminderRepository(pool)
+        receipt = (await writer.add_reminder(arguments, capability)).root
+        assert receipt.status == "ok"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox") == 0
+        await repo.register_destination(101, 101)
+        await repo.register_destination(101, 101)
+        again = (await writer.add_reminder(arguments, capability)).root
+        assert again.reminder_id == receipt.reminder_id and not again.created
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox") == 1
+        row = await pool.fetchrow("SELECT * FROM labbi_outbox")
+        assert row["destination_chat_id"] == 101 and row["reminder_id"] == receipt.reminder_id
+        assert row["deadline_at"] - row["due_at"] == timedelta(minutes=15)
+        await repo.register_destination(303, 303)
+        action2, args2, cap2 = await _confirmed_reminder(pool, 303)
+        await pool.execute(
+            "ALTER TABLE labbi_outbox ADD CONSTRAINT simulate_outbox_failure "
+            "CHECK(kind<>'reminder') NOT VALID"
+        )
+        denied = (await writer.add_reminder(args2, cap2)).root
+        assert denied.status == "error" and denied.error.code == "SOURCE_UNAVAILABLE"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders WHERE user_id=303") == 0
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_actions WHERE id=$1", action2["id"])
+            == "approved"
+        )
+        await pool.execute("ALTER TABLE labbi_outbox DROP CONSTRAINT simulate_outbox_failure")
+        assert (await writer.add_reminder(args2, cap2)).root.status == "ok"
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox WHERE user_id=303") == 1
+    finally:
+        await pool.close()
+
+
+async def test_lab3_city_cancel_confirmation_race_and_profile_change_fence_old_menus(database):
+    from test_notifications import CITY
+
+    from app.notifications.repository import NotificationRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo = NotificationRepository(pool)
+        await repo.register_destination(101, 101)
+        for _ in range(8):
+            token, v = await repo.start_menu(101)
+            await repo.fill_menu(101, token, v, [CITY])
+            await repo.choose(101, token, 0)
+            saved, cancelled = await asyncio.wait_for(
+                asyncio.gather(repo.confirm_city(101, token, 0), repo.cancel_menu(101, token)), 3
+            )
+            assert (saved == CITY and not cancelled) or (saved is None and cancelled)
+        token, v = await repo.start_menu(101)
+        await repo.fill_menu(101, token, v, [CITY])
+        await repo.choose(101, token, 0)
+        await ConfirmationRepository(pool).set_timezone(101, "Asia/Tokyo")
+        assert await repo.confirm_city(101, token, 0) is None
+        assert not await repo.fill_menu(101, token, v, [CITY])
+        for change in (
+            DialogRepository(pool).reset,
+            lambda owner: DialogRepository(pool).change_mode(owner, "translate"),
+        ):
+            token, v = await repo.start_menu(101)
+            await repo.fill_menu(101, token, v, [CITY])
+            await repo.choose(101, token, 0)
+            await change(101)
+            assert await repo.confirm_city(101, token, 0) is None
+    finally:
+        await pool.close()
+
+
+async def test_lab3_profile_change_cancels_prepared_briefing_but_not_started_send(
+    database,
+):
+    from test_notifications import CITY
+
+    from app.notifications.repository import NotificationRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo = NotificationRepository(pool)
+
+        async def setup(owner):
+            await repo.register_destination(owner, owner)
+            await ConfirmationRepository(pool).set_timezone(owner, "Europe/Moscow")
+            token, v = await repo.start_menu(owner)
+            await repo.fill_menu(owner, token, v, [CITY])
+            await repo.choose(owner, token, 0)
+            await repo.confirm_city(owner, token, 0)
+            moment = await repo.set_briefing(owner, True)
+            profile = await repo.profile(owner)
+            day = moment.astimezone(ZoneInfo(profile["timezone"])).date()
+            return await repo.enqueue_briefing(owner, day, expected_version=profile["version"])
+
+        first = await setup(101)
+        await pool.execute(
+            "UPDATE labbi_outbox SET state='ready',body='Already prepared' WHERE id=$1", first
+        )
+        token, v = await repo.start_menu(101)
+        changed = CITY.model_copy(update={"latitude": CITY.latitude + 1.0})
+        await repo.fill_menu(101, token, v, [changed])
+        await repo.choose(101, token, 0)
+        await repo.confirm_city(101, token, 0)
+        assert (await repo.event(101, first))["state"] == "cancelled"
+        assert (await repo.event(101, first))["body"] == "Already prepared"
+        assert (await repo.profile(101))["briefing_enabled"]
+        second = await setup(202)
+        await pool.execute(
+            "UPDATE labbi_outbox SET state='sending',body='Sending',attempts=1,"
+            "lease_token=$2,lease_until=clock_timestamp()+INTERVAL '60 seconds' WHERE id=$1",
+            second,
+            uuid4(),
+        )
+        await repo.set_briefing(202, False)
+        event = await repo.event(202, second)
+        assert event["state"] == "sending"  # An external send may already be in flight.
+        assert event["profile_version"] < (await repo.profile(202))["version"]
+        for statement in (
+            "UPDATE labbi_outbox SET attempts=4 WHERE id=$1",
+            "UPDATE labbi_outbox SET lease_token=NULL WHERE id=$1",
+            "UPDATE labbi_outbox SET body=NULL WHERE id=$1",
+            "UPDATE labbi_outbox SET deadline_at=due_at+INTERVAL '1 minute' WHERE id=$1",
+            "UPDATE labbi_outbox SET next_attempt_at=due_at-INTERVAL '1 second' WHERE id=$1",
+        ):
+            with pytest.raises(asyncpg.CheckViolationError):
+                await pool.execute(statement, second)
+    finally:
         await pool.close()

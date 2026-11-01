@@ -29,6 +29,8 @@ from app.mcp.contracts import (
     ScheduleResult,
     WeatherArguments,
     WeatherResult,
+    WeatherToolArguments,
+    WeatherToolResult,
     WeekResult,
     tool_schemas,
 )
@@ -40,7 +42,7 @@ CATALOG_URI = "materials://catalog"
 MAX_RESULT_BYTES = 32 * 1024
 MODELS = {
     "search_materials": (SearchArguments, SearchResult),
-    "get_weather": (WeatherArguments, WeatherResult),
+    "get_weather": (WeatherToolArguments, WeatherToolResult),
     "get_schedule": (ScheduleArguments, ScheduleResult),
     "add_reminder": (ReminderArguments, ReminderResult),
 }
@@ -217,6 +219,13 @@ class MCPClient:
         catalog, validators = {}, {}
         for tool in tools.tools:
             expected = tool_schemas(tool.name)
+            if (
+                tool.name == "get_weather"
+                and tool.input_schema == WeatherArguments.model_json_schema()
+                and tool.output_schema == WeatherResult.model_json_schema()
+            ):
+                # Explicit previous wire version; its validator still forbids point arguments.
+                expected = {"inputSchema": tool.input_schema, "outputSchema": tool.output_schema}
             for schema in (tool.input_schema, tool.output_schema):
                 _local_references(schema)
                 Draft202012Validator.check_schema(schema)
@@ -374,6 +383,11 @@ class MCPClient:
         # Reject a different day before it can become a fact in the final answer;
         # a mismatched write receipt has an unknown outcome and is reconciled in DB.
         if value["status"] != "error":
+            if name == "get_weather" and (
+                ("point" in arguments and value.get("point") != arguments["point"])
+                or ("point" not in arguments and "point" in value)
+            ):
+                raise ValueError("Mismatched weather point")
             if name == "search_materials" and any(
                 value[field] != arguments[field] for field in ("query", "document_id", "limit")
             ):

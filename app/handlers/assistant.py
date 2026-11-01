@@ -28,6 +28,9 @@ START_TEXT = (
     "/settings — режим, модель и температура\n"
     "/tools — доступные действия через MCP\n"
     "/timezone — часовой пояс напоминаний\n"
+    "/city — город для сводки\n"
+    "/briefing_on, /briefing_off — согласие на сводку\n"
+    "/notifications — настройки уведомлений\n"
     "/why — объяснение последнего действия\n"
     "/trace last — этапы последнего запроса\n"
     "/stop — остановить ответ и ожидающие запросы\n"
@@ -153,7 +156,7 @@ def create_router(*, request_limits_clock=None) -> Router:
 
     def callback_lane(query):
         data = query.data or ""
-        if data.startswith(("rem:cancel:", "tz:cancel:")):
+        if data.startswith(("rem:cancel:", "tz:cancel:", "city:cancel:")):
             return "cancel"
         return "callback"
 
@@ -186,6 +189,9 @@ def create_router(*, request_limits_clock=None) -> Router:
                 indicator = asyncio.create_task(typing(message)) if generating else None
                 try:
                     try:
+                        notifications = getattr(dialog, "notifications", None)
+                        if notifications is not None:
+                            await notifications.register_destination(owner, message.chat.id)
                         async with (
                             span("lifecycle", "command") if not generating else nullcontext()
                         ):
@@ -436,6 +442,82 @@ def create_router(*, request_limits_clock=None) -> Router:
     @router.message(Command("trace"))
     async def trace(message: Message, command: CommandObject, dialog: DialogService):
         await execute(message, dialog, lambda: dialog.trace(message.from_user.id, command.args))
+
+    @router.message(Command("city"))
+    @bounded_control("timezone")
+    async def city(message: Message, command: CommandObject, dialog: DialogService):
+        async def action():
+            service = getattr(dialog, "notifications", None)
+            return (
+                await service.city(message.from_user.id, command.args)
+                if service is not None
+                else "Настройки уведомлений сейчас недоступны."
+            )
+
+        await execute(
+            message,
+            dialog,
+            action,
+            generating=command.args is not None,
+            serialized=False,
+            literal=True,
+            check_confirmation=False,
+        )
+
+    @router.message(Command("notifications", "briefing_on", "briefing_off"))
+    @bounded_control("change")
+    async def notification_settings(
+        message: Message, command: CommandObject, dialog: DialogService
+    ):
+        async def action():
+            service = getattr(dialog, "notifications", None)
+            if service is None:
+                return "Настройки уведомлений сейчас недоступны."
+            if command.args:
+                return "Эта команда не принимает параметры. Город — /city, пояс — /timezone."
+            if command.command == "notifications":
+                return await service.status(message.from_user.id)
+            return await service.briefing(message.from_user.id, command.command == "briefing_on")
+
+        await execute(message, dialog, action, serialized=False, check_confirmation=False)
+
+    @router.callback_query(F.data.startswith("city:"))
+    @bounded_control(callback_lane)
+    async def city_callback(query: CallbackQuery, dialog: DialogService):
+        message = query.message
+        if (
+            not isinstance(message, Message)
+            or message.chat.type != "private"
+            or message.chat.id != query.from_user.id
+        ):
+            await acknowledge(query, "Выбор города доступен только в личном чате владельца.")
+            return
+        data = query.data or ""
+        if (
+            len(data.encode()) > 64
+            or re.fullmatch(r"city:(pick|use|page|cancel):[A-Za-z0-9_-]{22}(?::[0-9]{1,2})?", data)
+            is None
+        ):
+            await acknowledge(query, "Кнопка выбора города недействительна.")
+            return
+        await acknowledge(query)
+        service = getattr(dialog, "notifications", None)
+        if service is None:
+            return
+        task = asyncio.current_task()
+        callbacks.add(task)
+        try:
+            await execute(
+                message,
+                dialog,
+                lambda: service.city_callback(query.from_user.id, data),
+                user_id=query.from_user.id,
+                serialized=False,
+                edit_view=True,
+                check_confirmation=False,
+            )
+        finally:
+            callbacks.discard(task)
 
     @router.message(Command("timezone"))
     @bounded_control("timezone")

@@ -63,7 +63,7 @@ async def test_non_russian_or_malformed_input_is_rejected_before_weather_http(ci
 
 def test_discovered_schema_and_description_require_russian_before_call():
     schema = tool_schemas("get_weather")["inputSchema"]
-    description = schema["properties"]["city"]["description"]
+    description = schema["$defs"]["WeatherArguments"]["properties"]["city"]["description"]
     assert "на русском" in description and "Переведи" in description
     assert "Не угадывай" in description
     assert "переведи" in TOOLS["get_weather"][2]
