@@ -17,6 +17,7 @@ from app.formatting import FormattedText, format_reply, split_formatted
 from app.llm import ModelError
 from app.request_limits import CommandSlots, ControlSlots, RequestLimitError, RequestLimits
 from app.timezone_ui import TimezoneView
+from app.tracing.runtime import TraceUnavailable, failed, span
 
 logger = logging.getLogger(__name__)
 START_TEXT = (
@@ -28,6 +29,7 @@ START_TEXT = (
     "/tools — доступные действия через MCP\n"
     "/timezone — часовой пояс напоминаний\n"
     "/why — объяснение последнего действия\n"
+    "/trace last — этапы последнего запроса\n"
     "/stop — остановить ответ и ожидающие запросы\n"
     "/reset — очистить историю\n\n"
     "Сейчас по умолчанию используется /study. Отправь вопрос или выбери режим. "
@@ -172,7 +174,7 @@ def create_router(*, request_limits_clock=None) -> Router:
             return
         owner = user_id if user_id is not None else message.from_user.id
 
-        async def work():
+        async def perform():
             async with (
                 dialog.lock(owner) if serialized else nullcontext(),
                 limits.running() if generating else nullcontext(),
@@ -184,7 +186,10 @@ def create_router(*, request_limits_clock=None) -> Router:
                 indicator = asyncio.create_task(typing(message)) if generating else None
                 try:
                     try:
-                        answer = await action()
+                        async with (
+                            span("lifecycle", "command") if not generating else nullcontext()
+                        ):
+                            answer = await action()
                         if isinstance(answer, TimezoneView):
                             view = True
                             dismiss_previous = answer.dismiss_previous
@@ -228,9 +233,11 @@ def create_router(*, request_limits_clock=None) -> Router:
                                 # Параметры подтверждения отображаются буквально.
                                 formatted = False
                     except (ModelError, ConfirmationError) as exc:
+                        failed()
                         answer = exc.user_message
                         formatted = False
                     except Exception as exc:
+                        failed()
                         logger.error("Диалог: ошибка %s", type(exc).__name__)
                         answer = DATABASE_ERROR
                         formatted = False
@@ -255,7 +262,10 @@ def create_router(*, request_limits_clock=None) -> Router:
                         except Exception as exc:
                             logger.warning("Меню: ошибка редактирования %s", type(exc).__name__)
                     for number, part in enumerate(parts):
-                        await send_part(message, part, markup if number == len(parts) - 1 else None)
+                        async with span("telegram", "send_message"):
+                            await send_part(
+                                message, part, markup if number == len(parts) - 1 else None
+                            )
                     # Сначала доставляем результат; сбой Telegram не отменяет запись в БД.
                     if dismiss_previous:
                         await dismiss_message(message)
@@ -263,6 +273,19 @@ def create_router(*, request_limits_clock=None) -> Router:
                     if indicator:
                         indicator.cancel()
                         await asyncio.gather(indicator, return_exceptions=True)
+
+        async def work():
+            manager = getattr(dialog, "traces", None)
+            words = (message.text or "").split(maxsplit=1)
+            viewing = bool(words and words[0].split("@")[0] == "/trace")
+            if manager is None or viewing:
+                return await perform()
+            try:
+                async with manager.request(owner):
+                    return await perform()
+            except TraceUnavailable:
+                logger.error("Трассировка недоступна; запрос остановлен.")
+                await message.answer(DATABASE_ERROR, parse_mode=None)
 
         if not generating:
             if asyncio.current_task() not in controls:
@@ -396,10 +419,11 @@ def create_router(*, request_limits_clock=None) -> Router:
         )
         if revoked:
             answer += " Ожидающее подтверждение напоминания отменено."
-        await message.answer(
-            answer,
-            parse_mode=None,
-        )
+
+        async def stopped():
+            return answer
+
+        await execute(message, dialog, stopped, serialized=False)
 
     @router.message(Command("tools"))
     async def tools(message: Message, dialog: DialogService):
@@ -408,6 +432,10 @@ def create_router(*, request_limits_clock=None) -> Router:
     @router.message(Command("why"))
     async def why(message: Message, dialog: DialogService):
         await execute(message, dialog, lambda: dialog.why(message.from_user.id))
+
+    @router.message(Command("trace"))
+    async def trace(message: Message, command: CommandObject, dialog: DialogService):
+        await execute(message, dialog, lambda: dialog.trace(message.from_user.id, command.args))
 
     @router.message(Command("timezone"))
     @bounded_control("timezone")

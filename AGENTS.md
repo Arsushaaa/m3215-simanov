@@ -108,7 +108,16 @@
   Не выдавать их наличие за работающие Router/политику/worker или реализацию A2A.
   Этап 1 завершён: 1589/0/0 полная регрессия, 61 новая DTO-проверка и прежние 28 критериев
   (`docs/evaluation/lab3-stage1-checks.json`, `lab3-stage1-regression.json`), реальных LLM 0.
-- ЛР2 в текущем runtime сохраняет прежние бюджеты. После интеграции ЛР3 новый
+- Этап 2 подключает `routing/router.py`, `supervisor.py`, `policy.py`, Schedule/Lifestyle
+  и `tracing/`. `007_tracing.sql` хранит метаданные трасс; 001–006 не менять.
+  Knowledge до этапа 3 возвращает SOURCE_UNAVAILABLE, без подмены свободным ответом.
+  `/trace last`/UUID — только владелец, просмотр не заменяет последнюю трассу.
+  Тексты/аргументы/capability в spans запрещены; usage без метаданных — null.
+  Проверки подменяют LLM/MCP/Telegram и используют отдельную PostgreSQL.
+  Документ — `docs/lab3-orchestration.md`; живой эксперимент остаётся этапом 7.
+  Приёмка этапа 2: 1634/0/0, 45 новых тестов, прежние 28/28 критериев;
+  `docs/evaluation/lab3-stage2-checks.json` и `lab3-stage2-regression.json`.
+- Исторический AgentService ЛР2 сохраняет прежние бюджеты. В новом запуске ЛР3
   Supervisor имеет отдельный предел: 1 Router + до2 LLM специалиста и 1 MCP на сообщение;
   локальный предел специалиста до2 сохраняется. Router/legacy_study не имеют MCP.
   Translate/quiz обходят Router. Callback/готовая доставка — 0 LLM. Сводка — до3 MCP

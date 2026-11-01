@@ -153,7 +153,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 6
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 7
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
@@ -315,11 +315,11 @@ async def test_agent_migration_upgrades_lab1_and_preserves_history_and_registry(
         )
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 6
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 7
         assert (
             await pool.fetch(
                 "SELECT version, applied_at FROM labbi_schema_migrations "
-                "WHERE version <> '006_agent_state.sql' ORDER BY version"
+                "WHERE version < '006_agent_state.sql' ORDER BY version"
             )
             == applied_before
         )
@@ -2070,5 +2070,179 @@ async def test_quiz_structured_transitions_persist_across_pools_and_isolate_user
         llm.complete.assert_not_awaited()
         for call in llm.decide.call_args_list:
             assert call.kwargs["decision_schema"]["additionalProperties"] is False
+    finally:
+        await pool.close()
+
+
+async def test_lab3_traces_survive_pool_restart_isolate_owners_and_reject_foreign_parents(database):
+    from app.routing.contracts import TraceSpan
+    from app.tracing.repository import TraceRepository
+    from app.tracing.runtime import TraceManager, span
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repository = TraceRepository(pool)
+        async with TraceManager(repository).request(101) as first:
+            async with span("schedule", "agent", target="schedule"):
+                async with span("schedule", "tool_call", tool_name="get_schedule"):
+                    pass
+        async with TraceManager(repository).request(202) as foreign:
+            pass
+        assert await repository.read(202, first.trace_id) is None
+        assert await repository.read(101, foreign.trace_id) is None
+        row, spans = await repository.read(101, first.trace_id)
+        assert row["status"] == "ok" and len(spans) == 3
+        parent = next(s for s in spans if s.parent_span_id is None)
+        forged = TraceSpan.model_validate(
+            {
+                **parent.model_dump(),
+                "span_id": uuid4(),
+                "trace_id": foreign.trace_id,
+                "request_id": foreign.request_id,
+                "parent_span_id": parent.span_id,
+            }
+        )
+        with pytest.raises(asyncpg.ForeignKeyViolationError):
+            await repository.span(forged)
+        await pool.close()
+        pool = await create_pool(settings)
+        repository = TraceRepository(pool)
+        assert (await repository.read(101))[0]["id"] == first.trace_id
+        output = await repository.display(101, str(first.trace_id))
+        assert "schedule/tool_call get_schedule: ok" in output
+        assert "не найдена" in await repository.display(202, str(first.trace_id))
+        assert "Используй" in await repository.display(101, "invalid")
+        abandoned, request = uuid4(), uuid4()
+        await repository.start(101, abandoned, request, datetime.now(UTC) - timedelta(minutes=11))
+        assert (await repository.read(101, abandoned))[0]["status"] == "interrupted"
+        metadata = await pool.fetch("SELECT data FROM labbi_trace_spans")
+        assert all("actor_id" not in r["data"] and "capability" not in r["data"] for r in metadata)
+    finally:
+        await pool.close()
+
+
+async def test_lab3_supervisor_keeps_confirmation_guard_during_router_and_callback_has_no_llm(
+    database,
+):
+    from app.mcp.contracts import tool_schemas
+    from app.routing.policy import ScopedMCP
+    from app.routing.supervisor import Supervisor
+    from app.tracing.repository import TraceRepository
+    from app.tracing.runtime import TraceManager
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repository = DialogRepository(pool)
+        await repository.user(101)
+        confirmations_repo = ConfirmationRepository(pool)
+        await confirmations_repo.set_timezone(101, "Europe/Moscow")
+        now = (await pool.fetchval("SELECT clock_timestamp()")).replace(microsecond=0)
+        when = (now.astimezone(ZoneInfo("Europe/Moscow")) + timedelta(days=1)).replace(
+            hour=11, minute=0, second=0
+        )
+        text = f"Напомни {when.date()} в 11:00 сдать отчёт"
+        route = RoutingCompletion(
+            json.dumps({"target": "schedule", "reason": "schedule_request", "confidence": 0.9}), []
+        )
+        reminder = RoutingCompletion(
+            json.dumps(
+                {
+                    "action": "call_tool",
+                    "name": "add_reminder",
+                    "reason": "Prepare",
+                    "arguments": {"text": "Сдать отчёт", "remind_at": when.isoformat()},
+                    "evidence": {
+                        field: {"source": "user", "message_index": 0, "quote": text}
+                        for field in ("request", "text", "date", "time")
+                    },
+                }
+            ),
+            [],
+        )
+        llm = SimpleNamespace(decide=AsyncMock(side_effect=[route, reminder]), complete=AsyncMock())
+        writer = ReminderRepository(pool)
+
+        async def actual_write(name, arguments, *, action_context):
+            assert name == "add_reminder"
+            result = await writer.add_reminder(
+                ReminderArguments.model_validate(arguments), action_context
+            )
+            return result.model_dump(mode="json")
+
+        mcp = SimpleNamespace(
+            available=True,
+            tools={
+                name: {
+                    "name": name,
+                    "description": name,
+                    **tool_schemas(name),
+                }
+                for name in ("get_weather", "get_schedule", "add_reminder")
+            },
+            resources={},
+            call_tool=AsyncMock(side_effect=actual_write),
+            read_resource=AsyncMock(),
+        )
+        confirmation = ConfirmationService(
+            confirmations_repo, ScopedMCP(mcp, "schedule", confirmation=True)
+        )
+        traces = TraceManager(TraceRepository(pool))
+        dialog = DialogService(
+            repository,
+            llm,
+            settings,
+            agent=Supervisor(llm, mcp, AgentRepository(pool), settings, now=lambda: now),
+            confirmations=confirmation,
+            traces=traces,
+        )
+        async with traces.request(101):
+            answer = await dialog.respond(101, 1, text)
+        assert "Подтверждения" not in answer
+        card = await confirmations_repo.current_card(101)
+        assert card is not None and card.arguments.remind_at == when
+        assert llm.decide.await_count == 2 and llm.complete.await_count == 0
+        mcp.call_tool.assert_not_awaited()
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def delayed_router(*args, **kwargs):
+            started.set()
+            await release.wait()
+            return RoutingCompletion(
+                json.dumps(
+                    {"target": "legacy_study", "reason": "general_study", "confidence": 0.8}
+                ),
+                [],
+            )
+
+        llm.decide.side_effect = delayed_router
+        llm.complete.return_value = Completion("Привет!")
+        task = asyncio.create_task(dialog.respond(101, 2, "Привет"))
+        try:
+            await asyncio.wait_for(started.wait(), 2)
+            denied = await confirmations_repo.approve(101, card.action_id)
+            assert isinstance(denied, Outcome) and denied.code == "ACTION_CONFLICT"
+            mcp.call_tool.assert_not_awaited()
+        finally:
+            release.set()
+            await task
+        assert (await confirmations_repo.current_card(101)).action_id == card.action_id
+        counts = (llm.decide.await_count, llm.complete.await_count)
+        async with traces.request(101):
+            receipt = await dialog.confirm(101, str(card.action_id))
+        assert "Напоминание сохранено" in receipt
+        assert (llm.decide.await_count, llm.complete.await_count) == counts
+        mcp.call_tool.assert_awaited_once()
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 1
+        again = await dialog.confirm(101, str(card.action_id))
+        assert "Напоминание сохранено" in again
+        mcp.call_tool.assert_awaited_once()
+        _, spans = await traces.repository.read(101)
+        assert [(s.tool_name, s.operation) for s in spans if s.tool_name] == [
+            ("add_reminder", "tool_call")
+        ]
     finally:
         await pool.close()

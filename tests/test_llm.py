@@ -53,6 +53,29 @@ async def test_client_sends_roles_parameters_and_free_price_limit(http_server, b
     assert client.session.closed
 
 
+@pytest.mark.parametrize(
+    "usage,expected",
+    [
+        ({"prompt_tokens": 43, "completion_tokens": 17}, (43, 17)),
+        ({"prompt_tokens": True, "completion_tokens": -1}, (None, None)),
+        ({"prompt_tokens": "43", "completion_tokens": float("inf")}, (None, None)),
+        (None, (None, None)),
+    ],
+)
+async def test_usage_is_provider_metadata_never_estimated(
+    http_server, bot_settings, usage, expected
+):
+    url, state = http_server
+    state["body"]["usage"] = usage
+    client = OpenRouterClient(replace(bot_settings, openrouter_base_url=url))
+    await client.start()
+    try:
+        result = await client.complete([{"role": "user", "content": "Вопрос"}], 0.3)
+        assert (result.input_tokens, result.output_tokens) == expected
+    finally:
+        await client.close()
+
+
 @pytest.mark.parametrize("status", [401, 402, 403, 429, 500, 302])
 async def test_http_errors_are_safe_and_not_retried(http_server, bot_settings, status):
     url, state = http_server

@@ -39,6 +39,8 @@ Component = Literal[
     "knowledge",
     "lifestyle",
     "legacy_study",
+    "translate",
+    "quiz",
     "briefing",
     "reminder_delivery",
     "telegram",
@@ -228,6 +230,7 @@ class TraceSpan(ClosedModel):
     finished_at: AwareDateTime | None
     duration_ms: NonnegativeInt | None
     target: RouteTarget | None = None
+    confidence: Confidence | None = None
     tool_name: MCPTool | None = None
     resource_uri: MCPResource | None = None
     model_name: ModelName | None = None

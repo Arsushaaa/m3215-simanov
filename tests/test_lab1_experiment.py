@@ -245,7 +245,7 @@ async def test_recording_client_uses_production_parser_and_parameters(bot_settin
         )
     finally:
         await client.close()
-    assert answer == Completion("Ответ", truncated=True)
+    assert answer == Completion("Ответ", truncated=True, output_tokens=5)
     assert calls[0]["json"]["temperature"] == 0.7
     assert calls[0]["json"]["provider"] == {"max_price": {"prompt": 0, "completion": 0}}
     assert calls[0]["json"]["messages"][0]["content"].startswith("RCTF instruction")

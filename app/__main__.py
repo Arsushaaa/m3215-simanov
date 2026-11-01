@@ -5,7 +5,6 @@ import logging
 import aiohttp
 from aiogram import Dispatcher
 
-from app.agent import AgentService
 from app.agent_repository import AgentRepository, ConfirmationRepository
 from app.config import ConfigError, Settings
 from app.confirmations import ConfirmationService
@@ -18,9 +17,13 @@ from app.logging_setup import configure_logging
 from app.mcp.client import MCPClient
 from app.migration import migrate
 from app.repository import DialogRepository
+from app.routing.policy import ScopedMCP
+from app.routing.supervisor import Supervisor
 from app.telegram import create_bot
 from app.timezone_lookup import TimezoneLookup
 from app.timezone_ui import TimezoneUI
+from app.tracing.repository import TraceRepository
+from app.tracing.runtime import TraceManager
 
 logger = logging.getLogger("app")
 
@@ -80,8 +83,10 @@ async def run(settings: Settings) -> None:
         await llm.start()
         mcp = MCPClient(settings)
         await mcp.start()
-        agent = AgentService(llm, mcp, AgentRepository(state.pool), settings)
-        confirmations = ConfirmationService(ConfirmationRepository(state.pool), mcp)
+        agent = Supervisor(llm, mcp, AgentRepository(state.pool), settings)
+        confirmations = ConfirmationService(
+            ConfirmationRepository(state.pool), ScopedMCP(mcp, "schedule", confirmation=True)
+        )
         timezone_session = aiohttp.ClientSession()
         timezone_ui = TimezoneUI(confirmations, TimezoneLookup(timezone_session))
         dialog = DialogService(
@@ -91,6 +96,7 @@ async def run(settings: Settings) -> None:
             agent=agent,
             confirmations=confirmations,
             timezone_ui=timezone_ui,
+            traces=TraceManager(TraceRepository(state.pool)),
         )
         dispatcher = Dispatcher()
         dispatcher.include_router(create_router())

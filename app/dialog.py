@@ -16,6 +16,8 @@ from app.output_limits import check_output_size
 from app.prompts import MODE_NAMES, PROMPTS
 from app.quiz import INVALID_QUIZ, QuizState
 from app.repository import DialogRepository
+from app.routing.contracts import AgentResult
+from app.tracing.runtime import TracedLLM, span
 
 TRUNCATED_NOTICE = (
     "Ответ достиг ограничения длины. Ниже — весь полученный текст, но он ещё не закончен. "
@@ -78,11 +80,13 @@ class DialogService:
         agent=None,
         confirmations=None,
         timezone_ui=None,
+        traces=None,
     ):
         self.repository, self.llm, self.settings = repository, llm, settings
         self.agent = agent
         self.confirmations = confirmations
         self.timezone_ui = timezone_ui
+        self.traces = traces
         self.locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
 
     def lock(self, user_id: int) -> asyncio.Lock:
@@ -169,11 +173,17 @@ class DialogService:
                 ),
             )
         elif quiz_state is not None:
-            result = await self.llm.decide(messages, user.temperature, decision_schema=schema)
+            llm = TracedLLM(self.llm, "quiz", self.settings.openrouter_model)
+            result = await llm.decide(messages, user.temperature, decision_schema=schema)
             if result.tool_calls:
                 raise ModelError(INVALID_QUIZ)
         else:
-            result = await self.llm.complete(messages, user.temperature)
+            llm = TracedLLM(
+                self.llm,
+                user.mode if user.mode == "translate" else "legacy_study",
+                self.settings.openrouter_model,
+            )
+            result = await llm.complete(messages, user.temperature)
         if isinstance(getattr(result, "revision", None), int):
             user = replace(user, revision=result.revision)
         if getattr(result, "reminder", None) is not None and self.confirmations is not None:
@@ -181,16 +191,27 @@ class DialogService:
             if epoch is None and routing_context is not None:
                 epoch = routing_context.epoch
             try:
-                card = await self.confirmations.prepare(
-                    user,
-                    message_id,
-                    text,
-                    result.reminder,
-                    **({"expected_epoch": epoch} if epoch is not None else {}),
-                )
+                async with span("schedule", "prepare_notification"):
+                    card = await self.confirmations.prepare(
+                        user,
+                        message_id,
+                        text,
+                        result.reminder,
+                        **({"expected_epoch": epoch} if epoch is not None else {}),
+                    )
             except ConfirmationError as error:
                 raise ModelError(error.user_message) from None
             # prepare saves the action and exact user/card pair in one transaction.
+            outcome = getattr(result, "agent_result", None)
+            if isinstance(outcome, AgentResult):
+                AgentResult.model_validate(
+                    {
+                        **outcome.model_dump(),
+                        "status": "needs_confirmation",
+                        "pending_action_id": card.action_id,
+                        "message": card.card_text,
+                    }
+                )
             return card.card_text
         answer = result.text
         if quiz_state is not None:
@@ -207,6 +228,11 @@ class DialogService:
         if self.confirmations is None:
             return None
         return await self.confirmations.repository.lookup_card(user_id, message_id)
+
+    async def trace(self, user_id: int, argument=None):
+        if self.traces is None:
+            return "Трассировка сейчас недоступна."
+        return await self.traces.repository.display(user_id, argument)
 
     async def confirm(self, user_id: int, action_id: str) -> str:
         if self.confirmations is None:

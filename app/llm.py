@@ -21,6 +21,8 @@ REQUEST_REJECTED_MESSAGE = "Провайдер модели отклонил э�
 class Completion:
     text: str = field(repr=False)
     truncated: bool = False
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,8 @@ class RoutingCompletion:
     text: str | None = field(repr=False)
     tool_calls: list[dict] = field(repr=False)
     truncated: bool = False
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class ModelError(Exception):
@@ -82,7 +86,12 @@ class OpenRouterClient:
         result = await self._request(payload)
         if result.tool_calls:
             raise ModelError("Модель предложила новое действие вместо итогового ответа.")
-        return Completion(result.text, truncated=result.truncated)
+        return Completion(
+            result.text,
+            truncated=result.truncated,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        )
 
     async def decide(
         self,
@@ -231,4 +240,17 @@ class OpenRouterClient:
                 http_status,
                 time.monotonic() - started,
             )
-        return RoutingCompletion(text, calls, truncated=truncated)
+        usage = data.get("usage")
+        usage = usage if isinstance(usage, dict) else {}
+
+        def count(name):
+            value = usage.get(name)
+            return value if type(value) is int and 0 <= value <= 2**63 - 1 else None
+
+        return RoutingCompletion(
+            text,
+            calls,
+            truncated=truncated,
+            input_tokens=count("prompt_tokens"),
+            output_tokens=count("completion_tokens"),
+        )

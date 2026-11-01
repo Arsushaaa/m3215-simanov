@@ -33,6 +33,7 @@ from app.mcp.contracts import (
 )
 from app.reminder_grounding import indexed_history, indexed_message, user_sources, validate_evidence
 from app.reminder_messages import BUTTON_REQUIRED, REMINDER_CLARIFY
+from app.routing.policy import PolicyDenied
 from app.time_display import format_datetime
 from app.weather_reply import checked_weather_reply
 
@@ -135,6 +136,7 @@ class AgentReply:
     reminder: ReminderProposal | None = field(default=None, repr=False)
     revision: int | None = None
     confirmation_epoch: int | None = None
+    agent_result: object | None = field(default=None, repr=False)
 
 
 @dataclass
@@ -166,9 +168,10 @@ def _reminder_clarification(trace, text, *, code=None):
 
 
 class AgentService:
-    def __init__(self, llm, mcp, repository, settings: Settings, *, now=None):
+    def __init__(self, llm, mcp, repository, settings: Settings, *, now=None, role_rules=""):
         self.llm, self.mcp, self.repository, self.settings = llm, mcp, repository, settings
         self.now = now or (lambda: datetime.now(UTC))
+        self.role_rules = role_rules
 
     def _tools(self, context=None, *, message_indices=None):
         tools = [
@@ -246,9 +249,23 @@ class AgentService:
                     },
                 }
             )
+        if self.role_rules and "add_reminder" not in self.mcp.tools:
+            tools = [
+                tool
+                for tool in tools
+                if tool["function"]["name"]
+                not in {
+                    "prepare_reminder",
+                    "clarify_reminder",
+                    "use_confirmation",
+                    "cancel_reminder",
+                }
+            ]
         return tools
 
     def _facts(self, now, timezone, context=None):
+        if self.role_rules and getattr(self.mcp, "component", None) != "schedule":
+            context = None  # Lifestyle never receives another specialist's pending card.
         local = now.astimezone(ZoneInfo(self.settings.schedule_timezone))
         return "\nДоверенные данные приложения: " + _json(
             {
@@ -374,7 +391,7 @@ class AgentService:
         timezone = await self.repository.timezone(user.user_id)
         facts = self._facts(now, timezone, context)
         structured = self.settings.llm_tool_mode == "structured"
-        routing_prompt = prompt + ROUTING_RULES
+        routing_prompt = prompt + ROUTING_RULES + self.role_rules
         if structured:
             routing_prompt += (
                 "\nВерни один JSON-объект по схеме. Обнаруженные возможности: "
@@ -398,9 +415,12 @@ class AgentService:
             # user's reverse-history indices are still consecutive from one.
             indices = range(1 + sum(item["role"] == "user" for item in recent))
             tools = self._tools(context, message_indices=indices)
+            decision_schema = AgentDecision.model_json_schema()
+            if hasattr(self.mcp, "decision_schema"):
+                decision_schema = self.mcp.decision_schema(decision_schema)
             schema = (
                 model_schema(
-                    AgentDecision.model_json_schema(),
+                    decision_schema,
                     pending=context is not None and context.pending is not None,
                     message_indices=indices,
                 )
@@ -486,6 +506,9 @@ class AgentService:
                     ).root
             except (ValueError, KeyError, TypeError, ValidationError, RecursionError):
                 raise ModelError(INVALID_DECISION) from None
+        if hasattr(self.mcp, "allows_decision") and not self.mcp.allows_decision(decision):
+            trace.error_code = "UNAUTHORIZED"
+            raise PolicyDenied()
         if result.truncated and not isinstance(decision, (RespondDecision, ClarifyDecision)):
             trace.error_code = "INVALID_RESULT"
             raise ModelError("Решение модели оборвалось. Уточни запрос и попробуй снова.")
