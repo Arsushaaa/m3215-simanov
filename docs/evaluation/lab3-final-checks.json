@@ -1,9 +1,9 @@
 {
   "kind": "lab3_final_acceptance",
-  "generated_at": "2026-11-01T22:07:42.530533+00:00",
-  "status": "incomplete",
+  "generated_at": "2026-11-01T23:23:04.512963+00:00",
+  "status": "passed",
   "automated_status": "passed",
-  "release_ready": false,
+  "release_ready": true,
   "checks": [
     {
       "name": "pip check",
@@ -14,7 +14,7 @@
         "check"
       ],
       "exit_code": 0,
-      "duration_ms": 198
+      "duration_ms": 187
     },
     {
       "name": "Ruff",
@@ -26,7 +26,7 @@
         "."
       ],
       "exit_code": 0,
-      "duration_ms": 24
+      "duration_ms": 25
     },
     {
       "name": "format",
@@ -39,7 +39,7 @@
         "."
       ],
       "exit_code": 0,
-      "duration_ms": 24
+      "duration_ms": 23
     },
     {
       "name": "pytest + PostgreSQL",
@@ -50,18 +50,18 @@
         "-q",
         "-o",
         "faulthandler_timeout=60",
-        "--junitxml=/tmp/lab3-acceptance-ysj54p01/tests.xml"
+        "--junitxml=/tmp/lab3-acceptance-pw7ms61n/tests.xml"
       ],
       "exit_code": 0,
-      "duration_ms": 215593
+      "duration_ms": 222343
     }
   ],
   "suite": {
-    "passed": 1851,
+    "passed": 1854,
     "failed": 0,
     "skipped": 0
   },
-  "criteria_passed": 33,
+  "criteria_passed": 34,
   "criteria_total": 34,
   "cases": [
     {
@@ -687,11 +687,11 @@
     },
     {
       "id": "routing_experiment",
-      "status": "incomplete",
-      "correct": 0,
+      "status": "passed",
+      "correct": 13,
       "denominator": 15,
       "report": "docs/evaluation/lab3-experiment-v2-results.json",
-      "sha256": "c853c8ae562b40204fa4e0726c98cdf72cddf18fc34d18ae286eb783ff2b6209"
+      "sha256": "bfff446c81fe7fa16bceb6b5cb697515ed18e52963b6e4cfb339b65ff52e27b3"
     }
   ],
   "inherited_cases": [
