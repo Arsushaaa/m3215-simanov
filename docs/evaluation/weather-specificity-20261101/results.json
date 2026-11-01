@@ -1,0 +1,777 @@
+{
+  "created_at": "2026-11-01T13:22:04.633862+00:00",
+  "manifest_sha256": "2c048bb561f1176e7d114018872341c1ccc3df3280869b3df5f6ede168c936a0",
+  "status": "completed",
+  "attempts": [
+    {
+      "id": "rostov_followup",
+      "status": "failed",
+      "maximum_llm_calls": 6,
+      "started_at": "2026-11-01T13:22:09.055340+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:09.145176+00:00",
+          "temperature": 0.2,
+          "input_sha256": "31010bb55be6f97c79cbc372d27edd79fb33fcfe856b3c21cc392e3d62a1917b",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 0,
+            "remaining": 50
+          },
+          "wire": {
+            "request_sha256": "61eb37734e9adbe87a65ffb55a5a970053c2164c8d895f9b0a267dbdeff1b40a",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539329-iVZ5xxq4HzfDUMzl82xr",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3876,
+            "completion_tokens": 27,
+            "total_tokens": 3903,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-6858abfc-8a93-40ed-ba6b-f1e253f4d077",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:22:09.834593+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:16.302006+00:00",
+          "temperature": 0.2,
+          "input_sha256": "920a3b805afacfbf1e9e9857756ffb2e5e7cbef6bbc851a9f8850c75b3887ef5",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "95bac5195634f34ea9a0711c0c1a417618bf76f1c5970c6cefe2f205d7c22abd",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539337-U4ozbo2teRMXqueBzRdk",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1107,
+            "completion_tokens": 82,
+            "total_tokens": 1189,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "Уточните, какой именно Ростов вы имеете в виду. Найдено несколько вариантов:\n\n1. Ростов — Украина, Сумская область\n2. Ростов-на-Дону — Россия, Ростовская область\n3. Ростов Великий — Россия, Ярославская область\n\nНапишите полное название города, и я узнаю текущую погоду.",
+          "finished_at": "2026-11-01T13:22:18.112903+00:00"
+        },
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:18.184337+00:00",
+          "temperature": 0.2,
+          "input_sha256": "b0619dee0e48206888af584fcf38dd7a5e2b8739943539a9c4241180de4eca9b",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "2cdff67bc45b01e16980d203b38629d6c034280aba263a2dc692e4a04e703fec",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539338-Hi9b3xEDRIjHoBfAOGlh",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4015,
+            "completion_tokens": 29,
+            "total_tokens": 4044,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-ca515e0d-c4ef-4f15-9ac7-a22af6b6b2cd",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов, Россия\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:22:18.935007+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:19.034613+00:00",
+          "temperature": 0.2,
+          "input_sha256": "ec0303e690b6caf6e63f4478da4263d3d7f5a0f6402a50371e7e8f0fc63ac67b",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "b5fd0a6c2089f870e97847fd6d19b7396fb7f6eecb1d2d0658aba2dec93f4ce8",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539339-h09tcgtyDjEZEDfbpS6W",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1183,
+            "completion_tokens": 60,
+            "total_tokens": 1243,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "В России есть два города с таким названием. Уточни, какой имеешь в виду:\n\n1. Ростов-на-Дону, Ростовская область\n2. Ростов Великий, Ярославская область\n\nНапиши название полностью, и я уточню погоду.",
+          "finished_at": "2026-11-01T13:22:19.879160+00:00"
+        },
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:19.938364+00:00",
+          "temperature": 0.2,
+          "input_sha256": "96f408f34bba0ee489eb4054e80642e45faaa804d1ff3387e0b8d04e6b04e7c9",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "bb41e16bd752b06a5f51a371646db31ad6e591bf5ca1149e8c1ef15e5219db3d",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539340-k6iEnPodhLiN1VEqcc0B",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4123,
+            "completion_tokens": 30,
+            "total_tokens": 4153,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-27ca658a-fff8-46bb-a585-06dc624b566e",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов-на-Дону\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:22:21.051746+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:27.528328+00:00",
+          "temperature": 0.2,
+          "input_sha256": "eb35c689867c1a13f70448666cbd3a94ffac352bd6ca5080935eff26a8b74273",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "31119e5ad61a723428237ae3714016c966c325c39194863ff28ff811d928f3fb",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539347-3koOVdfHsMNX5LtOyNcc",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1303,
+            "completion_tokens": 81,
+            "total_tokens": 1384,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "В Ростове-на-Дону сейчас **переменная облачность**.\n\n- Температура: **15,5 °C**\n- Ветер: **4,7 км/ч**\n- Время наблюдения: **1 ноября 2026, 16:15 (UTC+03:00)**\n\nИсточник: Open-Meteo.",
+          "finished_at": "2026-11-01T13:22:28.424930+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ambiguous",
+            "query": "Ростов",
+            "candidates": [
+              {
+                "name": "Ростов",
+                "country": "Украина",
+                "region": "Сумская область, Shostkyns’ka Mis’krada, Yampilska Terytorialna Hromada"
+              },
+              {
+                "name": "Ростов-на-Дону",
+                "country": "Россия",
+                "region": "Ростовская Область"
+              },
+              {
+                "name": "Ростов Великий",
+                "country": "Россия",
+                "region": "Ярославская Область, Ростовский Район"
+              }
+            ],
+            "source": "Open-Meteo"
+          }
+        },
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов, Россия"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ambiguous",
+            "query": "Ростов, Россия",
+            "candidates": [
+              {
+                "name": "Ростов-на-Дону",
+                "country": "Россия",
+                "region": "Ростовская Область"
+              },
+              {
+                "name": "Ростов Великий",
+                "country": "Россия",
+                "region": "Ярославская Область, Ростовский Район"
+              }
+            ],
+            "source": "Open-Meteo"
+          }
+        },
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов-на-Дону"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ok",
+            "place": {
+              "name": "Ростов-на-Дону",
+              "country": "Россия",
+              "region": "Ростовская Область"
+            },
+            "temperature_c": 15.5,
+            "condition": {
+              "code": 2,
+              "description": "Переменная облачность"
+            },
+            "wind": {
+              "speed": 4.7,
+              "unit": "km/h"
+            },
+            "observed_at": "2026-11-01T16:15:00+03:00",
+            "timezone": "Europe/Moscow",
+            "source": "Open-Meteo"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "Какая сейчас погода в Ростове?",
+          "delivered_texts": [
+            "Найдено несколько мест. Уточни страну или регион:\n\n1. Ростов, Украина, Сумская область, Shostkyns’ka Mis’krada, Yampilska Terytorialna Hromada\n2. Ростов-на-Дону, Россия, Ростовская Область\n3. Ростов Великий, Россия, Ярославская Область, Ростовский Район\n\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        },
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "В России",
+          "delivered_texts": [
+            "Найдено несколько мест. Уточни страну или регион:\n\n1. Ростов-на-Дону, Россия, Ростовская Область\n2. Ростов Великий, Россия, Ярославская Область, Ростовский Район\n\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        },
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "В Ростове-на-Дону",
+          "delivered_texts": [
+            "Место: Ростов-на-Дону, Россия, Ростовская Область.\nТемпература: 15.5 °C. Переменная облачность.\nВетер: 4.7 км/ч.\n\nНаблюдение: 1 ноября 2026, 16:15 (UTC+03:00).\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        }
+      ],
+      "error_type": "CaseFailure",
+      "failure": "City was expanded or received unprovided country/region",
+      "finished_at": "2026-11-01T13:22:28.438949+00:00"
+    },
+    {
+      "id": "english_rostov",
+      "status": "passed",
+      "maximum_llm_calls": 2,
+      "started_at": "2026-11-01T13:22:28.439513+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:28.496316+00:00",
+          "temperature": 0.2,
+          "input_sha256": "5417fdba16c579d2e465302e7418692683bc2272baebc6a9d5d5150be2724ccf",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "953e0d5dc9c488ed0b89cead91195c4f391875855c64c321753f26ed1eddc9f7",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539348-xQKIXQpSEaZbJlXWkFpg",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3874,
+            "completion_tokens": 27,
+            "total_tokens": 3901,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-7b5758d4-51eb-4bd0-a38e-3e71b162bc2a",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:22:29.181148+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:29.282813+00:00",
+          "temperature": 0.2,
+          "input_sha256": "4846f016ce2bfe2413583166b24484585a6e6b4e35874f10e53377e930f0fc48",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "39962d8fe6430d748d3ed736ec1632b0e38417ab3af186aecebf1a2b8fb0e52c",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539349-Pyo3eWLW1sys2LluDK4j",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1105,
+            "completion_tokens": 78,
+            "total_tokens": 1183,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "Уточните, какой именно Ростов вы имеете в виду. Найдено несколько вариантов:\n\n1. Ростов, Украина — Сумская область\n2. Ростов-на-Дону, Россия — Ростовская область\n3. Ростов Великий, Россия — Ярославская область\n\nНапишите название города полностью, и я узнаю погоду.",
+          "finished_at": "2026-11-01T13:22:30.270014+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ambiguous",
+            "query": "Ростов",
+            "candidates": [
+              {
+                "name": "Ростов",
+                "country": "Украина",
+                "region": "Сумская область, Shostkyns’ka Mis’krada, Yampilska Terytorialna Hromada"
+              },
+              {
+                "name": "Ростов-на-Дону",
+                "country": "Россия",
+                "region": "Ростовская Область"
+              },
+              {
+                "name": "Ростов Великий",
+                "country": "Россия",
+                "region": "Ярославская Область, Ростовский Район"
+              }
+            ],
+            "source": "Open-Meteo"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "What's the weather in Rostov?",
+          "delivered_texts": [
+            "Найдено несколько мест. Уточни страну или регион:\n\n1. Ростов, Украина, Сумская область, Shostkyns’ka Mis’krada, Yampilska Terytorialna Hromada\n2. Ростов-на-Дону, Россия, Ростовская Область\n3. Ростов Великий, Россия, Ярославская Область, Ростовский Район\n\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        }
+      ],
+      "finished_at": "2026-11-01T13:22:30.279620+00:00"
+    },
+    {
+      "id": "explicit_full_name",
+      "status": "passed",
+      "maximum_llm_calls": 2,
+      "started_at": "2026-11-01T13:22:30.280425+00:00",
+      "llm_calls": [
+        {
+          "phase": "decide",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:30.347463+00:00",
+          "temperature": 0.2,
+          "input_sha256": "a70ce63dbfc1efcc5d6306e20095f48f5becba329fddd8bc1dba2a35d5746056",
+          "disable_tools": false,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "317c8e8ec5bfc06421002f8ceea0ae3c6c55c4b311c82de8d9229884d8571c3d",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "auto",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539350-tbOYL17QoNZ0gfjm99rw",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3876,
+            "completion_tokens": 30,
+            "total_tokens": 3906,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-59346875-e2ef-4d36-ab75-530dc3643dda",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Ростов-на-Дону\"}"
+              }
+            }
+          ],
+          "finished_at": "2026-11-01T13:22:31.110557+00:00"
+        },
+        {
+          "phase": "complete",
+          "status": "ok",
+          "started_at": "2026-11-01T13:22:31.258224+00:00",
+          "temperature": 0.2,
+          "input_sha256": "15a5f5d76c51335014d81b6d4185545843e48d1341f9fcee2e818fbf3593e957",
+          "disable_tools": true,
+          "quota_before": {
+            "limit": 50,
+            "used": 6,
+            "remaining": 44
+          },
+          "wire": {
+            "request_sha256": "3c71ddd72fa3beedb1e816169fad8b4d33e969119f2afc1bb77b1aa7630ecd9a",
+            "tools_present": true,
+            "tool_names": [
+              "get_weather",
+              "get_schedule",
+              "prepare_reminder",
+              "clarify_reminder",
+              "use_confirmation",
+              "cancel_reminder",
+              "read_current_week"
+            ],
+            "tool_choice": "none",
+            "provider": {
+              "max_price": {
+                "prompt": 0,
+                "completion": 0
+              },
+              "require_parameters": true
+            }
+          },
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539351-WB4hqqUDk3mewbfY54Dl",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 1104,
+            "completion_tokens": 91,
+            "total_tokens": 1195,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "raw_content": "Погода в Ростове-на-Дону (Россия, Ростовская область):\n\n- Температура: 15.5 °C\n- Состояние: переменная облачность\n- Ветер: 4.7 км/ч\n- Данные на 1 ноября 2026, 16:15 (UTC+03:00)\n- Источник: Open-Meteo",
+          "finished_at": "2026-11-01T13:22:32.208389+00:00"
+        }
+      ],
+      "mcp_calls": [
+        {
+          "operation": "tools/call",
+          "target": "get_weather",
+          "arguments": {
+            "city": "Ростов-на-Дону"
+          },
+          "status": "ok",
+          "result": {
+            "status": "ok",
+            "place": {
+              "name": "Ростов-на-Дону",
+              "country": "Россия",
+              "region": "Ростовская Область"
+            },
+            "temperature_c": 15.5,
+            "condition": {
+              "code": 2,
+              "description": "Переменная облачность"
+            },
+            "wind": {
+              "speed": 4.7,
+              "unit": "km/h"
+            },
+            "observed_at": "2026-11-01T16:15:00+03:00",
+            "timezone": "Europe/Moscow",
+            "source": "Open-Meteo"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "kind": "message",
+          "maximum_llm_calls": 2,
+          "llm_calls": 2,
+          "mcp_calls": 1,
+          "text": "Погода в Ростове-на-Дону",
+          "delivered_texts": [
+            "Место: Ростов-на-Дону, Россия, Ростовская Область.\nТемпература: 15.5 °C. Переменная облачность.\nВетер: 4.7 км/ч.\n\nНаблюдение: 1 ноября 2026, 16:15 (UTC+03:00).\nИсточник: Open-Meteo."
+          ],
+          "status": "completed"
+        }
+      ],
+      "finished_at": "2026-11-01T13:22:32.224339+00:00"
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "passed": 2,
+      "total": 3
+    },
+    "acceptance": "not_passed",
+    "llm_calls": 10,
+    "session_started_llm_calls": 16,
+    "mcp_calls": 5,
+    "api_cost": 0,
+    "real_telegram_http_calls": 0
+  },
+  "finished_at": "2026-11-01T13:22:32.964318+00:00"
+}

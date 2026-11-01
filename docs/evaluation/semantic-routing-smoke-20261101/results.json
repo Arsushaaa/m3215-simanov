@@ -1,0 +1,439 @@
+{
+  "created_at": "2026-11-01T13:21:12.054407+00:00",
+  "manifest_sha256": "d9749a309ab1d73979f9e7258ff94bbde71dcdbf47c771903a9bc61bdd992d36",
+  "attempts": [
+    {
+      "id": "natural_reminder",
+      "query": "не забудь мне напомнить в 11:00 завтра приготовить пирог",
+      "started_at": "2026-11-01T13:21:12.054713+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-01T13:21:12.056830+00:00",
+          "request_sha256": "cd0fefaa48351ba076b1e8408190bbdc4028328dced2dfc827ff1ad409cdfd76",
+          "input_sha256": "9c4edf175b903fffb9532a8e7a2ccd5941618e88c1203c624b3b1654d2a3227b",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 2911,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-5b673a86-5fbf-4592-a77f-0aadea17fd9c",
+              "type": "function",
+              "function": {
+                "name": "prepare_reminder",
+                "arguments": "{\"arguments\":{\"text\":\"приготовить пирог\",\"remind_at\":\"2026-10-27T11:00:00+03:00\"},\"evidence\":{\"request\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"не забудь мне напомнить в 11:00 завтра приготовить пирог\"},\"text\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"приготовить пирог\"},\"date\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"завтра\"},\"time\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"11:00\"}}}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539272-F5MCNKWjtu75ESJEe34D",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3890,
+            "completion_tokens": 202,
+            "total_tokens": 4092,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 2133,
+          "finished_at": "2026-11-01T13:21:14.196070+00:00"
+        }
+      ],
+      "actual": {
+        "action": "add_reminder",
+        "arguments": {
+          "text": "приготовить пирог",
+          "remind_at": "2026-10-27T11:00:00+03:00"
+        }
+      },
+      "displayed_answer": "Сохранить напоминание?\n\nТекст: приготовить пирог\nКогда: 27 октября 2026, 11:00 (UTC+03:00)\nЧасовой пояс: Europe/Moscow\n\nСрок подтверждения — 5 минут с подготовки.\nНапоминание ещё не сохранено. Отправка уведомлений пока не подключена.",
+      "audit": {
+        "decision": "call_tool",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Для напоминания нужно подтверждение; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 2142,
+        "argument_summary": "Время: 2026-10-27T11:00:00+03:00; зона: Europe/Moscow"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-11-01T13:21:14.197004+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "negated_reminder",
+      "query": "Не напоминай мне про пирог. Просто объясни, как его приготовить.",
+      "started_at": "2026-11-01T13:21:14.204162+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-01T13:21:14.206350+00:00",
+          "request_sha256": "f314951500c63448dba64a5f7eab2ddb77e838135c1a8be41a4d81c9d9eac6b4",
+          "input_sha256": "92b7f2f0d2c515ad3597d15b2b2a583099881db787ff96b30f423bc2feeb2c18",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 2917,
+          "raw_content": "Вот простой рецепт яблочного пирога.\n\n**Ингредиенты**\n- Мука — 2 стакана\n- Сахар — 1 стакан\n- Яйца — 2 шт.\n- Сливочное масло — 100 г\n- Разрыхлитель — 1 ч. л.\n- Яблоки — 3–4 шт.\n- Щепотка соли\n\n**Приготовление**\n1. Разогрей духовку до 180 °С.\n2. Смешай муку, сахар, разрыхлитель и соль.\n3. Добавь растопленное масло и яйца, замеси тесто.\n4. Нарежь яблоки дольками и выложи на тесто.\n5. Выпекай 30–40 минут до золотистой корочки.\n\n**Типичные ошибки**\n- Не открывай духовку в первые 20 минут — пирог может осесть.\n- Не пересушивай тесто: добавь немного молока или кефира, если оно слишком густое.\n\nЕсли хочешь другой вариант пирога (шарлотку, ванильный, шоколадный), уточни, и я подберу рецепт.",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539274-JKh5rB6oEh66MB4WBMnW",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3888,
+            "completion_tokens": 291,
+            "total_tokens": 4179,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 4376,
+          "finished_at": "2026-11-01T13:21:18.582973+00:00"
+        }
+      ],
+      "actual": {
+        "action": "respond",
+        "arguments": {}
+      },
+      "displayed_answer": "Вот простой рецепт яблочного пирога.\n\n**Ингредиенты**\n- Мука — 2 стакана\n- Сахар — 1 стакан\n- Яйца — 2 шт.\n- Сливочное масло — 100 г\n- Разрыхлитель — 1 ч. л.\n- Яблоки — 3–4 шт.\n- Щепотка соли\n\n**Приготовление**\n1. Разогрей духовку до 180 °С.\n2. Смешай муку, сахар, разрыхлитель и соль.\n3. Добавь растопленное масло и яйца, замеси тесто.\n4. Нарежь яблоки дольками и выложи на тесто.\n5. Выпекай 30–40 минут до золотистой корочки.\n\n**Типичные ошибки**\n- Не открывай духовку в первые 20 минут — пирог может осесть.\n- Не пересушивай тесто: добавь немного молока или кефира, если оно слишком густое.\n\nЕсли хочешь другой вариант пирога (шарлотку, ванильный, шоколадный), уточни, и я подберу рецепт.",
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "OK",
+        "reason": "Модель сформировала обычный ответ.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 4379,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-11-01T13:21:18.583467+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "english_weather",
+      "query": "What's the weather in Kazan, Russia?",
+      "started_at": "2026-11-01T13:21:18.583759+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-11-01T13:21:18.585883+00:00",
+          "request_sha256": "4b28d15a379e1835ad8b3b85b48e8b73f3e9563a4301013306db150f279111c6",
+          "input_sha256": "ccd644da95119a0738cb5bd485ae6d30a459ef881b5129ecbea5c7e3897a93d1",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 2890,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-99671f23-0088-4c6a-a0c2-e04cb7bb5670",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань, Россия\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539278-m96RvFVBEEA6JB5UAGwG",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3875,
+            "completion_tokens": 29,
+            "total_tokens": 3904,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 672,
+          "finished_at": "2026-11-01T13:21:19.257963+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_weather",
+        "arguments": {
+          "city": "Казань, Россия"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_weather",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 674,
+        "argument_summary": "Город: Казань, Россия"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-11-01T13:21:19.258594+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "unspecified_clock",
+      "query": "Не забудь завтра вечером напомнить про пирог.",
+      "started_at": "2026-11-01T13:21:19.258916+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-01T13:21:19.261330+00:00",
+          "request_sha256": "2213793c900452d208776dbb36ff505956bb18eedbe24f3801e3201871d152ed",
+          "input_sha256": "4908f8e7126ca4afefeb39486c410a9197ed7957c4eb47ed09a5c91d588fbbf7",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 2906,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-bbd42f97-a6e2-4ee9-9c20-fe301b1da38f",
+              "type": "function",
+              "function": {
+                "name": "clarify_reminder",
+                "arguments": "{\"question\":\"Уточни, пожалуйста, точное время напоминания «вечером» (например, 18:00 или 20:00). Дата — завтра, 2026-10-27, задача — «про пирог».\",\"reason\":\"В запросе нет точного времени: «вечером» — это часть дня, а не часы. Без точного времени не могу подготовить карточку напоминания.\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539279-X9XPiwyEYzXpvGRwl5wh",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3882,
+            "completion_tokens": 138,
+            "total_tokens": 4020,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1898,
+          "finished_at": "2026-11-01T13:21:21.159577+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify_reminder",
+        "arguments": {}
+      },
+      "displayed_answer": "Уточни, пожалуйста, точное время напоминания «вечером» (например, 18:00 или 20:00). Дата — завтра, 2026-10-27, задача — «про пирог».\n\nНапоминание ещё не сохранено.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1901,
+        "argument_summary": ""
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-11-01T13:21:21.160253+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "reordered_reminder",
+      "query": "Завтра к одиннадцати хочу приготовить пирог — напомни об этом.",
+      "started_at": "2026-11-01T13:21:21.160648+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-01T13:21:21.162901+00:00",
+          "request_sha256": "ed7fe3e5b8a72511e331775a12a332f4bc853ddf84355c8f8b3b5e927e863652",
+          "input_sha256": "d4f5b8af1d3faf9df8d84f65cf862ae9c04ecd702b62325e70f0cf89edb97803",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 2916,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-71c183f3-4ba9-4f45-9311-d58e2418e111",
+              "type": "function",
+              "function": {
+                "name": "prepare_reminder",
+                "arguments": "{\"arguments\":{\"text\":\"приготовить пирог\",\"remind_at\":\"2026-10-27T11:00:00+03:00\"},\"evidence\":{\"request\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Завтра к одиннадцати хочу приготовить пирог — напомни об этом.\"},\"text\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"приготовить пирог\"},\"date\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Завтра\"},\"time\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"к одиннадцати\"}}}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539281-tkfP5YHOyujH0zi5Dzux",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 3888,
+            "completion_tokens": 199,
+            "total_tokens": 4087,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1677,
+          "finished_at": "2026-11-01T13:21:22.840542+00:00"
+        }
+      ],
+      "actual": {
+        "action": "add_reminder",
+        "arguments": {
+          "text": "приготовить пирог",
+          "remind_at": "2026-10-27T11:00:00+03:00"
+        }
+      },
+      "displayed_answer": "Сохранить напоминание?\n\nТекст: приготовить пирог\nКогда: 27 октября 2026, 11:00 (UTC+03:00)\nЧасовой пояс: Europe/Moscow\n\nСрок подтверждения — 5 минут с подготовки.\nНапоминание ещё не сохранено. Отправка уведомлений пока не подключена.",
+      "audit": {
+        "decision": "call_tool",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Для напоминания нужно подтверждение; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1681,
+        "argument_summary": "Время: 2026-10-27T11:00:00+03:00; зона: Europe/Moscow"
+      },
+      "former_card_revoked": false,
+      "finished_at": "2026-11-01T13:21:22.841630+00:00",
+      "score": {
+        "action_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": true
+      }
+    },
+    {
+      "id": "relative_card_edit",
+      "query": "Нет, лучше на два часа позже",
+      "started_at": "2026-11-01T13:21:22.842229+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-01T13:21:22.845893+00:00",
+          "request_sha256": "1a96153d5a6f017343bd02b6d2b1ad8d866c91488c706d86210f5de315a0c640",
+          "input_sha256": "8524d99025058dee7730fbc94f120e82e61932f19edc1fabd1999a16c21544f2",
+          "temperature": 0.2,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 2955,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-32d4af15-3b63-4577-a5d4-b34ccec5a6a9",
+              "type": "function",
+              "function": {
+                "name": "clarify_reminder",
+                "arguments": "{\"question\":\"Уточните, пожалуйста, на два часа позже чего: отложить существующее напоминание «Приготовить пирог» с 19:00 на 21:00 27 октября, или создать новое напоминание на другое время?\",\"reason\":\"Пользователь просит сдвинуть время на два часа позже, но не указал, относится ли это к текущей карточке или к новому напоминанию.\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793539282-WGJII00ALHzhF3vrGhgu",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4146,
+            "completion_tokens": 138,
+            "total_tokens": 4284,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1281,
+          "finished_at": "2026-11-01T13:21:24.128029+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify_reminder",
+        "arguments": {}
+      },
+      "displayed_answer": "Уточните, пожалуйста, на два часа позже чего: отложить существующее напоминание «Приготовить пирог» с 19:00 на 21:00 27 октября, или создать новое напоминание на другое время?\n\nНапоминание ещё не сохранено.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1286,
+        "argument_summary": ""
+      },
+      "former_card_revoked": true,
+      "finished_at": "2026-11-01T13:21:24.128949+00:00",
+      "score": {
+        "action_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false,
+        "one_llm_call": true,
+        "pending_replacement_safe": true,
+        "passed": false
+      }
+    }
+  ],
+  "metrics": {
+    "cases": {
+      "correct": 5,
+      "total": 6
+    },
+    "actions": {
+      "correct": 5,
+      "total": 6
+    },
+    "arguments": {
+      "correct": 3,
+      "total": 4
+    },
+    "llm_calls": 6,
+    "executed_mcp_calls": 0,
+    "database_writes": 0,
+    "telegram_calls": 0,
+    "api_cost": 0,
+    "acceptance": "not_passed"
+  },
+  "finished_at": "2026-11-01T13:21:24.129785+00:00"
+}
