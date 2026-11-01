@@ -1,6 +1,17 @@
 # Проверка и демонстрация ЛР2
 
-Обновление от 28 октября 2026 года — [`lab2-final-v3`](https://github.com/Arsushaaa/m3215-simanov/tree/lab2-final-v3).
+Версия для сдачи — **[`lab2-final-v4`](https://github.com/Arsushaaa/m3215-simanov/tree/lab2-final-v4)**, 1 ноября 2026 года.
+Исправлено замечание преподавателя: неоднозначный «Ростов» не превращается
+в Ростов-на-Дону до выбора пользователя; отсутствующие страна/регион не дописываются.
+[Новый реальный семантический повтор](semantic-routing.md): **6/6 действий, 4/4 аргументов**;
+[погодная проверка](evaluation/weather-specificity-20261101-v4/results.json): **2/2 потока**.
+[Полная приёмка](evaluation/lab2-final-v4-acceptance.json): **1528 passed,
+0 failed, 0 skipped, 28/28 критериев**. Все 49 LLM-вызовов, сетевые неуспехи
+и изменение избыточного критерия сохранены в [реестре](evaluation/teacher-feedback-20261101.json).
+Telegram transport подменён; реальные модель, MCP и отдельный PostgreSQL проверены.
+Исторические теги сохраняются.
+
+Историческое обновление от 28 октября 2026 года — [`lab2-final-v3`](https://github.com/Arsushaaa/m3215-simanov/tree/lab2-final-v3).
 [Полная приёмка](evaluation/lab2-adversarial-release-20261028.json): **1505 passed,
 0 failed, 0 skipped, 28/28 критериев**. [Проверки устойчивости](adversarial-testing.md)
 фиксируют 50 реальных LLM-вызовов с сохранением всех неуспехов и стоимостью API 0.
@@ -92,7 +103,7 @@ dots T=0,3 прошла 10/12 и 8/9 с фактическими 12/12 и 8/9; �
 | Миграции и конфигурация воспроизводимы; SQL/расписание включены в Docker и деплой; персональных данных в учебном файле нет | `app/migration.py`, `app/config.py`, `.env.example`, Compose, Dockerfile, `scripts/cloud.py`, `.gitignore` | `test_agent_migration_upgrades_lab1_and_preserves_history_and_registry`, `test_repository_fixture_covers_all_fourteen_days_and_has_no_personal_fields`, `tests/test_compose.py`, `tests/test_scripts.py`; `source_checks.migrations_001_to_006_unchanged` и контейнерный протокол |
 | `AGENTS.md`, `spec.md`, `plan.md` соответствуют реализации; запуск и независимая демонстрация описаны | Документы в корне, README, документы этапов 2–6, `scripts/mcp_probe.py` | Ручная сверка карты с исходниками; `test_independent_stdio_probe_needs_no_database_or_telegram_keys`, `test_independent_stdio_client_commits_confirmed_reminder_in_real_postgres` |
 | Реальный эксперимент: все 12 запросов, действие ≥10/12, аргументы ≥8/9, исходные данные и разбор ошибок | Неизменный `docs/evaluation/lab2-routing.json`; скрипт `scripts/lab2_experiment.py` | Итоговый `docs/evaluation/lab2-results.json`: 12/12 и 9/9. В `lab2-experiment.md` разобраны оба неуспешных прогона и повтор всех кейсов после уточнения одного блока правил |
-| Итоговый отчёт, использование AI, ограничения, новое состояние `lab2-final-v3` | Отчёт/инструкция защиты и новый аннотированный тег после приёмки; старые теги сохраняются | `docs/lab2-report.md` и `docs/lab2-defense.md`; после фиксации проверить `git show lab2-final-v3` и чистоту рабочего дерева |
+| Итоговый отчёт, использование AI, ограничения, новое состояние `lab2-final-v4` | Отчёт/инструкция защиты и новый аннотированный тег после приёмки; старые теги сохраняются | `docs/lab2-report.md` и `docs/lab2-defense.md`; после фиксации проверить `git show lab2-final-v4` и чистоту рабочего дерева |
 
 ## Воспроизводимая демонстрация
 
@@ -144,7 +155,7 @@ dots T=0,3 прошла 10/12 и 8/9 с фактическими 12/12 и 8/9; �
 8. Показать все 12 результатов реальной модели, расчёт двух метрик, объяснение
    ошибок и сохранённый повтор после изменения одного элемента, если он потребовался.
    Для новой маршрутизации отдельно показать её реальные результаты и ограничения.
-   После финальной приёмки показать новый аннотированный тег `lab2-final-v3`
+   После финальной приёмки показать новый аннотированный тег `lab2-final-v4`
    и сохранённые исторические теги.
 
 ## Границы результата
