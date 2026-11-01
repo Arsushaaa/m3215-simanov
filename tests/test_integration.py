@@ -153,7 +153,7 @@ async def test_dialog_migrations_isolation_persistence_atomicity_and_revision(da
     try:
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 9
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 10
         repository = DialogRepository(pool)
         alice = await repository.user(101)
         bob = await repository.user(202)
@@ -315,7 +315,7 @@ async def test_agent_migration_upgrades_lab1_and_preserves_history_and_registry(
         )
         await migrate(pool)
         await migrate(pool)
-        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 9
+        assert await pool.fetchval("SELECT count(*) FROM labbi_schema_migrations") == 10
         assert (
             await pool.fetch(
                 "SELECT version, applied_at FROM labbi_schema_migrations "
@@ -3082,5 +3082,219 @@ async def test_reminder_delivery_success_ack_after_deadline_is_recorded_without_
         counts, uncertain = await NotificationRepository(pool).delivery_status(101)
         assert counts == {"sent": 1} and uncertain == 0
         assert await NotificationRepository(pool).delivery_status(202) == ({}, 0)
+    finally:
+        await pool.close()
+
+
+async def _briefing_seed(pool, *, zone="Europe/Moscow", now=None, owner=101):
+    from test_notifications import CITY
+
+    from app.notifications.briefing_repository import BriefingRepository
+    from app.notifications.repository import NotificationRepository
+
+    await NotificationRepository(pool).register_destination(owner, owner)
+    await pool.execute("UPDATE labbi_users SET timezone=$2 WHERE user_id=$1", owner, zone)
+    clock = DeliveryClock(now or datetime.fromisoformat("2026-11-10T08:00:00+03:00"))
+    await pool.execute(
+        "UPDATE labbi_notification_profiles SET city=$2::jsonb,"
+        "city_confirmed_at=clock_timestamp(),briefing_enabled=TRUE,"
+        "consented_at=$3 WHERE user_id=$1",
+        owner,
+        CITY.model_dump_json(),
+        clock() - timedelta(days=1),
+    )
+    return BriefingRepository(pool, clock=clock), clock
+
+
+@pytest.mark.parametrize("zone", ["Europe/Moscow", "Asia/Tokyo", "America/New_York"])
+async def test_daily_briefing_local_eight_unique_concurrent_scheduler_and_restart(database, zone):
+    from app.notifications.briefing_repository import BriefingRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        moment = datetime(2026, 11, 10, 8, tzinfo=ZoneInfo(zone))
+        repo, clock = await _briefing_seed(pool, zone=zone, now=moment)
+        await asyncio.gather(*(repo.schedule() for _ in range(5)))
+        rows = await pool.fetch("SELECT * FROM labbi_outbox WHERE kind='briefing'")
+        assert len(rows) == 1 and rows[0]["local_date"] == moment.date()
+        assert rows[0]["due_at"] == moment
+        claims = await asyncio.gather(*(repo.claim_daily() for _ in range(5)))
+        assert sum(len(c) for c in claims) == 1
+        await pool.close()
+        pool = await create_pool(settings)
+        repo = BriefingRepository(pool, clock=clock)
+        await repo.schedule()
+        assert await repo.claim_daily() == []
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox WHERE kind='briefing'") == 1
+    finally:
+        await pool.close()
+
+
+@pytest.mark.parametrize("minutes,count", [(-1, 1), (0, 1), (60, 1), (61, 0), (1440 * 5 + 61, 0)])
+async def test_daily_briefing_window_no_old_day_catchup_and_no_consent_retroactivity(
+    database, minutes, count
+):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        due = datetime.fromisoformat("2026-11-10T08:00:00+03:00")
+        repo, clock = await _briefing_seed(pool, now=due + timedelta(minutes=minutes))
+        await repo.schedule()
+        assert (
+            await pool.fetchval("SELECT count(*) FROM labbi_outbox WHERE kind='briefing'") == count
+        )
+        if minutes < 0:
+            assert await repo.claim_daily() == []
+        # Enabling at 08:01 must not create today's digest.
+        await _briefing_seed(pool, owner=202, now=due + timedelta(minutes=1))
+        await pool.execute(
+            "UPDATE labbi_notification_profiles SET consented_at=$1 WHERE user_id=202",
+            due + timedelta(minutes=1),
+        )
+        clock.value = due + timedelta(minutes=1)
+        await repo.schedule()
+        assert await pool.fetchval("SELECT count(*) FROM labbi_outbox WHERE user_id=202") == 0
+    finally:
+        await pool.close()
+
+
+async def test_daily_briefing_real_db_reservations_cache_delivery_no_held_connection(database):
+    from test_briefing import Sources
+
+    from app.agents.knowledge import KnowledgeAgent
+    from app.notifications.briefing import BriefingService
+    from app.notifications.worker import ReminderWorker
+    from app.tracing.repository import TraceRepository
+    from app.tracing.runtime import TraceManager
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo, clock = await _briefing_seed(pool)
+        sources = Sources()
+        original = sources.call_tool
+
+        async def checked(name, args):
+            assert pool.get_idle_size() == pool.get_size()
+            reserved = await pool.fetchval(
+                "SELECT mcp_reserved FROM labbi_outbox WHERE user_id=101"
+            )
+            assert reserved >= 1
+            return await original(name, args)
+
+        sources.call_tool = checked
+
+        async def model(*args, **kwargs):
+            assert (
+                await pool.fetchval("SELECT llm_reserved FROM labbi_outbox WHERE user_id=101") == 1
+            )
+            assert pool.get_idle_size() == pool.get_size()
+            return Completion("invalid")
+
+        llm = SimpleNamespace(complete=AsyncMock(side_effect=model))
+        traces = TraceManager(TraceRepository(pool))
+        service = BriefingService(
+            repo, sources, KnowledgeAgent(sources.corpus.catalog()), llm, settings, traces=traces
+        )
+        await service.tick()
+        row = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE user_id=101")
+        assert row["state"] == "ready" and row["mcp_reserved"] == 3 and row["llm_reserved"] == 1
+        assert "Учебный фокус:" in row["body"] and "Источник:" in row["body"]
+        bot = SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=77)))
+        await ReminderWorker(repo, bot, traces=traces).tick()
+        await ReminderWorker(repo, bot, traces=traces).tick()
+        assert bot.send_message.await_count == 1
+        assert await pool.fetchval("SELECT state FROM labbi_outbox WHERE user_id=101") == "sent"
+        # Next day with same topic after a three-day cycle: persistent cache, only two reads.
+        clock.value += timedelta(days=3)
+        await service.tick()
+        second = await pool.fetchrow(
+            "SELECT * FROM labbi_outbox WHERE user_id=101 ORDER BY due_at DESC LIMIT 1"
+        )
+        assert (
+            second["state"] == "ready"
+            and second["mcp_reserved"] == 2
+            and second["llm_reserved"] == 0
+        )
+        assert llm.complete.await_count == 1
+        assert await TraceRepository(pool).read(101) is not None
+    finally:
+        await pool.close()
+
+
+async def test_daily_briefing_spent_preparation_never_replays_after_crash(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo, clock = await _briefing_seed(pool)
+        await repo.schedule()
+        lease = (await repo.claim_daily())[0]
+        await repo.reserve(lease, "mcp")
+        clock.value += timedelta(seconds=151)
+        await repo.recover()
+        row = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE id=$1", lease.event_id)
+        assert row["state"] == "failed" and row["mcp_reserved"] == 1
+        assert await repo.claim_daily() == []
+        with pytest.raises(ValueError):
+            await repo.reserve(lease, "mcp")
+    finally:
+        await pool.close()
+
+
+async def test_daily_briefing_consent_revoked_during_preparation_and_before_send(database):
+    from app.notifications.repository import NotificationRepository
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo, clock = await _briefing_seed(pool)
+        await repo.schedule()
+        lease = (await repo.claim_daily())[0]
+        await NotificationRepository(pool).set_briefing(101, False)
+        assert not await repo.ready(lease, "private payload")
+        with pytest.raises(ValueError):
+            await repo.reserve(lease, "llm")
+        assert await repo.candidates() == []
+        # Separate owner: consent changes after begin_send still fail preflight.
+        await _briefing_seed(pool, owner=202, now=clock())
+        await repo.schedule()
+        lease = (await repo.claim_daily())[0]
+        assert await repo.ready(lease, "known digest")
+        sending = await repo.begin_send(lease.event_id, 202)
+        assert sending is not None
+        await NotificationRepository(pool).set_briefing(202, False)
+        assert not await repo.preflight(sending)
+        assert (
+            await pool.fetchval("SELECT state FROM labbi_outbox WHERE id=$1", lease.event_id)
+            == "cancelled"
+        )
+    finally:
+        await pool.close()
+
+
+async def test_daily_briefing_budget_concurrency_and_reminders_isolate_local_calendar(database):
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    try:
+        await migrate(pool)
+        repo, clock = await _briefing_seed(pool)
+        await repo.schedule()
+        lease = (await repo.claim_daily())[0]
+        outcomes = await asyncio.gather(
+            *(repo.reserve(lease, "llm") for _ in range(5)), return_exceptions=True
+        )
+        assert sum(not isinstance(x, Exception) for x in outcomes) == 1
+        outcomes = await asyncio.gather(
+            *(repo.reserve(lease, "mcp") for _ in range(5)), return_exceptions=True
+        )
+        assert sum(not isinstance(x, Exception) for x in outcomes) == 3
+        assert await repo.reminders(202, clock().date(), "Asia/Tokyo") == []
+        assert await repo.snapshot(lease) is not None
     finally:
         await pool.close()

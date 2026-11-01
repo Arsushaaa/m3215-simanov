@@ -17,6 +17,8 @@ from app.llm import OpenRouterClient
 from app.logging_setup import configure_logging
 from app.mcp.client import MCPClient
 from app.migration import migrate
+from app.notifications.briefing import BriefingService
+from app.notifications.briefing_repository import BriefingRepository
 from app.notifications.city import CityLookup
 from app.notifications.delivery_repository import DeliveryRepository
 from app.notifications.repository import NotificationRepository
@@ -115,7 +117,17 @@ async def run(settings: Settings) -> None:
         dispatcher.include_router(create_router())
         runner = await start_health_server(state, settings.health_port)
         delivery = ReminderWorker(
-            DeliveryRepository(state.pool), bot, traces=TraceManager(TraceRepository(state.pool))
+            DeliveryRepository(state.pool),
+            bot,
+            traces=TraceManager(TraceRepository(state.pool)),
+            briefing=BriefingService(
+                BriefingRepository(state.pool),
+                mcp,
+                knowledge,
+                llm,
+                settings,
+                traces=TraceManager(TraceRepository(state.pool)),
+            ),
         )
         state.delivery_task = delivery.start()
         state.polling_task = asyncio.create_task(

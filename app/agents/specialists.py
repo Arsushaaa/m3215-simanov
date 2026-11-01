@@ -11,10 +11,32 @@ RULES = {
 
 
 class ScheduleAgent(AgentService):
+    @staticmethod
+    async def read_day(mcp, day):
+        from app.mcp.contracts import ScheduleResult
+
+        result = ScheduleResult.model_validate(
+            await mcp.call_tool("get_schedule", {"date": day.isoformat()})
+        ).root
+        if result.status != "error" and result.date != day:
+            raise ValueError("Wrong schedule day")
+        return result
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, role_rules=RULES["schedule"], **kwargs)
 
 
 class LifestyleAgent(AgentService):
+    @staticmethod
+    async def read_point(mcp, point):
+        from app.mcp.contracts import PointWeatherResult
+
+        result = PointWeatherResult.model_validate(
+            await mcp.call_tool("get_weather", {"point": point.model_dump(mode="json")})
+        ).root
+        if result.status != "error" and result.point != point:
+            raise ValueError("Wrong weather point")
+        return result
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, role_rules=RULES["lifestyle"], **kwargs)

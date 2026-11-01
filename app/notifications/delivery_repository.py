@@ -74,7 +74,7 @@ class DeliveryRepository:
         async with self.pool.acquire() as conn, conn.transaction():
             now = await self._now(conn)
             rows = await conn.fetch(
-                "SELECT * FROM labbi_outbox WHERE kind='reminder' AND ("
+                "SELECT * FROM labbi_outbox WHERE ("
                 "(state IN ('pending','preparing','ready','retry_wait') AND deadline_at<$1) OR "
                 "(state IN ('preparing','sending') AND lease_until<=$1)) "
                 "ORDER BY (state='sending') DESC,(state='preparing') DESC,due_at,id "
@@ -108,6 +108,8 @@ class DeliveryRepository:
                     )
                 elif now > row["deadline_at"]:
                     await self._terminal(conn, row, now, "missed", "DEADLINE_EXPIRED")
+                elif row["kind"] == "briefing" and (row["llm_reserved"] or row["mcp_reserved"]):
+                    await self._terminal(conn, row, now, "failed", "PREPARATION_INTERRUPTED")
                 else:
                     await conn.execute(
                         "UPDATE labbi_outbox SET state='pending',lease_until=NULL,lease_token=NULL,"
@@ -183,7 +185,7 @@ class DeliveryRepository:
         async with self.pool.acquire() as conn:
             now = await self._now(conn)
             rows = await conn.fetch(
-                "SELECT id,user_id FROM labbi_outbox WHERE kind='reminder' "
+                "SELECT id,user_id FROM labbi_outbox WHERE kind IN ('reminder','briefing') "
                 "AND state IN ('ready','retry_wait') AND due_at<=$1 AND next_attempt_at<=$1 "
                 "AND deadline_at>=$1 "
                 "ORDER BY due_at,id LIMIT $2",
@@ -206,8 +208,7 @@ class DeliveryRepository:
         # Claims which also inspect a profile always use user -> profile -> outbox.
         await conn.fetchval("SELECT user_id FROM labbi_users WHERE user_id=$1 FOR UPDATE", owner)
         profile = await conn.fetchrow(
-            "SELECT destination_chat_id FROM labbi_notification_profiles "
-            "WHERE user_id=$1 FOR UPDATE",
+            "SELECT * FROM labbi_notification_profiles WHERE user_id=$1 FOR UPDATE",
             owner,
         )
         row = await conn.fetchrow(
@@ -215,13 +216,28 @@ class DeliveryRepository:
         )
         return profile, row
 
+    @staticmethod
+    def _profile_valid(profile, row):
+        return (
+            profile is not None
+            and profile["destination_chat_id"] == row["destination_chat_id"]
+            and (
+                row["kind"] != "briefing"
+                or (
+                    profile["briefing_enabled"]
+                    and profile["version"] == row["profile_version"]
+                    and profile["city"] is not None
+                )
+            )
+        )
+
     async def begin_send(self, event, owner, *, trace_id=None):
         async with self.pool.acquire() as conn, conn.transaction():
             profile, row = await self._lock(conn, event, owner)
             now = await self._now(conn)
             if (
                 row is None
-                or row["kind"] != "reminder"
+                or row["kind"] not in {"reminder", "briefing"}
                 or row["state"] not in {"ready", "retry_wait"}
             ):
                 return None
@@ -230,7 +246,7 @@ class DeliveryRepository:
             if now > row["deadline_at"]:
                 await self._terminal(conn, row, now, "missed", "DEADLINE_EXPIRED")
                 return None
-            if profile is None or profile["destination_chat_id"] != row["destination_chat_id"]:
+            if not self._profile_valid(profile, row):
                 await self._terminal(conn, row, now, "cancelled", "DESTINATION_CHANGED")
                 return None
             known = await self._known_receipt(conn, event)
@@ -291,7 +307,7 @@ class DeliveryRepository:
                 "DEADLINE_EXPIRED"
                 if now > row["deadline_at"]
                 else "DESTINATION_CHANGED"
-                if profile is None or profile["destination_chat_id"] != row["destination_chat_id"]
+                if not self._profile_valid(profile, row)
                 else None
             )
             if code is not None:

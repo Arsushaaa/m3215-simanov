@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class ReminderWorker:
-    def __init__(self, repository, bot, *, traces=None, poll_seconds=5):
+    def __init__(self, repository, bot, *, traces=None, poll_seconds=5, briefing=None):
         if type(poll_seconds) not in (int, float) or not 0 < poll_seconds <= 60:
             raise ValueError("Invalid polling interval")
         self.repository, self.bot, self.traces = repository, bot, traces
+        self.briefing = briefing
         self.poll_seconds = poll_seconds
         self._stop = asyncio.Event()
         self._running = asyncio.Semaphore(2)
@@ -51,6 +52,10 @@ class ReminderWorker:
         finally:
             if self._stop.is_set() and leases:
                 await self.repository.release_preparations(leases)
+        if self._stop.is_set():
+            return
+        if self.briefing is not None:
+            await self.briefing.tick()
         if self._stop.is_set():
             return
         candidates = await self.repository.candidates(limit=10)

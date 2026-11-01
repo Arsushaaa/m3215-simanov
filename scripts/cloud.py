@@ -82,7 +82,7 @@ def source_archive(root: Path) -> Path:
     ]
     candidates.extend((root / "app").rglob("*.py"))
     candidates.extend((root / "app" / "migrations").glob("*.sql"))
-    candidates.append(root / "data" / "schedule.json")
+    candidates.extend(root / "data" / name for name in ("schedule.json", "schedule-demo.json"))
     candidates.extend(
         root / "data" / "materials" / name
         for name in ("registry.json", "mcp-basics.md", "llm-context.md", "reliable-delivery.md")
@@ -95,9 +95,10 @@ def source_archive(root: Path) -> Path:
 
 
 def validate_cloud_schedule(settings: Settings) -> None:
-    if settings.schedule_file != "data/schedule.json":
+    if settings.schedule_file not in {"data/schedule.json", "data/schedule-demo.json"}:
         raise ConfigError(
-            "SCHEDULE_FILE: автоматический деплой поддерживает только data/schedule.json. "
+            "SCHEDULE_FILE: автоматический деплой поддерживает "
+            "data/schedule.json и data/schedule-demo.json. "
             "Личные файлы расписания автоматически не передаются; используйте их локально."
         )
 

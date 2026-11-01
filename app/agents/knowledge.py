@@ -148,6 +148,29 @@ class KnowledgeAgent:
             logger.warning("Каталог материалов недоступен: %s", type(error).__name__)
             return cls()
 
+    async def read_focus(self, mcp, topic):
+        if self.catalog is None:
+            raise ValueError("Catalog unavailable")
+        entry = next(d for d in self.catalog.documents if d.document_id == topic)
+        arguments = SearchArguments(query=entry.title, document_id=topic, limit=1)
+        result = SearchResult.model_validate(
+            await mcp.call_tool("search_materials", arguments.model_dump(mode="json"))
+        ).root
+        if (
+            result.status == "error"
+            or result.catalog_version != self.catalog.catalog_version
+            or result.query != arguments.query
+            or result.document_id != topic
+            or result.limit != 1
+        ):
+            raise ValueError("Invalid focus source")
+        if any(
+            m.document_id != topic or m.version != entry.version or m.title != entry.title
+            for m in result.matches
+        ):
+            raise ValueError("Unknown focus version")
+        return result.matches
+
     async def respond(self, request, user, history, llm, mcp, settings):
         def outcome(message, status="success", facts=None, *, tools=(), error=None):
             return AgentResult(

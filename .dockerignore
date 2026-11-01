@@ -6,6 +6,7 @@
 !app/**
 !data/
 !data/schedule.json
+!data/schedule-demo.json
 !data/materials/
 !data/materials/registry.json
 !data/materials/mcp-basics.md
