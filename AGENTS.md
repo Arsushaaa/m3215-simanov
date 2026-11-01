@@ -110,13 +110,31 @@
   (`docs/evaluation/lab3-stage1-checks.json`, `lab3-stage1-regression.json`), реальных LLM 0.
 - Этап 2 подключает `routing/router.py`, `supervisor.py`, `policy.py`, Schedule/Lifestyle
   и `tracing/`. `007_tracing.sql` хранит метаданные трасс; 001–006 не менять.
-  Knowledge до этапа 3 возвращает SOURCE_UNAVAILABLE, без подмены свободным ответом.
+  На этапе 2 Knowledge был заглушкой SOURCE_UNAVAILABLE; этап 3 описан ниже.
   `/trace last`/UUID — только владелец, просмотр не заменяет последнюю трассу.
   Тексты/аргументы/capability в spans запрещены; usage без метаданных — null.
   Проверки подменяют LLM/MCP/Telegram и используют отдельную PostgreSQL.
   Документ — `docs/lab3-orchestration.md`; живой эксперимент остаётся этапом 7.
   Приёмка этапа 2: 1634/0/0, 45 новых тестов, прежние 28/28 критериев;
   `docs/evaluation/lab3-stage2-checks.json` и `lab3-stage2-regression.json`.
+- Этап 3: `app/materials/` — канонические схемы, реестр и bounded lexical search;
+  `app/agents/knowledge.py` — отдельный специалист без записи/погоды/расписания.
+  `search_materials` и `materials://catalog` добавлены в MCP. Каталог реально читается
+  один раз при старте, сравнивается с `data/materials/registry.json`, затем кэшируется.
+  Его инициализация — отдельный MCP-read вне пользовательского бюджета; поиск — максимум
+  один MCP на сообщение, обычный положительный ответ — до 3 LLM с Router, пустой — до 2.
+  Клиент допускает прежний полный каталог ЛР2 или новый полный ЛР3, остальные отвергает.
+  Query/limit/document_id сверяются с результатом; ID/title/version — с каталогом,
+  факты результата агента — с наблюдённым вызовом. Цитаты не короче 20 символов
+  проверяются по snippets; ошибочный итог заменяется выдержками без повтора LLM.
+  Нет совпадений — not_found, не свободная генерация. Исходные MD — авторские,
+  три файла и registry упаковываются явно; посторонние документы не включаются.
+  Реестр хранит SHA256 файлов; после правки источника обновляй версию/хеш каталога.
+  SQL/зависимости не добавлены. Документ — `docs/lab3-materials.md`, тесты —
+  `tests/test_materials.py` и сквозной stdio+PostgreSQL в `test_integration.py`.
+  Приёмка этапа 3: 1695/0/0, 61 новая проверка и прежние 28/28 критериев;
+  `docs/evaluation/lab3-stage3-checks.json`, полный прогон `lab3-stage3-regression.json`.
+  Первый неуспех сохранён отдельно, реальные LLM/Telegram HTTP не использовались.
 - Исторический AgentService ЛР2 сохраняет прежние бюджеты. В новом запуске ЛР3
   Supervisor имеет отдельный предел: 1 Router + до2 LLM специалиста и 1 MCP на сообщение;
   локальный предел специалиста до2 сохраняется. Router/legacy_study не имеют MCP.

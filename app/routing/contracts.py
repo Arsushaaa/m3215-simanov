@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.materials.contracts import CatalogResult
 from app.mcp.contracts import (
     AnswerText,
     AwareDateTime,
@@ -142,6 +143,11 @@ class WeatherFacts(_MCPFacts):
     data: WeatherResult = Field(repr=False)
 
 
+class CatalogFacts(_MCPFacts):
+    kind: Literal["materials_catalog"] = "materials_catalog"
+    data: CatalogResult = Field(repr=False)
+
+
 class MaterialMatch(ClosedModel):
     document_id: DocumentId
     title: ShortText
@@ -157,7 +163,7 @@ class KnowledgeFacts(ClosedModel):
 
 
 AgentFacts = Annotated[
-    EmptyFacts | ScheduleFacts | WeekFacts | WeatherFacts | KnowledgeFacts,
+    EmptyFacts | ScheduleFacts | WeekFacts | WeatherFacts | CatalogFacts | KnowledgeFacts,
     Field(discriminator="kind"),
 ]
 

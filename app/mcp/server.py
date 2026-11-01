@@ -30,6 +30,8 @@ from pydantic import ValidationError
 from app.agent_repository import ReminderRepository, valid_capability_context
 from app.config import ConfigError, MCPSettings
 from app.db import create_pool
+from app.materials.contracts import CatalogResult, SearchArguments, SearchResult
+from app.materials.corpus import Corpus, MaterialSourceError
 from app.mcp.contracts import (
     ErrorDetails,
     ErrorResult,
@@ -46,9 +48,17 @@ from app.mcp.schedule import ScheduleService, ScheduleSourceError
 
 logger = logging.getLogger(__name__)
 WEEK_URI = "schedule://current-week"
+CATALOG_URI = "materials://catalog"
 CAPABILITY_KEY = "labbi/action-capability"
 MAX_RESULT_BYTES = 32 * 1024
 TOOLS = {
+    "search_materials": (
+        SearchArguments,
+        SearchResult,
+        "Найти фрагменты учебных материалов по текстовому запросу. "
+        "document_id — только ID из materials://catalog, не путь и не URL. "
+        "Пустая выдача означает отсутствие ответа в материалах.",
+    ),
     "get_weather": (
         WeatherArguments,
         WeatherResult,
@@ -108,12 +118,20 @@ def _tool_result(value):
 
 
 class _Runtime:
-    def __init__(self, settings, weather, schedule, reminders):
+    def __init__(self, settings, weather, schedule, reminders, materials=None):
         self.settings = settings
         self.weather, self.schedule, self.reminders = weather, schedule, reminders
         self.pool = None
         self.session = None
         self.pool_lock = asyncio.Lock()
+        self.materials = materials
+        self.materials_lock = asyncio.Lock()
+
+    async def get_materials(self):
+        async with self.materials_lock:
+            if self.materials is None:
+                self.materials = await asyncio.to_thread(Corpus.load)
+        return self.materials
 
     async def get_weather(self):
         if self.weather is None:
@@ -153,13 +171,15 @@ class _Runtime:
                 self.pool.terminate()
 
 
-def create_server(settings: MCPSettings, *, weather=None, schedule=None, reminders=None, now=None):
+def create_server(
+    settings: MCPSettings, *, weather=None, schedule=None, reminders=None, materials=None, now=None
+):
     """Транспорт и прикладные границы можно проверить независимым SDK-клиентом."""
     clock = now or (lambda: datetime.now(UTC))
 
     @asynccontextmanager
     async def lifespan(_server):
-        runtime = _Runtime(settings, weather, schedule, reminders)
+        runtime = _Runtime(settings, weather, schedule, reminders, materials)
         try:
             yield runtime
         finally:
@@ -206,6 +226,14 @@ def create_server(settings: MCPSettings, *, weather=None, schedule=None, reminde
                     result = await (await runtime.get_weather()).get_weather(arguments.city)
                 elif params.name == "get_schedule":
                     result = (await runtime.get_schedule()).get_schedule(arguments.date)
+                elif params.name == "search_materials":
+                    service = await runtime.get_materials()
+                    try:
+                        result = service.search(arguments)
+                    except ValueError:
+                        return _tool_result(
+                            _error("INVALID_ARGUMENTS", "Неизвестный ID документа.")
+                        )
                 else:
                     result = await (await runtime.get_reminders()).add_reminder(
                         arguments, capability
@@ -220,6 +248,8 @@ def create_server(settings: MCPSettings, *, weather=None, schedule=None, reminde
                 else "Инструмент не успел ответить. Попробуй позже."
             )
             raw = _error(code, message, retryable=True)
+        except MaterialSourceError:
+            raw = _error("SOURCE_UNAVAILABLE", "Источник учебных материалов недоступен.")
         except ScheduleSourceError:
             raw = _error("SOURCE_UNAVAILABLE", "Источник расписания недоступен или некорректен.")
         except (ValidationError, ValueError, TypeError, RecursionError):
@@ -253,28 +283,41 @@ def create_server(settings: MCPSettings, *, weather=None, schedule=None, reminde
         return ListResourcesResult(
             resources=[
                 Resource(
+                    uri=CATALOG_URI,
+                    name="materials-catalog",
+                    description="Проверяемый каталог версий учебных документов.",
+                    mimeType="application/json",
+                ),
+                Resource(
                     uri=WEEK_URI,
                     name="current-week",
                     description="Учебное расписание на текущую неделю.",
                     mimeType="application/json",
-                )
+                ),
             ]
         )
 
     async def read_resource(ctx, params):
-        if str(params.uri) != WEEK_URI:
+        uri = str(params.uri)
+        if uri not in {WEEK_URI, CATALOG_URI}:
             raise MCPError(-32002, "Ресурс не найден.")
         try:
             async with asyncio.timeout(settings.mcp_timeout_seconds):
-                service = await ctx.lifespan_context.get_schedule()
-                raw = WeekResult.model_validate(
-                    service.current_week(now=clock()).model_dump(mode="json")
-                ).model_dump(mode="json")
+                if uri == CATALOG_URI:
+                    service = await ctx.lifespan_context.get_materials()
+                    raw = CatalogResult(service.catalog()).model_dump(mode="json")
+                else:
+                    service = await ctx.lifespan_context.get_schedule()
+                    raw = WeekResult.model_validate(
+                        service.current_week(now=clock()).model_dump(mode="json")
+                    ).model_dump(mode="json")
                 text = _json(raw)
         except TimeoutError:
             text = _json(
                 _error("TIMEOUT", "Не удалось получить расписание вовремя.", retryable=True)
             )
+        except MaterialSourceError:
+            text = _json(_error("SOURCE_UNAVAILABLE", "Источник учебных материалов недоступен."))
         except ScheduleSourceError:
             text = _json(
                 _error("SOURCE_UNAVAILABLE", "Источник расписания недоступен или некорректен.")
@@ -284,7 +327,7 @@ def create_server(settings: MCPSettings, *, weather=None, schedule=None, reminde
         except Exception:
             text = _json(_error("SOURCE_UNAVAILABLE", "Ресурс сейчас недоступен.", retryable=True))
         result = ReadResourceResult(
-            contents=[TextResourceContents(uri=WEEK_URI, mimeType="application/json", text=text)]
+            contents=[TextResourceContents(uri=uri, mimeType="application/json", text=text)]
         )
         try:
             _json(result.model_dump(mode="json", by_alias=True, exclude_none=True))

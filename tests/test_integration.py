@@ -817,8 +817,8 @@ async def test_independent_stdio_client_commits_confirmed_reminder_in_real_postg
             async with Client(parameters, read_timeout_seconds=10) as client:
                 tools = {tool.name for tool in (await client.list_tools()).tools}
                 resources = {resource.uri for resource in (await client.list_resources()).resources}
-                assert tools == {"get_weather", "get_schedule", "add_reminder"}
-                assert resources == {"schedule://current-week"}
+                assert tools == {"get_weather", "get_schedule", "add_reminder", "search_materials"}
+                assert resources == {"schedule://current-week", "materials://catalog"}
                 raw_arguments = arguments.model_dump(mode="json")
                 denied = await client.call_tool("add_reminder", raw_arguments)
                 assert denied.is_error
@@ -2245,4 +2245,86 @@ async def test_lab3_supervisor_keeps_confirmation_guard_during_router_and_callba
             ("add_reminder", "tool_call")
         ]
     finally:
+        await pool.close()
+
+
+async def test_lab3_knowledge_real_stdio_and_postgres_persist_grounded_answer_and_trace(database):
+    from app.agents.knowledge import KnowledgeAgent
+    from app.materials.contracts import SearchArguments
+    from app.materials.corpus import Corpus
+    from app.routing.supervisor import Supervisor
+    from app.tracing.repository import TraceRepository
+    from app.tracing.runtime import TraceManager
+
+    settings, _, _, _ = database
+    pool = await create_pool(settings)
+    mcp = MCPClient(settings)
+    try:
+        await migrate(pool)
+        await mcp.start()
+        assert mcp.available
+        knowledge = await KnowledgeAgent.initialize(mcp)
+        assert knowledge.catalog is not None
+        query = "контекстное окно"
+        match = Corpus.load().search(SearchArguments(query=query)).matches[0]
+        llm = SimpleNamespace(
+            decide=AsyncMock(
+                side_effect=[
+                    RoutingCompletion(
+                        json.dumps(
+                            {
+                                "target": "knowledge",
+                                "reason": "materials_request",
+                                "confidence": 0.9,
+                            }
+                        ),
+                        [],
+                    ),
+                    RoutingCompletion(
+                        json.dumps({"action": "search_materials", "arguments": {"query": query}}),
+                        [],
+                    ),
+                ]
+            ),
+            complete=AsyncMock(
+                return_value=Completion(
+                    json.dumps(
+                        {
+                            "answer": "Контекстное окно ограничено токенами.",
+                            "citations": [
+                                {"document_id": match.document_id, "quote": match.snippet[:90]}
+                            ],
+                        }
+                    )
+                )
+            ),
+        )
+        traces = TraceManager(TraceRepository(pool))
+        dialog = DialogService(
+            DialogRepository(pool),
+            llm,
+            settings,
+            agent=Supervisor(llm, mcp, AgentRepository(pool), settings, knowledge=knowledge),
+            confirmations=ConfirmationService(ConfirmationRepository(pool), mcp),
+            traces=traces,
+        )
+        async with traces.request(101) as trace:
+            answer = await dialog.respond(101, 1, "По материалам объясни контекстное окно")
+        assert "[llm-context]" in answer and "Источники:" in answer
+        assert llm.decide.await_count == 2 and llm.complete.await_count == 1
+        assert await pool.fetchval("SELECT count(*) FROM labbi_reminders") == 0
+        assert await pool.fetchval("SELECT count(*) FROM labbi_actions") == 0
+        assert (await AgentRepository(pool).has_processed(101, 1)) is True
+        await pool.close()
+        pool = await create_pool(settings)
+        assert await DialogRepository(pool).answer(101, 1) == answer
+        assert await DialogRepository(pool).answer(202, 1) is None
+        row, spans = await TraceRepository(pool).read(101, trace.trace_id)
+        assert row["status"] == "ok"
+        assert [s.tool_name for s in spans if s.tool_name] == ["search_materials"]
+        assert sum(s.operation.startswith("model_") for s in spans) == 3
+        assert any("llm-context" in s.document_ids for s in spans)
+        assert await TraceRepository(pool).read(202, trace.trace_id) is None
+    finally:
+        await mcp.close()
         await pool.close()

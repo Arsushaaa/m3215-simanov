@@ -63,7 +63,7 @@ async def test_discovery_exposes_exact_contracts_and_read_only_resource(mcp_sett
     async with Client(server, read_timeout_seconds=3) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         resources = (await client.list_resources()).resources
-    assert set(tools) == {"get_weather", "get_schedule", "add_reminder"}
+    assert set(tools) == {"get_weather", "get_schedule", "add_reminder", "search_materials"}
     assert set(tools["get_weather"].input_schema["properties"]) == {"city"}
     assert set(tools["get_schedule"].input_schema["properties"]) == {"date"}
     assert set(tools["add_reminder"].input_schema["properties"]) == {"text", "remind_at"}
@@ -74,7 +74,10 @@ async def test_discovery_exposes_exact_contracts_and_read_only_resource(mcp_sett
         Draft202012Validator.check_schema(tool.input_schema)
         Draft202012Validator.check_schema(tool.output_schema)
         assert tool.annotations.read_only_hint is (name != "add_reminder")
-    assert [resource.uri for resource in resources] == ["schedule://current-week"]
+    assert {resource.uri for resource in resources} == {
+        "schedule://current-week",
+        "materials://catalog",
+    }
     assert resources[0].mime_type == "application/json"
 
 
@@ -330,9 +333,10 @@ async def test_independent_stdio_probe_needs_no_database_or_telegram_keys(
         "get_weather",
         "get_schedule",
         "add_reminder",
+        "search_materials",
     }
     assert all(tool["output_schema"] for tool in report["tools"])
-    assert report["resources"] == ["schedule://current-week"]
+    assert set(report["resources"]) == {"schedule://current-week", "materials://catalog"}
     assert report["schedule"]["status"] == "ok"
     assert report["week"]["days"] == 7
     assert report["write_without_context"] == {"is_error": True, "code": "UNAUTHORIZED"}

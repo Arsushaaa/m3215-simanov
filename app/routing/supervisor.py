@@ -6,12 +6,16 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.agent import AgentReply, fit_context
+from app.agents.knowledge import KnowledgeAgent
 from app.agents.specialists import LifestyleAgent, ScheduleAgent
 from app.llm import ModelError
+from app.materials.contracts import SearchResult
 from app.routing.contracts import (
     AgentRequest,
     AgentResult,
+    CatalogFacts,
     EmptyFacts,
+    KnowledgeFacts,
     ScheduleFacts,
     WeatherFacts,
     WeekFacts,
@@ -22,21 +26,28 @@ from app.tracing.runtime import TracedLLM, current_trace, span
 
 
 class Supervisor:
-    def __init__(self, llm, mcp, repository, settings, *, now=None):
+    def __init__(self, llm, mcp, repository, settings, *, now=None, knowledge=None):
         self.llm, self.mcp, self.repository, self.settings = llm, mcp, repository, settings
         self.now = now or (lambda: datetime.now(UTC))
+        self.knowledge = knowledge or KnowledgeAgent()
 
-    async def _audit(self, user, message_id, *, status="OK", llm_calls=0, error_code=None):
+    async def _audit(
+        self, user, message_id, *, status="OK", llm_calls=0, error_code=None, mcp_calls=0
+    ):
         await self.repository.record(
             user.user_id,
             message_id,
             decision="respond",
             target=None,
             status=status,
-            reason="Завершён маршрут без прикладного MCP.",
+            reason=(
+                "Учебный ответ по проверенному поиску MCP; детали — /trace last."
+                if mcp_calls
+                else "Завершён маршрут без прикладного MCP."
+            ),
             error_code=error_code,
             llm_calls=llm_calls,
-            mcp_calls=0,
+            mcp_calls=mcp_calls,
             duration_ms=0,
             argument_summary="",
         )
@@ -119,11 +130,13 @@ class Supervisor:
                         result = await llm.complete(messages, user.temperature, disable_tools=True)
                         reply = AgentReply(result.text, result.truncated)
                     elif target == "knowledge":
-                        agent_metadata.update(status="failed", error_code="SOURCE_UNAVAILABLE")
-                        reply = AgentReply(
-                            "Источник учебных материалов ещё не подключён. "
-                            "Поиск по материалам будет доступен после следующего этапа ЛР3."
+                        reply = await self.knowledge.respond(
+                            request, user, history, llm, scoped, self.settings
                         )
+                        outcome = self._knowledge_result(reply, request, scoped)
+                        if outcome.status == "failed":
+                            agent_metadata.update(status="failed", error_code=outcome.error_code)
+                            await self._revoke(user, message_id, context)
                     else:
                         # A failed/uncertain interpretation must not leave an old card live.
                         if context is not None and context.pending is not None:
@@ -134,10 +147,20 @@ class Supervisor:
                         user,
                         message_id,
                         llm_calls=budget.llm_calls - 1,
-                        status="FAILED" if target == "knowledge" or decision is None else "OK",
+                        mcp_calls=budget.mcp_calls,
+                        status="FAILED"
+                        if (target == "knowledge" and reply.agent_result.status == "failed")
+                        or decision is None
+                        else "OK",
                         error_code="SOURCE_UNAVAILABLE"
-                        if target == "knowledge"
+                        if target == "knowledge" and reply.agent_result.status == "failed"
                         else ("INVALID_RESULT" if decision is None else None),
+                    )
+                if target == "knowledge":
+                    return replace(
+                        reply,
+                        revision=context.revision if context else reply.revision,
+                        confirmation_epoch=context.epoch if context else reply.confirmation_epoch,
                     )
                 facts, status, tools, resources = EmptyFacts(), "success", (), ()
                 error = None
@@ -195,12 +218,46 @@ class Supervisor:
                             if isinstance(error, asyncio.CancelledError)
                             else "FAILED",
                             llm_calls=max(0, budget.llm_calls - 1),
+                            mcp_calls=budget.mcp_calls,
                         )
                 except Exception:
                     pass  # Request marker remains unfinished; /why never falls back to old audit.
             if isinstance(error, TimeoutError):
                 raise ModelError("Не удалось завершить ответ вовремя. Попробуй позже.") from None
             raise
+
+    def _knowledge_result(self, reply, request, scoped):
+        outcome = AgentResult.model_validate(reply.agent_result)
+        if (
+            (outcome.request_id, outcome.trace_id) != (request.request_id, request.trace_id)
+            or outcome.pending_action_id is not None
+            or outcome.used_resources
+        ):
+            raise ModelError("Результат специалиста относится к другому запросу или действию.")
+        observed = scoped.observation
+        if observed is None:
+            if outcome.used_tools or isinstance(outcome.facts, KnowledgeFacts):
+                raise ModelError("Специалист указал невыполненный поиск.")
+            if outcome.status == "success" and not isinstance(outcome.facts, CatalogFacts):
+                raise ModelError("Ответ специалиста не основан на материале или каталоге.")
+            if isinstance(outcome.facts, CatalogFacts):
+                if self.knowledge.catalog is None or outcome.facts.data.model_dump(
+                    mode="json"
+                ) != self.knowledge.catalog.model_dump(mode="json"):
+                    raise ModelError("Каталог специалиста не прошёл проверку.")
+        else:
+            kind, name, raw = observed
+            if kind != "tool" or name != "search_materials" or outcome.used_tools != (name,):
+                raise ModelError("Специалист указал другое действие.")
+            result = SearchResult.model_validate(raw).root
+            if (
+                not isinstance(outcome.facts, KnowledgeFacts)
+                or outcome.facts.catalog_version != result.catalog_version
+                or [m.model_dump(mode="json") for m in outcome.facts.matches]
+                != [m.model_dump(mode="json") for m in result.matches]
+            ):
+                raise ModelError("Факты специалиста не соответствуют поиску.")
+        return outcome
 
     async def _revoke(self, user, message_id, context):
         if context is None or context.pending is None or context.revoked:

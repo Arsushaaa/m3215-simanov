@@ -285,6 +285,11 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
     data.mkdir()
     (data / "schedule.json").write_text('{"lessons": []}', encoding="utf-8")
     (data / "private.json").write_text("PRIVATE", encoding="utf-8")
+    materials = data / "materials"
+    materials.mkdir()
+    for name in ("registry.json", "mcp-basics.md", "llm-context.md", "reliable-delivery.md"):
+        (materials / name).write_text("Public corpus", encoding="utf-8")
+    (materials / "private.md").write_text("PRIVATE", encoding="utf-8")
     (tmp_path / ".tools").mkdir()
     (tmp_path / ".tools" / "schedule.json").write_text("PRIVATE", encoding="utf-8")
     (tmp_path / "app" / ".env").write_text("SECRET=yes", encoding="utf-8")
@@ -302,6 +307,9 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
     assert "app/mcp/server.py" in names
     assert "data/schedule.json" in names
     assert "data/private.json" not in names
+    assert "data/materials/private.md" not in names
+    for name in ("registry.json", "mcp-basics.md", "llm-context.md", "reliable-delivery.md"):
+        assert "data/materials/" + name in names
     assert ".tools/schedule.json" not in names
     assert all(".env" not in n and "id_ed25519" not in n for n in names)
 

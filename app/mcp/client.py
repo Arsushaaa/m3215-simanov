@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from app.agent_repository import valid_capability_context
 from app.config import MCPSettings, Settings
+from app.materials.contracts import CatalogResult, SearchArguments, SearchResult
 from app.mcp.contracts import (
     ReminderArguments,
     ReminderResult,
@@ -35,8 +36,10 @@ from app.mcp.contracts import (
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[2]
 WEEK_URI = "schedule://current-week"
+CATALOG_URI = "materials://catalog"
 MAX_RESULT_BYTES = 32 * 1024
 MODELS = {
+    "search_materials": (SearchArguments, SearchResult),
     "get_weather": (WeatherArguments, WeatherResult),
     "get_schedule": (ScheduleArguments, ScheduleResult),
     "add_reminder": (ReminderArguments, ReminderResult),
@@ -200,9 +203,16 @@ class MCPClient:
         _bounded(resources.model_dump(mode="json", by_alias=True, exclude_none=True))
         if tools.next_cursor or resources.next_cursor:
             raise ValueError("Unexpected paginated catalog")
-        if len(tools.tools) != 3 or {tool.name for tool in tools.tools} != set(MODELS):
+        names = [tool.name for tool in tools.tools]
+        base = set(MODELS) - {"search_materials"}
+        if len(names) != len(set(names)) or set(names) not in (base, set(MODELS)):
             raise ValueError("Unexpected tools")
-        if len(resources.resources) != 1 or resources.resources[0].uri != WEEK_URI:
+        resource_names = [str(resource.uri) for resource in resources.resources]
+        expected_resources = {WEEK_URI, CATALOG_URI} if "search_materials" in names else {WEEK_URI}
+        if (
+            len(resource_names) != len(set(resource_names))
+            or set(resource_names) != expected_resources
+        ):
             raise ValueError("Unexpected resources")
         catalog, validators = {}, {}
         for tool in tools.tools:
@@ -234,18 +244,18 @@ class MCPClient:
                 Draft202012Validator(tool.input_schema),
                 Draft202012Validator(tool.output_schema),
             )
-        resource = resources.resources[0]
-        if resource.mime_type != "application/json":
+        if any(resource.mime_type != "application/json" for resource in resources.resources):
             raise ValueError("Unexpected resource MIME type")
         self._tools = catalog
         self._validators = validators
         self._resources = {
-            WEEK_URI: {
-                "uri": WEEK_URI,
+            str(resource.uri): {
+                "uri": str(resource.uri),
                 "name": resource.name,
                 "description": resource.description or "Расписание текущей недели.",
                 "mimeType": resource.mime_type,
             }
+            for resource in resources.resources
         }
 
     async def _run(self) -> None:
@@ -309,7 +319,7 @@ class MCPClient:
                 result = await sdk.session.read_resource(
                     operation.target, allow_input_required=True
                 )
-                value = self._resource_value(result)
+                value = self._resource_value(result, operation.target)
         except asyncio.CancelledError:
             if not operation.future.done():
                 operation.future.set_exception(
@@ -364,6 +374,10 @@ class MCPClient:
         # Reject a different day before it can become a fact in the final answer;
         # a mismatched write receipt has an unknown outcome and is reconciled in DB.
         if value["status"] != "error":
+            if name == "search_materials" and any(
+                value[field] != arguments[field] for field in ("query", "document_id", "limit")
+            ):
+                raise ValueError("Mismatched search request")
             if name == "get_schedule" and value["date"] != arguments["date"]:
                 raise ValueError("Mismatched schedule date")
             if name == "add_reminder" and datetime.fromisoformat(
@@ -372,7 +386,7 @@ class MCPClient:
                 raise ValueError("Mismatched reminder moment")
         return self._domain_result(value)
 
-    def _resource_value(self, result) -> dict:
+    def _resource_value(self, result, uri=WEEK_URI) -> dict:
         if not isinstance(result, types.ReadResourceResult):
             raise ValueError("Unsupported resource result")
         _bounded(result.model_dump(mode="json", by_alias=True, exclude_none=True))
@@ -381,10 +395,11 @@ class MCPClient:
         ):
             raise ValueError("Unexpected resource contents")
         content = result.contents[0]
-        if content.uri != WEEK_URI or content.mime_type != "application/json":
+        if content.uri != uri or content.mime_type != "application/json":
             raise ValueError("Unexpected resource identity")
         raw = json.loads(content.text, object_pairs_hook=_unique_keys)
-        value = WeekResult.model_validate(raw).model_dump(mode="json")
+        model = CatalogResult if uri == CATALOG_URI else WeekResult
+        value = model.model_validate(raw).model_dump(mode="json")
         return self._domain_result(value)
 
     @staticmethod
@@ -436,6 +451,6 @@ class MCPClient:
         )
 
     async def read_resource(self, uri: str) -> dict:
-        if uri != WEEK_URI:
+        if uri not in {WEEK_URI, CATALOG_URI} or (uri == CATALOG_URI and uri not in self.resources):
             raise MCPClientError("UNKNOWN_TOOL")
         return await self._request("resources/read", uri)

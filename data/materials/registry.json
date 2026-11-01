@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "catalog_version": "61205a672f3b3b24dc2b68fbb319039bba6f451311bcbaf7eca8dce033b5054d",
+  "documents": [
+    {
+      "document_id": "mcp-basics",
+      "title": "Назначение MCP",
+      "version": "90ea07e23d685f8e8cfd2e7bc878e1ba08ec287123a887a167b80eafc819aeae",
+      "summary": "Инструменты, ресурсы, роли приложения и границы доверия."
+    },
+    {
+      "document_id": "llm-context",
+      "title": "Контекстное окно и структурированный вывод",
+      "version": "ecaf87e152ace018aaf62b6e247f67ca53ee9596b276e126f22473d4b6405152",
+      "summary": "Бюджет токенов, JSON-схемы и native tool calling."
+    },
+    {
+      "document_id": "reliable-delivery",
+      "title": "Идемпотентность и восстановление доставки",
+      "version": "dfc35895fa2bddbee4d6a5d2cd6ae719e5d2d897c92ed462804dd639972d365c",
+      "summary": "Action ID, транзакции, outbox и неопределённый исход отправки."
+    }
+  ]
+}

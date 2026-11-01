@@ -33,11 +33,19 @@ async def probe(settings: MCPSettings, *, day: str = "2026-10-12") -> dict:
     async with Client(parameters, read_timeout_seconds=settings.mcp_timeout_seconds + 5) as client:
         tools = (await client.list_tools()).tools
         resources = (await client.list_resources()).resources
-        if {tool.name for tool in tools} != {"get_weather", "get_schedule", "add_reminder"}:
-            raise ProbeError("MCP не обнаружил три ожидаемых инструмента.")
+        if {tool.name for tool in tools} != {
+            "get_weather",
+            "get_schedule",
+            "add_reminder",
+            "search_materials",
+        }:
+            raise ProbeError("MCP не обнаружил четыре ожидаемых инструмента.")
         if any(not tool.input_schema or not tool.output_schema for tool in tools):
             raise ProbeError("Инструмент не опубликовал входную или выходную схему.")
-        if {resource.uri for resource in resources} != {"schedule://current-week"}:
+        if {resource.uri for resource in resources} != {
+            "schedule://current-week",
+            "materials://catalog",
+        }:
             raise ProbeError("MCP не обнаружил ресурс текущей недели.")
 
         schedule_result = await client.call_tool("get_schedule", {"date": day})

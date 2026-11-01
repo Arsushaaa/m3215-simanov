@@ -184,7 +184,7 @@ class AgentService:
                 },
             }
             for value in self.mcp.tools.values()
-            if value["name"] != "add_reminder"
+            if value["name"] in {"get_weather", "get_schedule"}
         ]
         if "add_reminder" in self.mcp.tools:
             tools.append(
@@ -400,6 +400,7 @@ class AgentService:
                         "tools": [
                             {"name": value["name"], "description": value["description"][:160]}
                             for value in self.mcp.tools.values()
+                            if value["name"] in {"get_weather", "get_schedule", "add_reminder"}
                         ],
                         "resources": list(self.mcp.resources),
                     }

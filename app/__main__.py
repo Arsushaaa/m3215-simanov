@@ -6,6 +6,7 @@ import aiohttp
 from aiogram import Dispatcher
 
 from app.agent_repository import AgentRepository, ConfirmationRepository
+from app.agents.knowledge import KnowledgeAgent
 from app.config import ConfigError, Settings
 from app.confirmations import ConfirmationService
 from app.db import create_pool
@@ -83,7 +84,8 @@ async def run(settings: Settings) -> None:
         await llm.start()
         mcp = MCPClient(settings)
         await mcp.start()
-        agent = Supervisor(llm, mcp, AgentRepository(state.pool), settings)
+        knowledge = await KnowledgeAgent.initialize(mcp)
+        agent = Supervisor(llm, mcp, AgentRepository(state.pool), settings, knowledge=knowledge)
         confirmations = ConfirmationService(
             ConfirmationRepository(state.pool), ScopedMCP(mcp, "schedule", confirmation=True)
         )

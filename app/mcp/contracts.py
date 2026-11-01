@@ -463,10 +463,13 @@ class AgentDecision(
 
 def tool_schemas(name: str) -> dict[str, dict]:
     """Канонические схемы для будущего MCP-сервера, без копий в обработчиках."""
+    from app.materials.contracts import SearchArguments, SearchResult
+
     models = {
         "get_weather": (WeatherArguments, WeatherResult),
         "get_schedule": (ScheduleArguments, ScheduleResult),
         "add_reminder": (ReminderArguments, ReminderResult),
+        "search_materials": (SearchArguments, SearchResult),
     }
     try:
         arguments, result = models[name]

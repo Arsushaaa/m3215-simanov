@@ -209,6 +209,8 @@ class ConfirmationService:
             "confirm": "подтверждение напоминания",
             "cancel": "отзыв подтверждения",
         }
+        if event.decision == "respond" and event.mcp_calls:
+            actions["respond"] = "ответ по чтению MCP"
         statuses = {
             "OK": "успешно",
             "CLARIFY": "нужно уточнение или подтверждение; действие не выполнено",

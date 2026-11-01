@@ -6,6 +6,11 @@
 !app/**
 !data/
 !data/schedule.json
+!data/materials/
+!data/materials/registry.json
+!data/materials/mcp-basics.md
+!data/materials/llm-context.md
+!data/materials/reliable-delivery.md
 **/__pycache__/
 **/*.pyc
 **/.env*
