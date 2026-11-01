@@ -227,3 +227,32 @@ def test_ambiguous_card_preserves_api_added_latin_secondary_region_without_inven
     )
     assert "Казань, Россия, Татарстан, Gorodskoy Okrug Kazan’" in plain(result.text)
     assert "Республика Татарстан" not in plain(result.text)
+
+
+@pytest.mark.parametrize("mode", ["native", "structured"])
+@pytest.mark.parametrize("city", ["Ростов", "Ростов, Россия"])
+async def test_city_specificity_is_not_expanded_between_model_and_mcp(setup_agent, mode, city):
+    agent, llm, mcp, _ = setup_agent
+    agent.settings = replace(agent.settings, llm_tool_mode=mode)
+    arguments = {"city": city}
+    llm.decide.return_value = (
+        native("get_weather", arguments)
+        if mode == "native"
+        else routing("call_tool", name="get_weather", arguments=arguments)
+    )
+    value = deepcopy(AMBIGUOUS)
+    value.update(
+        query=city,
+        candidates=[
+            {"name": "Ростов-на-Дону", "country": "Россия", "region": "Ростовская область"},
+            {"name": "Ростов Великий", "country": "Россия", "region": "Ярославская область"},
+        ],
+    )
+    mcp.call_tool.return_value = value
+    llm.complete.return_value = Completion("Выбираю Ростов-на-Дону, Россия: 25 °C.")
+    reply = await ask(agent, f"Погода в {city}")
+    assert mcp.call_tool.call_args.args == ("get_weather", arguments)
+    assert reply.text == canonical_weather_clarification(WeatherAmbiguous.model_validate(value))
+    assert "25" not in plain(reply.text)
+    assert "Уточни" in plain(reply.text)
+    assert llm.decide.await_count == llm.complete.await_count == 1

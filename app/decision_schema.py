@@ -47,21 +47,9 @@ def model_schema(schema, *, pending=False, inline_refs=False, message_indices=No
                 hints(child)
 
     hints(result)
-    weather = result.get("$defs", {}).get("WeatherArguments", result)
-    city = weather.get("properties", {}).get("city")
-    if city is not None:
-        city["description"] = (
-            "City name IN RUSSIAN (на русском), Cyrillic only. Translate city and "
-            "explicitly supplied country/region before returning this argument. "
-            "Do not copy Latin names or invent a country."
-            " For a short clarification retain the city and ALL country/region qualifiers "
-            "the user explicitly supplied earlier; add the new qualifier without dropping any."
-            " When choosing an offered candidate after a short clarification, return its "
-            "COMPLETE Russian label: city, country, matching Russian region. Keep the offered "
-            "Russian spelling; do not add administrative words or omit the country. "
-            "An API-added Latin secondary administrative fragment is not a user qualifier: "
-            "exclude it instead of copying Latin into city or inventing a translation."
-        )
+    # Keep the MCP contract's city description verbatim. A separate provider
+    # hint used to request a complete candidate label and overrode the rule
+    # against inventing country/region qualifiers.
     if not inline_refs:
         return result
 

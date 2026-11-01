@@ -150,3 +150,22 @@ def test_inline_native_reminder_schema_requires_objects_without_losing_validatio
             Draft202012Validator(provider).validate(serialized)
         with pytest.raises(ModelValidationError):
             ReminderPreparation.model_validate(serialized)
+
+
+@pytest.mark.parametrize("model", [WeatherArguments, AgentDecision])
+@pytest.mark.parametrize("inline_refs", [False, True])
+def test_weather_city_instructions_remain_the_discovered_contract(model, inline_refs):
+    """A provider override must not reintroduce guessed candidate qualifiers."""
+    canonical = WeatherArguments.model_json_schema()["properties"]["city"]["description"]
+    provider = model_schema(model.model_json_schema(), inline_refs=inline_refs)
+    city_descriptions = []
+    pending = [provider]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            if "city" in node.get("properties", {}):
+                city_descriptions.append(node["properties"]["city"]["description"])
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+    assert city_descriptions and all(value == canonical for value in city_descriptions)
