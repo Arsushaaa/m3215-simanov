@@ -35,7 +35,9 @@ class BriefingService:
 
     async def tick(self):
         await self.repository.schedule(limit=10)
-        for lease in await self.repository.claim_daily(limit=2):
+        leases = await self.repository.claim_daily(limit=2)
+
+        async def prepare_one(lease):
             context = (
                 self.traces.request(
                     lease.owner, component="briefing", operation="prepare_notification"
@@ -46,6 +48,15 @@ class BriefingService:
             async with context:
                 async with asyncio.timeout(100):
                     await self.prepare(lease)
+
+        # Both leases start together. Waiting behind another 100-second
+        # preparation would otherwise consume the second lease's 150 seconds.
+        outcomes = await asyncio.gather(
+            *(prepare_one(lease) for lease in leases), return_exceptions=True
+        )
+        for outcome in outcomes:
+            if isinstance(outcome, asyncio.CancelledError):
+                raise outcome
 
     async def _focus(self, lease, day):
         if self.knowledge.catalog is None:

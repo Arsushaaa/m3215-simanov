@@ -249,3 +249,31 @@ async def test_daily_specialist_rejects_well_formed_result_for_other_input(name)
             await LifestyleAgent.read_point(
                 ScopedMCP(sources, "lifestyle", allow_point=True), CITY.coordinates()
             )
+
+
+async def test_two_daily_leases_begin_together_before_either_preparation_finishes():
+    import asyncio
+
+    svc, repo, _, _, first = setup()
+    repo.schedule = AsyncMock()
+    second = Lease(uuid4(), 202, uuid4(), 1, None, 202, 0)
+    repo.claim_daily = AsyncMock(return_value=[first, second])
+    entered = set()
+    both = asyncio.Event()
+    release = asyncio.Event()
+
+    async def prepare(lease):
+        entered.add(lease.owner)
+        if entered == {101, 202}:
+            both.set()
+        await release.wait()
+        return True
+
+    svc.prepare = prepare
+    task = asyncio.create_task(svc.tick())
+    try:
+        await asyncio.wait_for(both.wait(), 1)
+        assert not task.done()
+    finally:
+        release.set()
+        await task

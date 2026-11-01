@@ -3174,25 +3174,42 @@ async def test_daily_briefing_real_db_reservations_cache_delivery_no_held_connec
     pool = await create_pool(settings)
     try:
         await migrate(pool)
+        await pool.close()
+        pool = await asyncpg.create_pool(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            min_size=1,
+            max_size=1,
+            command_timeout=5,
+        )
+        source_probes, model_probes = [], []
         repo, clock = await _briefing_seed(pool)
         sources = Sources()
         original = sources.call_tool
 
         async def checked(name, args):
-            assert pool.get_idle_size() == pool.get_size()
-            reserved = await pool.fetchval(
-                "SELECT mcp_reserved FROM labbi_outbox WHERE user_id=101"
-            )
+            # Concurrent readers may briefly use the pool. With max_size=1 this
+            # probe proves this HTTP callback did not retain its own DB connection.
+            async with asyncio.timeout(2):
+                reserved = await pool.fetchval(
+                    "SELECT mcp_reserved FROM labbi_outbox WHERE user_id=101"
+                )
+            source_probes.append(True)
             assert reserved >= 1
             return await original(name, args)
 
         sources.call_tool = checked
 
         async def model(*args, **kwargs):
-            assert (
-                await pool.fetchval("SELECT llm_reserved FROM labbi_outbox WHERE user_id=101") == 1
-            )
-            assert pool.get_idle_size() == pool.get_size()
+            async with asyncio.timeout(2):
+                assert (
+                    await pool.fetchval("SELECT llm_reserved FROM labbi_outbox WHERE user_id=101")
+                    == 1
+                )
+            model_probes.append(True)
             return Completion("invalid")
 
         llm = SimpleNamespace(complete=AsyncMock(side_effect=model))
@@ -3201,6 +3218,7 @@ async def test_daily_briefing_real_db_reservations_cache_delivery_no_held_connec
             repo, sources, KnowledgeAgent(sources.corpus.catalog()), llm, settings, traces=traces
         )
         await service.tick()
+        assert source_probes == [True, True, True] and model_probes == [True]
         row = await pool.fetchrow("SELECT * FROM labbi_outbox WHERE user_id=101")
         assert row["state"] == "ready" and row["mcp_reserved"] == 3 and row["llm_reserved"] == 1
         assert "Учебный фокус:" in row["body"] and "Источник:" in row["body"]
