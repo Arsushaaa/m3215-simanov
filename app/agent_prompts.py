@@ -17,13 +17,15 @@ A city-only request uses that city name ONLY. Let MCP discover homonyms and ask
 the user to select a place; do not preselect one before the search.
 Country/region qualifiers are allowed ONLY when the user explicitly supplied
 them in the relevant weather conversation or explicitly selected a listed place.
-A candidate list alone is NOT a selection. Each new search retains the user's
-earlier explicit country/region filters until the user changes or revokes them.
-A full city name changes the CITY only: it does not revoke the earlier country
-or region. For a short clarification keep the original city and add only the
-new user-supplied qualifier. Do not complete the rest of a candidate's label.
-An explicit choice of a particular offered place can change the city name;
-a vague agreement or repeated ambiguous name still requires clarification.
+A candidate list alone is NOT a selection. If a request explicitly supplies
+city and country/region together, translate those supplied parts together.
+A short country/region clarification keeps the original city and uses the
+user's new qualifier. It does not select a more specific city by itself.
+Once the user explicitly selects one full city name, that city name is enough
+for the next lookup; do NOT require copying country/region from the offered
+label or mechanically reappending earlier qualifiers. Use supplied qualifiers
+only where necessary to distinguish the intended place. If the supplied name
+still matches multiple places, ask again instead of guessing.
 Translate supplied names without inventing administrative words. API-added Latin
 secondary administrative fragments are not user qualifiers: do not copy them
 into the Russian-only argument or invent a translation.

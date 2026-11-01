@@ -208,5 +208,50 @@ async def test_all_flows_use_real_sql_discovery_and_substituted_weather_llm(
     verify.summarize(data)
     assert data["metrics"]["acceptance"] == "passed", data["attempts"]
     assert data["metrics"]["llm_calls"] == 10
-    assert data["metrics"]["session_started_llm_calls"] == 32
+    assert data["metrics"]["session_started_llm_calls"] == 48
     assert data["metrics"]["mcp_calls"] == 5
+
+
+@pytest.mark.parametrize(
+    "city",
+    [
+        "Ростов-на-Дону",
+        "Ростов-на-Дону, Россия",
+        "Ростов-на-Дону, Украина",
+        "Ростов-на-Дону, Россия, Неуказанный регион",
+    ],
+)
+async def test_explicit_city_choice_checks_identity_without_mandatory_country_suffix(city):
+    observation = await FixtureMCP.call_tool(None, "get_weather", {"city": "Ростов-на-Дону"})
+    row = {
+        "llm_calls": [
+            {"status": "ok"},
+            {"status": "ok", "disable_tools": True, "wire": {"tool_choice": "none"}},
+        ],
+        "mcp_calls": [
+            {
+                "target": "get_weather",
+                "arguments": {"city": city},
+                "status": "ok",
+                "result": observation,
+            }
+        ],
+    }
+    runtime = SimpleNamespace(
+        llm=SimpleNamespace(row=row),
+        dialog=SimpleNamespace(
+            repository=SimpleNamespace(user=AsyncMock(), set_temperature=AsyncMock()),
+            confirmations=SimpleNamespace(repository=SimpleNamespace(set_timezone=AsyncMock())),
+        ),
+        step=AsyncMock(
+            return_value=[SimpleNamespace(text="Ростов-на-Дону, Россия: 7.4°C, Open-Meteo")]
+        ),
+        current_card=AsyncMock(return_value=None),
+        reminder_count=AsyncMock(return_value=0),
+    )
+    case = {"steps": [verify.CASES[0]["steps"][2]]}
+    if city in case["steps"][0]["allowed_cities"]:
+        await verify.execute_case(runtime, case, 101)
+    else:
+        with pytest.raises(verify.base.CaseFailure, match="expanded"):
+            await verify.execute_case(runtime, case, 101)

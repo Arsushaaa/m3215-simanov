@@ -1,7 +1,7 @@
 """New-session regression for place specificity after the teacher's feedback.
 
-Second frozen round: ten weather calls plus six unchanged semantic cases.
-The previous16attempts remain frozen; this task has a maximum32attempts.
+Third frozen round: ten weather calls plus six unchanged semantic cases.
+The previous32attempts remain frozen; this task has a maximum48attempts.
 Uses real model/MCP/isolated PostgreSQL; Telegram transport is substituted.
 Prepare/commit fresh manifests before API. Never overwrite or replay attempts.
 """
@@ -34,8 +34,8 @@ from scripts import lab2_adversarial_live as base
 from scripts.lab2_experiment import checkpoint, digest, timestamp
 
 ROOT = base.ROOT
-SMOKE_FOLDER = ROOT / "docs/evaluation/semantic-routing-smoke-20261101-v3"
-MAXIMUM, COHORT_MAXIMUM, PRIOR_CALLS, SESSION_MAXIMUM = 10, 16, 16, 32
+SMOKE_FOLDER = ROOT / "docs/evaluation/semantic-routing-smoke-20261101-v4"
+MAXIMUM, COHORT_MAXIMUM, PRIOR_CALLS, SESSION_MAXIMUM = 10, 16, 32, 48
 PRIOR_SMOKE = ROOT / "docs/evaluation/semantic-routing-smoke-20261101"
 PRIOR_WEATHER = ROOT / "docs/evaluation/weather-specificity-20261101"
 CASES = (
@@ -45,7 +45,12 @@ CASES = (
         "steps": (
             {"query": "Какая сейчас погода в Ростове?", "city": "Ростов", "status": "ambiguous"},
             {"query": "В России", "city": "Ростов, Россия", "status": "ambiguous"},
-            {"query": "В Ростове-на-Дону", "city": "Ростов-на-Дону, Россия", "status": "ok"},
+            {
+                "query": "В Ростове-на-Дону",
+                "city": "Ростов-на-Дону",
+                "allowed_cities": ["Ростов-на-Дону", "Ростов-на-Дону, Россия"],
+                "status": "ok",
+            },
         ),
     },
     {
@@ -62,7 +67,7 @@ CASES = (
     },
 )
 PLAN = {
-    "version": 2,
+    "version": 3,
     "session": "teacher-feedback-20261101",
     "cases": CASES,
     "maximum_llm_calls": MAXIMUM,
@@ -89,20 +94,23 @@ def related_smoke():
 
 
 def previous_runs():
-    smoke = json.loads((PRIOR_SMOKE / "results.json").read_text())
-    weather = json.loads((PRIOR_WEATHER / "results.json").read_text())
-    count = sum(len(row["calls"]) for row in smoke["attempts"])
-    count += sum(len(row["llm_calls"]) for row in weather["attempts"])
-    if count != PRIOR_CALLS or weather["status"] != "completed":
-        raise ValueError("Previous round's consumed slots changed or remain unresolved.")
-    return {
-        "started_llm_calls": count,
-        "files_sha256": {
-            str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for folder in (PRIOR_SMOKE, PRIOR_WEATHER)
-            for path in (folder / "manifest.json", folder / "results.json")
-        },
-    }
+    folders = (
+        (PRIOR_SMOKE, "calls"),
+        (PRIOR_WEATHER, "llm_calls"),
+        (ROOT / "docs/evaluation/semantic-routing-smoke-20261101-v3", "calls"),
+        (ROOT / "docs/evaluation/weather-specificity-20261101-v2", "llm_calls"),
+    )
+    count, files = 0, {}
+    for folder, key in folders:
+        result = json.loads((folder / "results.json").read_text())
+        if any(row["status"] == "in_progress" for row in result["attempts"]):
+            raise ValueError("Previous round remains unresolved.")
+        count += sum(len(row[key]) for row in result["attempts"])
+        for path in (folder / "manifest.json", folder / "results.json"):
+            files[str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
+    if count != PRIOR_CALLS:
+        raise ValueError("Previous rounds' consumed slots changed.")
+    return {"started_llm_calls": count, "files_sha256": files}
 
 
 def smoke_calls():
@@ -248,7 +256,10 @@ async def execute_case(runtime, case, owner):
         call = row["mcp_calls"][-1]
         base.require(
             call["target"] == "get_weather"
-            and base.arguments_equal("get_weather", call["arguments"], {"city": expected["city"]}),
+            and any(
+                base.arguments_equal("get_weather", call["arguments"], {"city": city})
+                for city in expected.get("allowed_cities", [expected["city"]])
+            ),
             "City was expanded or received unprovided country/region",
         )
         base.require(call["status"] == "ok", "MCP did not return a validated result")
