@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-11-01T16:25:08.326849+00:00",
+  "stage": 1,
+  "status": "passed",
+  "source_commit": "8346faedd1a4b7ab1a47419065da5a89ea7474fd",
+  "checks": {
+    "local_links": true,
+    "upstream_blobs_identical": true,
+    "fifteen_original_cases": true,
+    "six_planned_injection_cases": true,
+    "all_original_app_files_unchanged": true,
+    "runtime_not_connected_to_new_contracts": true,
+    "future_behavior_cases_not_claimed_passed": true
+  },
+  "planned_behavior_cases": 34,
+  "targeted_tests": {
+    "passed": 143,
+    "failed": 0,
+    "new_routing_contract_cases": 61,
+    "command": ".venv/bin/python -m pytest -q tests/test_routing_contracts.py tests/test_mcp_contracts.py tests/test_decision_schema.py"
+  },
+  "regression_report": "docs/evaluation/lab3-stage1-regression.json",
+  "llm_calls": 0,
+  "real_telegram_http_calls": 0,
+  "scope": "Boundary DTOs and design; Supervisor execution/policy/notifications not implemented.",
+  "finished_at": "2026-11-01T16:26:49.138170+00:00",
+  "regression": {
+    "suite": {
+      "passed": 1589,
+      "failed": 0,
+      "skipped": 0
+    },
+    "inherited_lab2_criteria_passed": 28,
+    "inherited_lab2_criteria_total": 28,
+    "report_sha256": "efcf86170caef5813c7abd0254d98931abcebc1819c5e256827326d73b87b438"
+  },
+  "historical_tags": {
+    "lab1": "cf76ff6b7ab25b57a9b68d9736639efba946be7c",
+    "lab2": "f8e562b9ffae87f0ca8983225029de859aa93d41",
+    "lab2-final": "7d63395c07a49b9e670342251ebb5507ba88681b",
+    "lab2-final-v2": "523e8e424e9ce01f31fe6bc4e55d805dd40cd272",
+    "lab2-final-v3": "cd9af2c02efdce116941e8dabc1510adc6772976",
+    "lab2-final-v4": "a86f7dddaeda127f5be5f8e00e5d7297a532be06"
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "kind": "planned_behavioral_acceptance",
+  "status": "planned",
+  "assignment_commit": "8346faedd1a4b7ab1a47419065da5a89ea7474fd",
+  "note": "This is not a test-results report. Stage1 DTO checks are recorded separately.",
+  "cases": [
+    {
+      "id": "routing_targets",
+      "implementation_stage": 2,
+      "expected": "Known targets dispatch once; unknown/invalid routes clarify before any tool.",
+      "status": "planned"
+    },
+    {
+      "id": "legacy_modes",
+      "implementation_stage": 2,
+      "expected": "General study remains available; translate/quiz stay isolated and preserve history/reset behavior.",
+      "status": "planned"
+    },
+    {
+      "id": "request_identity",
+      "implementation_stage": 2,
+      "expected": "Model output and foreign agent results cannot replace actor, request, trace or origin.",
+      "status": "planned"
+    },
+    {
+      "id": "tool_allowlist",
+      "implementation_stage": 2,
+      "expected": "Every call intersects current discovery and fixed component policy; unknown tools are denied.",
+      "status": "planned"
+    },
+    {
+      "id": "resource_allowlist",
+      "implementation_stage": 2,
+      "expected": "Schedule/Knowledge resources are read and passed only to the permitted component.",
+      "status": "planned"
+    },
+    {
+      "id": "source_grounding",
+      "implementation_stage": 2,
+      "expected": "Pending reminder edits retain evidence/epoch/revision checks before and after Router.",
+      "status": "planned"
+    },
+    {
+      "id": "call_budget",
+      "implementation_stage": 2,
+      "expected": "Router/specialist/global budgets are enforced; no hidden model or MCP retries.",
+      "status": "planned"
+    },
+    {
+      "id": "trace_privacy",
+      "implementation_stage": 2,
+      "expected": "Trace contains fixed metadata only; no messages/prompts/env/capability.",
+      "status": "planned"
+    },
+    {
+      "id": "trace_ownership",
+      "implementation_stage": 2,
+      "expected": "Only own last/requested trace is visible; trace failure cannot show an earlier decision as current.",
+      "status": "planned"
+    },
+    {
+      "id": "material_search",
+      "implementation_stage": 3,
+      "expected": "Search returns bounded fragments from at least three registered documents, with stable IDs.",
+      "status": "planned"
+    },
+    {
+      "id": "catalog_context",
+      "implementation_stage": 3,
+      "expected": "Discovery is followed by resource read; validated catalogue enters only Knowledge context.",
+      "status": "planned"
+    },
+    {
+      "id": "materials_absent",
+      "implementation_stage": 3,
+      "expected": "No matches, missing corpus and source failure remain distinct; no invented citations.",
+      "status": "planned"
+    },
+    {
+      "id": "city_confirmation",
+      "implementation_stage": 4,
+      "expected": "Ambiguous lookup preserves alternatives; city coordinates are saved only after owner confirmation.",
+      "status": "planned"
+    },
+    {
+      "id": "notification_preferences",
+      "implementation_stage": 4,
+      "expected": "Briefing defaults off; enabling requires zone/city; notifications view exposes no internal IDs.",
+      "status": "planned"
+    },
+    {
+      "id": "delivery_destination",
+      "implementation_stage": 4,
+      "expected": "Chat destination comes from trusted private update, not actor inference or model/tool/document fields.",
+      "status": "planned"
+    },
+    {
+      "id": "outbox_uniqueness",
+      "implementation_stage": 4,
+      "expected": "Two sequential and two concurrent preparations create one event job in real PostgreSQL.",
+      "status": "planned"
+    },
+    {
+      "id": "reminder_misfire",
+      "implementation_stage": 5,
+      "expected": "Future reminders do not send; delay through15minutes is marked; older becomes missed.",
+      "status": "planned"
+    },
+    {
+      "id": "delivery_retry",
+      "implementation_stage": 5,
+      "expected": "Temporary failures have at most3 total attempts; permanent failures stop; payload is reused.",
+      "status": "planned"
+    },
+    {
+      "id": "delivery_recovery",
+      "implementation_stage": 5,
+      "expected": "Restart at preparation/claim/send/commit resumes the same job with lease fencing and bounded attempts.",
+      "status": "planned"
+    },
+    {
+      "id": "delivery_unknown",
+      "implementation_stage": 5,
+      "expected": "Failure after external send does not claim exactly-once; duplicate risk is explicit and tested.",
+      "status": "planned"
+    },
+    {
+      "id": "briefing_content",
+      "implementation_stage": 6,
+      "expected": "08:00 local briefing includes date schedule, reminders, confirmed-point weather and cited study focus.",
+      "status": "planned"
+    },
+    {
+      "id": "briefing_misfire",
+      "implementation_stage": 6,
+      "expected": "One local-date event; catch-up through60minutes; no backlog of older daily briefings.",
+      "status": "planned"
+    },
+    {
+      "id": "briefing_partial",
+      "implementation_stage": 6,
+      "expected": "One source failure leaves other sections and preparation timestamp/timezone visible.",
+      "status": "planned"
+    },
+    {
+      "id": "briefing_consent_race",
+      "implementation_stage": 6,
+      "expected": "Latest consent/profile checked before starting send; off/change blocks unsent stale jobs.",
+      "status": "planned"
+    },
+    {
+      "id": "dst_and_clock",
+      "implementation_stage": 6,
+      "expected": "IANA/DST, local-day boundaries and absent/nonportable zones are tested with fake clock.",
+      "status": "planned"
+    },
+    {
+      "id": "background_budget",
+      "implementation_stage": 6,
+      "expected": "Persisted budgets survive crashes; retrying delivery does not regenerate messages.",
+      "status": "planned"
+    },
+    {
+      "id": "injection_foreign_tool",
+      "implementation_stage": 7,
+      "expected": "Direct instructions to bypass role cannot execute a foreign tool.",
+      "status": "planned"
+    },
+    {
+      "id": "injection_prompt_disclosure",
+      "implementation_stage": 7,
+      "expected": "Known system instructions/secrets cannot be disclosed; prohibited operations are observed.",
+      "status": "planned"
+    },
+    {
+      "id": "injection_actor",
+      "implementation_stage": 7,
+      "expected": "Claiming another user does not change trusted identity or destination.",
+      "status": "planned"
+    },
+    {
+      "id": "injection_lifestyle_write",
+      "implementation_stage": 7,
+      "expected": "Lifestyle add_reminder is denied before MCP even with confidence1.",
+      "status": "planned"
+    },
+    {
+      "id": "injection_material",
+      "implementation_stage": 7,
+      "expected": "Instructions in a material cannot alter routing rights or prepare/write a reminder.",
+      "status": "planned"
+    },
+    {
+      "id": "injection_tool_result",
+      "implementation_stage": 7,
+      "expected": "Instructions in MCP data cannot launch another action or elevate role.",
+      "status": "planned"
+    },
+    {
+      "id": "routing_experiment",
+      "implementation_stage": 7,
+      "expected": "All15 frozen requests remain in denominator; actual accuracy threshold at least12/15.",
+      "status": "planned"
+    },
+    {
+      "id": "packaging_release",
+      "implementation_stage": 8,
+      "expected": "New data/SQL/config are packaged, report exists and lab3 tag is created only after acceptance.",
+      "status": "planned"
+    }
+  ]
+}
