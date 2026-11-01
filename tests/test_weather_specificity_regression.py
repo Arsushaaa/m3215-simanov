@@ -208,5 +208,5 @@ async def test_all_flows_use_real_sql_discovery_and_substituted_weather_llm(
     verify.summarize(data)
     assert data["metrics"]["acceptance"] == "passed", data["attempts"]
     assert data["metrics"]["llm_calls"] == 10
-    assert data["metrics"]["session_started_llm_calls"] == 16
+    assert data["metrics"]["session_started_llm_calls"] == 32
     assert data["metrics"]["mcp_calls"] == 5

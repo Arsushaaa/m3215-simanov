@@ -1,6 +1,7 @@
 """New-session regression for place specificity after the teacher's feedback.
 
-Ten bounded LLM calls plus the unchanged six-case semantic smoke: maximum16.
+Second frozen round: ten weather calls plus six unchanged semantic cases.
+The previous16attempts remain frozen; this task has a maximum32attempts.
 Uses real model/MCP/isolated PostgreSQL; Telegram transport is substituted.
 Prepare/commit fresh manifests before API. Never overwrite or replay attempts.
 """
@@ -33,8 +34,10 @@ from scripts import lab2_adversarial_live as base
 from scripts.lab2_experiment import checkpoint, digest, timestamp
 
 ROOT = base.ROOT
-SMOKE_FOLDER = ROOT / "docs/evaluation/semantic-routing-smoke-20261101"
-MAXIMUM, SESSION_MAXIMUM = 10, 16
+SMOKE_FOLDER = ROOT / "docs/evaluation/semantic-routing-smoke-20261101-v3"
+MAXIMUM, COHORT_MAXIMUM, PRIOR_CALLS, SESSION_MAXIMUM = 10, 16, 16, 32
+PRIOR_SMOKE = ROOT / "docs/evaluation/semantic-routing-smoke-20261101"
+PRIOR_WEATHER = ROOT / "docs/evaluation/weather-specificity-20261101"
 CASES = (
     {
         "id": "rostov_followup",
@@ -59,12 +62,13 @@ CASES = (
     },
 )
 PLAN = {
-    "version": 1,
+    "version": 2,
     "session": "teacher-feedback-20261101",
     "cases": CASES,
     "maximum_llm_calls": MAXIMUM,
     "related_unchanged_smoke_maximum_llm_calls": 6,
     "maximum_session_llm_calls": SESSION_MAXIMUM,
+    "previous_started_llm_calls": PRIOR_CALLS,
     "maximum_mcp_calls_per_message": 1,
     "maximum_llm_calls_per_message": 2,
     "automatic_retries": False,
@@ -81,6 +85,23 @@ def related_smoke():
     return {
         "path": str(path.relative_to(ROOT)),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+def previous_runs():
+    smoke = json.loads((PRIOR_SMOKE / "results.json").read_text())
+    weather = json.loads((PRIOR_WEATHER / "results.json").read_text())
+    count = sum(len(row["calls"]) for row in smoke["attempts"])
+    count += sum(len(row["llm_calls"]) for row in weather["attempts"])
+    if count != PRIOR_CALLS or weather["status"] != "completed":
+        raise ValueError("Previous round's consumed slots changed or remain unresolved.")
+    return {
+        "started_llm_calls": count,
+        "files_sha256": {
+            str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for folder in (PRIOR_SMOKE, PRIOR_WEATHER)
+            for path in (folder / "manifest.json", folder / "results.json")
+        },
     }
 
 
@@ -110,7 +131,7 @@ async def prepare(settings, folder, *, quota=None, catalog=None):
     if target.exists():
         raise ValueError("Never overwrite a verification manifest.")
     quota = await base.quota_status(settings) if quota is None else quota
-    if type(quota.get("remaining")) is not int or quota["remaining"] < SESSION_MAXIMUM:
+    if type(quota.get("remaining")) is not int or quota["remaining"] < COHORT_MAXIMUM:
         raise ValueError("Sixteen remaining requests are required before this new session.")
     previous = related_smoke()
     owned = catalog is None
@@ -140,6 +161,7 @@ async def prepare(settings, folder, *, quota=None, catalog=None):
                 "provider_max_price": {"prompt": 0, "completion": 0},
                 "source_sha256": sources(),
                 "related_smoke": previous,
+                "previous_round": previous_runs(),
                 "catalog_sha256": digest({"tools": source.tools, "resources": source.resources}),
             },
             "quota": {key: quota.get(key) for key in ("limit", "used", "remaining")},
@@ -162,6 +184,7 @@ def validate(settings, folder):
         digest(manifest["plan"]) != digest(PLAN)
         or protocol["source_sha256"] != sources()
         or protocol["related_smoke"] != related_smoke()
+        or protocol["previous_round"] != previous_runs()
         or protocol["model"] != settings.openrouter_model
         or protocol["tool_mode"] != settings.llm_tool_mode
         or protocol["api_base"] != settings.openrouter_base_url
@@ -170,6 +193,7 @@ def validate(settings, folder):
     base.assert_committed(path)
     for name, expected in {
         **protocol["source_sha256"],
+        **protocol["previous_round"]["files_sha256"],
         protocol["related_smoke"]["path"]: protocol["related_smoke"]["sha256"],
     }.items():
         raw = subprocess.run(
@@ -183,7 +207,7 @@ def validate(settings, folder):
 class WeatherBudget(base.BudgetLLM):
     async def _call(self, phase, messages, temperature, kwargs):
         used = sum(len(row["llm_calls"]) for row in self.document["attempts"])
-        if used >= MAXIMUM or smoke_calls() + used >= SESSION_MAXIMUM:
+        if used >= MAXIMUM or PRIOR_CALLS + smoke_calls() + used >= SESSION_MAXIMUM:
             raise ModelError("Weather verification/session budget rejected before HTTP.")
         return await super()._call(phase, messages, temperature, kwargs)
 
@@ -201,7 +225,7 @@ def summarize(document):
         "cases": {"passed": sum(row["status"] == "passed" for row in rows), "total": len(CASES)},
         "acceptance": "passed" if passed else "not_passed",
         "llm_calls": len(calls),
-        "session_started_llm_calls": smoke_calls() + len(calls),
+        "session_started_llm_calls": PRIOR_CALLS + smoke_calls() + len(calls),
         "mcp_calls": sum(len(row["mcp_calls"]) for row in rows),
         "api_cost": sum(costs) if costs and all(value is not None for value in costs) else None,
         "real_telegram_http_calls": 0,
