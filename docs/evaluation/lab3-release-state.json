@@ -1,14 +1,14 @@
 {
   "kind": "lab3_release_state",
-  "generated_at": "2026-11-02T10:22:54.281125+00:00",
-  "status": "ready_for_local_submission",
+  "generated_at": "2026-11-02T11:04:51.582352+00:00",
+  "status": "ready_for_local_submission_after_additional_audit",
   "release_ready": true,
   "implementation": "ready",
   "automated_acceptance": {
-    "report": "docs/evaluation/lab3-release-checks-20261102.json",
-    "sha256": "c6eb0ea37220ae4992f29dd43df14a2365b5f6fa25ce1e57355e95474c5f1c0c",
+    "report": "docs/evaluation/lab3-hardened-checks-20261102.json",
+    "sha256": "dec84772737f0f7f464712e600ddaadb9a7337b8c1019a6e30473938763b095f",
     "suite": {
-      "passed": 1865,
+      "passed": 1877,
       "failed": 0,
       "skipped": 0
     },
@@ -22,25 +22,27 @@
     "remaining_percent": 0,
     "method": "Equal stage weights; stage effort differs."
   },
-  "protocol_commit": "d4dceb1",
-  "live_protocol": "docs/evaluation/lab3-experiment-v5-protocol.json",
-  "live_results": "docs/evaluation/lab3-experiment-v5-results.json",
-  "routing_correct": 13,
+  "protocol_commit": "a64f9f5",
+  "live_protocol": "docs/evaluation/lab3-experiment-v6-protocol.json",
+  "live_results": "docs/evaluation/lab3-experiment-v6-results.json",
+  "routing_correct": 12,
   "routing_denominator": 15,
-  "requested_tag": "lab3",
+  "requested_tag": "lab3-final-v2",
   "tag_created": true,
   "tag_scope": "Local annotated tag created with release commit; no remote publication requested.",
-  "runtime_smoke": "docs/evaluation/lab3-release-runtime-20261102.json",
-  "container_check": "docs/evaluation/lab3-release-container-20261102.json",
-  "quota": "docs/evaluation/lab3-release-quota-20261102.json",
+  "runtime_smoke": "docs/evaluation/lab3-hardened-runtime-20261102.json",
+  "container_check": "docs/evaluation/lab3-hardened-container-20261102.json",
+  "quota": "docs/evaluation/lab3-hardened-quota-20261102.json",
   "report": "docs/lab3-report.md",
   "defense": "docs/lab3-defense.md",
   "remaining": [],
   "old_tags_unchanged": true,
   "boundaries": [
-    "Real adversarial LLM/MCP/isolated PostgreSQL; Telegram transport substituted.",
-    "Runtime connection/health checked; Telegram UI not checked.",
-    "Literal prompt guard does not cover arbitrary paraphrases or encodings.",
-    "Two final ambiguous routes remain wrong; fixed denominator and passing threshold retained."
-  ]
+    "Real adaptive LLM/MCP/isolated PostgreSQL; Telegram transport substituted.",
+    "Confirmed reminders remain read-only; only pending cards can be cancelled.",
+    "Short time follow-up failed once; full request recovered. Failure is preserved.",
+    "Three final ambiguous routes remain wrong, original threshold and denominator retained.",
+    "Literal prompt guard and free language generation do not guarantee every future answer."
+  ],
+  "original_lab3_commit": "e7a6b909c4285e505492f5c4f53c08c58139e152"
 }
