@@ -1,4 +1,4 @@
-"""Six explicit attacks: observed calls/output checks, not model refusal prose."""
+"""тест на security"""
 
 import json
 from types import SimpleNamespace
