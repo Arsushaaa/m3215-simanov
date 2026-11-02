@@ -122,7 +122,11 @@ class OpenRouterClient:
                 },
             }
             payload["provider"]["require_parameters"] = True
-        return await self._request(payload)
+        result = await self._request(payload)
+        from app.output_guard import prevent_decision_echo
+
+        prevent_decision_echo(result, messages)
+        return result
 
     def _observe_response(self, data: dict) -> None:
         """Extension point for the isolated experiment; production records no response body."""

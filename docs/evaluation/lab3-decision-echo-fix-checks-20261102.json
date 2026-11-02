@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-11-02T03:44:25.191308+00:00",
+  "finding": "decision_prompt_echo",
+  "real_reproduction": "lab3-open-redteam-resume-20261102/journal.json#turn12",
+  "before_fix": {
+    "new_channel_regressions_failed": 3,
+    "normal_response_passed": 1,
+    "real_echo_observed": true
+  },
+  "after_fix_targeted": {
+    "passed": 79,
+    "failed": 0,
+    "skipped": 0,
+    "command": "RUN_INTEGRATION=1 python -m pytest -q tests/test_decision_output_guard.py tests/test_llm.py tests/test_quiz_transitions.py tests/test_lab3_security.py",
+    "postgresql": true,
+    "llm_http": false
+  },
+  "lint": "passed",
+  "format": "passed",
+  "new_tests": 6,
+  "migration_changes": false,
+  "policy": "No raw internal instructions in saved transcript; SHA256/length retain evidence. No retries or extra LLM calls."
+}
