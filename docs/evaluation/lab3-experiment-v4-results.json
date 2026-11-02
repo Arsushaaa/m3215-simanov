@@ -1,0 +1,567 @@
+{
+  "kind": "lab3_real_router_experiment",
+  "protocol_sha256": "daccb0d52803f1e086816bf633322b16ca413a9d41a64c012a6261aa62815fa8",
+  "cases": [
+    {
+      "id": "schedule_1",
+      "query": "Какие пары у меня завтра?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:55.437604+00:00",
+      "actual_target": "schedule",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "schedule",
+      "correct": true,
+      "duration_ms": 673,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "802d38337ecf519e27e80895829d41140a87592a4c8dea6efa190964c5d3ef3e",
+        "usage": {
+          "prompt_tokens": 714,
+          "completion_tokens": 50,
+          "total_tokens": 764,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-6848ddaa-7016-4c9b-ab57-a91ee55d9739",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"schedule\",\"reason\":\"schedule_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "schedule_2",
+      "query": "Напомни в пятницу в 17:00 отправить лабораторную.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:56.110931+00:00",
+      "actual_target": "schedule",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "schedule",
+      "correct": true,
+      "duration_ms": 653,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "1cf15c516116ded9d886c9f456f2a316184d1555d4e87d9082a857d08708cadd",
+        "usage": {
+          "prompt_tokens": 725,
+          "completion_tokens": 50,
+          "total_tokens": 775,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-c8eb41f4-d40b-4c44-ae46-b1c26c1d357b",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"schedule\",\"reason\":\"schedule_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "schedule_3",
+      "query": "Когда сегодня начинается первая пара?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:56.764549+00:00",
+      "actual_target": "schedule",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "schedule",
+      "correct": true,
+      "duration_ms": 641,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "bd45197d3f0ab67b779147c884840b67b82996df4f24debfbfed8dad634115bb",
+        "usage": {
+          "prompt_tokens": 712,
+          "completion_tokens": 50,
+          "total_tokens": 762,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-3e585a59-e5ba-4b14-80b8-5c9920c98326",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"schedule\",\"reason\":\"schedule_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "schedule_4",
+      "query": "Покажи расписание занятий на эту неделю.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:57.406466+00:00",
+      "actual_target": "schedule",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "schedule",
+      "correct": true,
+      "duration_ms": 679,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "027f90709e9439b76b53469bd5559087af8f6d44e949b37688e51822f10f3230",
+        "usage": {
+          "prompt_tokens": 718,
+          "completion_tokens": 50,
+          "total_tokens": 768,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-ac912a60-fe6a-408c-8fc2-69f30a20ff6b",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"schedule\",\"reason\":\"schedule_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "knowledge_1",
+      "query": "По учебным материалам объясни назначение MCP.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:58.085782+00:00",
+      "actual_target": "knowledge",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "knowledge",
+      "correct": true,
+      "duration_ms": 610,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "02ee1b55a57a7c140cd155addcf04a169d3e9b7434f3d6407f5349fb74a3a0de",
+        "usage": {
+          "prompt_tokens": 717,
+          "completion_tokens": 51,
+          "total_tokens": 768,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-2a651aa2-c126-46cf-b1dd-967bc632e09e",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"knowledge\",\"reason\":\"materials_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "knowledge_2",
+      "query": "Найди в материалах определение контекстного окна.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:58.704499+00:00",
+      "actual_target": "knowledge",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "knowledge",
+      "correct": true,
+      "duration_ms": 707,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "e18add4a4937383d1b8609f17e0c5716c8355d4d659287d07d02d95270972e25",
+        "usage": {
+          "prompt_tokens": 721,
+          "completion_tokens": 51,
+          "total_tokens": 772,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-72b1dfcc-3ad9-4c9d-91fe-a5715405e719",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"knowledge\",\"reason\":\"materials_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "knowledge_3",
+      "query": "Какие правила в конспекте относятся к структурированному выводу?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:44:59.420218+00:00",
+      "actual_target": "knowledge",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "knowledge",
+      "correct": true,
+      "duration_ms": 708,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "d432c3356f7a520e9fbcaf233b6e75653b0c78b1ad5dbc2c8ba36f2b65445d00",
+        "usage": {
+          "prompt_tokens": 723,
+          "completion_tokens": 51,
+          "total_tokens": 774,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-de91f77e-e127-41fa-8f97-3e06711f9ef7",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"knowledge\",\"reason\":\"materials_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "knowledge_4",
+      "query": "Составь краткое объяснение идемпотентности по учебным документам.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:00.136338+00:00",
+      "actual_target": "knowledge",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "knowledge",
+      "correct": true,
+      "duration_ms": 614,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "87a645d660c5f5ec3b4640b88ee9311c9469486058865eef5ffea33a6a5145ab",
+        "usage": {
+          "prompt_tokens": 725,
+          "completion_tokens": 51,
+          "total_tokens": 776,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-9d990d9d-a3ad-4404-9fba-8f2f9b2d2f4a",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"knowledge\",\"reason\":\"materials_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifestyle_1",
+      "query": "Какая сейчас погода в моём городе?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:00.752018+00:00",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "lifestyle",
+      "correct": true,
+      "duration_ms": 646,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "b271b09f3848db47a6d5ff309bf768e1985ca1c0adcc6dfc5844299a02529852",
+        "usage": {
+          "prompt_tokens": 715,
+          "completion_tokens": 52,
+          "total_tokens": 767,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-6d228559-34cb-4142-912b-f1c868852210",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"lifestyle\",\"reason\":\"weather_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifestyle_2",
+      "query": "Стоит ли сегодня брать зонт?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:01.406249+00:00",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "lifestyle",
+      "correct": true,
+      "duration_ms": 763,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "53737cc4585b88b619c0475952f0f56b8f81df8fa54c8525d17182acdc37e105",
+        "usage": {
+          "prompt_tokens": 716,
+          "completion_tokens": 52,
+          "total_tokens": 768,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-62d2be1d-99e9-4e93-8c36-a7b604d91bf6",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"lifestyle\",\"reason\":\"weather_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifestyle_3",
+      "query": "Сильный ли сейчас ветер?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:02.178204+00:00",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "lifestyle",
+      "correct": true,
+      "duration_ms": 621,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "dac4ef5ceb9b9efcff7ab829fa154f6921594c223a5742517b65cbf56d90babe",
+        "usage": {
+          "prompt_tokens": 712,
+          "completion_tokens": 52,
+          "total_tokens": 764,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-3bbb587d-d961-4dc9-965c-76727e005877",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"lifestyle\",\"reason\":\"weather_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lifestyle_4",
+      "query": "Как одеться с учётом текущей погоды?",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:02.815953+00:00",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "error": null,
+      "expected_target": "lifestyle",
+      "correct": true,
+      "duration_ms": 708,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "beb693bd6e1f1456ce21cc081eff462f425f403344a632e0d0e72f51c5687947",
+        "usage": {
+          "prompt_tokens": 718,
+          "completion_tokens": 52,
+          "total_tokens": 770,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-7c33e19b-bb5d-4a49-9186-7b0d045a389c",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"lifestyle\",\"reason\":\"weather_request\",\"confidence\":0.95}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "clarify_1",
+      "query": "Подготовь меня к завтрашнему дню.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:03.526111+00:00",
+      "actual_target": "schedule",
+      "confidence": 0.9,
+      "error": null,
+      "expected_target": "clarify",
+      "correct": false,
+      "duration_ms": 806,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "4be913c9120af2e4433771a57a1c259606b1893b8074e84dc918a9fcf6c862c6",
+        "usage": {
+          "prompt_tokens": 717,
+          "completion_tokens": 49,
+          "total_tokens": 766,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-561f4045-c492-4f90-899b-ba824eaceee3",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"schedule\",\"reason\":\"schedule_request\",\"confidence\":0.9}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "clarify_2",
+      "query": "Сделай что-нибудь полезное.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:04.340549+00:00",
+      "actual_target": "clarify",
+      "confidence": 0.9,
+      "error": null,
+      "expected_target": "clarify",
+      "correct": true,
+      "duration_ms": 1416,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "75ec1eb7a4db3ceea6d88f56fcea669a0d8c61ee86beb7ec28fadc4df30877fe",
+        "usage": {
+          "prompt_tokens": 714,
+          "completion_tokens": 50,
+          "total_tokens": 764,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-10ec9873-434a-4324-a7b2-a9872e91095c",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"clarify\",\"reason\":\"ambiguous\",\"confidence\":0.9}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "clarify_3",
+      "query": "Расскажи, что для меня важно сегодня.",
+      "state": "finished",
+      "started_at": "2026-11-02T03:45:05.765289+00:00",
+      "actual_target": "clarify",
+      "confidence": 0.5,
+      "error": null,
+      "expected_target": "clarify",
+      "correct": true,
+      "duration_ms": 617,
+      "http_attempts": 1,
+      "observation": {
+        "payload_sha256": "8e4fb11d1e507e7c0d9eb57090609675cb71058a8350a4b3834dd71bdd57d6e7",
+        "usage": {
+          "prompt_tokens": 717,
+          "completion_tokens": 50,
+          "total_tokens": 767,
+          "cost": 0
+        },
+        "response": {
+          "content": null,
+          "tool_calls": [
+            {
+              "type": "function",
+              "index": 0,
+              "id": "call-8fed2460-3bde-4c31-9b93-64c88c788f19",
+              "function": {
+                "name": "select_route",
+                "arguments": "{\"target\":\"clarify\",\"reason\":\"ambiguous\",\"confidence\":0.5}"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "scope": "One production Router decision per frozen query. No specialist/final LLM, MCP or Telegram calls.",
+  "created_at": "2026-11-02T03:44:55.155708+00:00",
+  "quota_before": {
+    "limit": 50,
+    "used": 0,
+    "remaining": 50
+  },
+  "summary": {
+    "correct": 14,
+    "denominator": 15,
+    "accuracy": 0.9333333333333333,
+    "started_attempts": 15,
+    "http_attempts": 15,
+    "status": "passed",
+    "api_cost_reported": 0
+  },
+  "quota_after": {
+    "limit": 50,
+    "used": 0,
+    "remaining": 50
+  }
+}
