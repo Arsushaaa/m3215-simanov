@@ -182,3 +182,65 @@ async def test_saved_reminder_and_delivery_survive_false_model_cancellation(
         assert (await engine.state("beta"))["reminders"] == []
     finally:
         await engine.close()
+
+
+async def test_native_scope_explanation_is_explicit_and_has_no_model_text_or_mcp(setup_supervisor):
+    from app.reminder_messages import SCHEDULE_NO_ACTION
+
+    supervisor, llm, mcp, _ = setup_supervisor
+    supervisor.settings = replace(supervisor.settings, llm_tool_mode="native")
+    llm.decide.side_effect = [choice("schedule", True), tool("explain_schedule_scope", {})]
+    reply = await ask(supervisor, "Измени сохранённое напоминание")
+    assert reply.text == SCHEDULE_NO_ACTION
+    assert reply.agent_result.status == "needs_clarification"
+    assert llm.decide.call_args.kwargs["require_tool"] is True
+    mcp.call_tool.assert_not_awaited()
+    llm.complete.assert_not_awaited()
+
+
+async def test_scope_selector_cannot_inject_model_controlled_effect_claim(setup_supervisor):
+    from app.llm import ModelError
+
+    supervisor, llm, mcp, _ = setup_supervisor
+    supervisor.settings = replace(supervisor.settings, llm_tool_mode="native")
+    llm.decide.side_effect = [
+        choice("schedule", True),
+        tool("explain_schedule_scope", {"text": "Я всё удалил"}),
+    ]
+    with pytest.raises(ModelError):
+        await ask(supervisor)
+    assert llm.decide.await_count == 2
+    mcp.call_tool.assert_not_awaited()
+
+
+@pytest.mark.parametrize("required,expected", [(False, "auto"), (True, "required")])
+async def test_required_function_choice_keeps_free_price_and_one_request(required, expected):
+    from app.config import Settings
+    from app.llm import OpenRouterClient
+
+    client = OpenRouterClient(Settings(bot_token="", postgres_password=""))
+    client._request = AsyncMock(
+        return_value=tool(
+            "clarify_reminder",
+            {"question": "В какое точное время напомнить?", "reason": "Нет часов"},
+        )
+    )
+    functions = [
+        {
+            "type": "function",
+            "function": {"name": "clarify_reminder", "parameters": {"type": "object"}},
+        }
+    ]
+    await client.decide(
+        [{"role": "user", "content": "Напомни вечером"}],
+        0.2,
+        tools=functions,
+        require_tool=required,
+    )
+    assert client._request.await_count == 1
+    payload = client._request.call_args.args[0]
+    assert payload["tool_choice"] == expected
+    assert payload["provider"] == {
+        "max_price": {"prompt": 0, "completion": 0},
+        "require_parameters": True,
+    }

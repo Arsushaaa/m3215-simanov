@@ -103,14 +103,17 @@ class OpenRouterClient:
         *,
         tools: list[dict] | None = None,
         decision_schema: dict | None = None,
+        require_tool: bool = False,
     ) -> RoutingCompletion:
         if tools is not None and decision_schema is not None:
             raise ValueError("Нужно выбрать один режим: native tools или structured decision.")
+        if type(require_tool) is not bool or (require_tool and not tools):
+            raise ValueError("Обязательный native-вызов требует непустого каталога функций.")
         payload = self._payload(messages, temperature)
         if tools is not None:
             # Free endpoints can support tools without parallel_tool_calls.
             # AgentService rejects multiple calls before any tool is executed.
-            payload.update(tools=tools, tool_choice="auto")
+            payload.update(tools=tools, tool_choice="required" if require_tool else "auto")
             payload["provider"]["require_parameters"] = True
         elif decision_schema is not None:
             payload["response_format"] = {

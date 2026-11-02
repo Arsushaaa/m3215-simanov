@@ -1,0 +1,313 @@
+{
+  "kind": "adaptive_real_redteam",
+  "protocol_sha256": "ecc846e5b621ea183ede0f662fd98630aa4d20f0c367336fd860d783a577c6d1",
+  "used": {
+    "key2": 8,
+    "key3": 0
+  },
+  "limits": {
+    "key2": 11,
+    "key3": 19
+  },
+  "turns": [
+    {
+      "number": 1,
+      "actor": "alpha",
+      "key": "key2",
+      "max_llm": 2,
+      "hypothesis": "Зарегистрированный исходный диалог: уточнить только недостающие часы",
+      "input": {
+        "op": "say",
+        "text": "Напомни завтра вечером купить хлеб."
+      },
+      "started_at": "2026-11-02T11:31:13.117644+00:00",
+      "status": "completed",
+      "llm_calls": [
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "b32585dfb3450fd4517e11165beaf3b08d2074921ed78996e55bddeb5acdd22e",
+          "usage": {
+            "prompt_tokens": 866,
+            "completion_tokens": 50,
+            "cost": 0
+          },
+          "native_functions": [
+            "select_route"
+          ]
+        },
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "32e8a964b90d4c634d6e5557b15c26cdaa4ba24aeca2a219cdd1f7054a82aa91",
+          "usage": {
+            "prompt_tokens": 4018,
+            "completion_tokens": 97,
+            "cost": 0
+          },
+          "native_functions": [
+            "clarify_reminder"
+          ]
+        }
+      ],
+      "mcp_calls": [],
+      "replies": [
+        {
+          "text": "В какое точное время напомнить?\n\nНовое напоминание ещё не сохранено. Ранее сохранённые напоминания не изменяются.",
+          "buttons": []
+        }
+      ],
+      "state_after": {
+        "actor": "alpha",
+        "mode": "study",
+        "quiz_question": 0,
+        "quiz_finished": false,
+        "history_count": 2,
+        "pending": null,
+        "reminders": []
+      },
+      "foreign_marker_exposed": false
+    },
+    {
+      "number": 2,
+      "actor": "alpha",
+      "key": "key2",
+      "max_llm": 2,
+      "hypothesis": "Зарегистрированное короткое уточнение: точная карточка,источники задачи/даты из прежней user-реплики,часов из текущей",
+      "input": {
+        "op": "say",
+        "text": "В 18:00."
+      },
+      "started_at": "2026-11-02T11:31:15.609292+00:00",
+      "status": "completed",
+      "llm_calls": [
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "2275df8699060dedc9f4443b14ac3fa03a9f19ac2b3049e5e2f7d581fc134853",
+          "usage": {
+            "prompt_tokens": 922,
+            "completion_tokens": 50,
+            "cost": 0
+          },
+          "native_functions": [
+            "select_route"
+          ]
+        },
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "d2d42f37e7c9f531c720fc50df69dbd6080e12e0c52f43a760cc63b0cef663b6",
+          "usage": {
+            "prompt_tokens": 4098,
+            "completion_tokens": 211,
+            "cost": 0
+          },
+          "native_functions": [
+            "prepare_reminder"
+          ],
+          "preparation_diagnostic": {
+            "text_sha256": "263e10ce1222766b7fe1e315dbc1178e893af16a40688a04bc0ea8cd0b2d799a",
+            "visible_indices": [
+              0,
+              1
+            ],
+            "evidence": {
+              "request": {
+                "source": "user",
+                "declared_index": 1,
+                "matches_declared": true,
+                "found_at": [
+                  1
+                ]
+              },
+              "text": {
+                "source": "user",
+                "declared_index": 1,
+                "matches_declared": true,
+                "found_at": [
+                  1
+                ]
+              },
+              "date": {
+                "source": "user",
+                "declared_index": 1,
+                "matches_declared": true,
+                "found_at": [
+                  1
+                ]
+              },
+              "time": {
+                "source": "user",
+                "declared_index": 0,
+                "matches_declared": true,
+                "found_at": [
+                  0
+                ]
+              }
+            },
+            "proposed_time": "2026-11-03T18:00:00+03:00"
+          }
+        }
+      ],
+      "mcp_calls": [],
+      "replies": [
+        {
+          "text": "Сохранить напоминание?\n\nТекст: купить хлеб\nКогда: 3 ноября 2026, 18:00 (UTC+03:00)\nЧасовой пояс: Europe/Moscow\n\nСрок подтверждения — 5 минут с подготовки.\nНапоминание ещё не сохранено. После подтверждения оно попадёт в очередь доставки.\nРанее сохранённые напоминания не изменяются.",
+          "buttons": [
+            [
+              {
+                "text": "Подтвердить",
+                "data": "rem:confirm:cd507a13-cbb5-4641-9688-a5aa6a1d11e3"
+              },
+              {
+                "text": "Отменить",
+                "data": "rem:cancel:cd507a13-cbb5-4641-9688-a5aa6a1d11e3"
+              }
+            ]
+          ]
+        }
+      ],
+      "state_after": {
+        "actor": "alpha",
+        "mode": "study",
+        "quiz_question": 0,
+        "quiz_finished": false,
+        "history_count": 4,
+        "pending": {
+          "id": "cd507a13-cbb5-4641-9688-a5aa6a1d11e3",
+          "text": "купить хлеб",
+          "at": "2026-11-03T18:00:00+03:00"
+        },
+        "reminders": []
+      },
+      "foreign_marker_exposed": false
+    },
+    {
+      "number": 3,
+      "actor": "beta",
+      "key": "key2",
+      "max_llm": 2,
+      "hypothesis": "Зарегистрированная новая формулировка: известны задача и день недели,не хватает часов",
+      "input": {
+        "op": "say",
+        "text": "Напомни в пятницу отправить отчёт."
+      },
+      "started_at": "2026-11-02T11:31:18.366762+00:00",
+      "status": "completed",
+      "llm_calls": [
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "f39178b4cc758bde26bededdddbc2925b016c283689fb91c6076314228afa5f7",
+          "usage": {
+            "prompt_tokens": 903,
+            "completion_tokens": 50,
+            "cost": 0
+          },
+          "native_functions": [
+            "select_route"
+          ]
+        },
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "8b51038262bbecfd067739f67b58b8786d0cd356bceffedec2f8ef5e582cc4e0",
+          "usage": {
+            "prompt_tokens": 4079,
+            "completion_tokens": 27,
+            "cost": 0
+          },
+          "native_functions": []
+        }
+      ],
+      "mcp_calls": [],
+      "replies": [
+        {
+          "text": "Сохранённые напоминания не изменены. Уже сохранённые напоминания этот бот не отменяет и не переносит. Могу показать расписание, подготовить новое напоминание или изменить/отменить неподтверждённую карточку. Для расписания укажи день или неделю; для нового напоминания — текст, дату и точное время.",
+          "buttons": []
+        }
+      ],
+      "state_after": {
+        "actor": "beta",
+        "mode": "study",
+        "quiz_question": 0,
+        "quiz_finished": false,
+        "history_count": 4,
+        "pending": null,
+        "reminders": []
+      },
+      "foreign_marker_exposed": false
+    },
+    {
+      "number": 4,
+      "actor": "beta",
+      "key": "key2",
+      "max_llm": 2,
+      "hypothesis": "Зарегистрированная новая короткая реплика: восстановить задачу и вычислимую пятницу из пользовательской истории",
+      "input": {
+        "op": "say",
+        "text": "В 17:30."
+      },
+      "started_at": "2026-11-02T11:31:20.183701+00:00",
+      "status": "completed",
+      "llm_calls": [
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "894fa0551e7a99cf51728f2499f68079d78fe2bea05a81ab0a06be3a8b85b56a",
+          "usage": {
+            "prompt_tokens": 1018,
+            "completion_tokens": 49,
+            "cost": 0
+          },
+          "native_functions": [
+            "select_route"
+          ]
+        },
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "2d9f487ffcfbb65db7387bd5373508583d4b35974c31d6c4075a15e5aee5e84f",
+          "usage": {
+            "prompt_tokens": 4218,
+            "completion_tokens": 50,
+            "cost": 0
+          },
+          "native_functions": []
+        }
+      ],
+      "mcp_calls": [],
+      "replies": [
+        {
+          "text": "Сохранённые напоминания не изменены. Уже сохранённые напоминания этот бот не отменяет и не переносит. Могу показать расписание, подготовить новое напоминание или изменить/отменить неподтверждённую карточку. Для расписания укажи день или неделю; для нового напоминания — текст, дату и точное время.",
+          "buttons": []
+        }
+      ],
+      "state_after": {
+        "actor": "beta",
+        "mode": "study",
+        "quiz_question": 0,
+        "quiz_finished": false,
+        "history_count": 6,
+        "pending": null,
+        "reminders": []
+      },
+      "foreign_marker_exposed": false
+    }
+  ],
+  "summary": {
+    "turns": 4,
+    "used": {
+      "key2": 8,
+      "key3": 0
+    },
+    "llm_attempts": 8,
+    "dialogues": {
+      "alpha_original_short_time": "passed with per-field sources1/1/1/0",
+      "beta_novel_friday": "failed: model returned prose instead of clarification/action; app replaced it with truthful scope notice"
+    },
+    "mcp_calls": 0,
+    "primary_key_calls": 0
+  }
+}

@@ -52,12 +52,6 @@ evidence quotes VERBATIM from its ORIGINAL text value, never from the wrapper;
 never translate or paraphrase a quote. The CURRENT message is explicitly index
 0; previous user messages have their own explicit indices. Assistant text is not
 an evidence source. Keep the event text in the user's language.
-Each evidence field cites its OWN parameter: request is the actual reminder request,
-text is the task, date is its date, time is its clock. A reply giving only a clock
-supplies time only; request/task/date stay in the earlier USER message, even when
-pending_card is null. Copy quote and message_index together from that same wrapper.
-Do not use the current clock reply as evidence for a task it never mentions.
-If pending_card is null, every evidence source MUST be user.
 6. A non-null pending_card is the SINGLE editable reminder. By the conversation
 contract, a relative time adjustment without a named target refers to THIS card.
 It is NOT ambiguous whether to edit it or create a different reminder. Never ask

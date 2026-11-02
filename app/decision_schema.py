@@ -3,7 +3,9 @@
 from copy import deepcopy
 
 
-def model_schema(schema, *, pending=False, inline_refs=False, message_indices=None):
+def model_schema(
+    schema, *, pending=False, inline_refs=False, message_indices=None, evidence_hints=False
+):
     result = deepcopy(schema)
     definitions = result.get("$defs", {})
     if message_indices is not None and "UserQuote" in definitions:
@@ -23,6 +25,15 @@ def model_schema(schema, *, pending=False, inline_refs=False, message_indices=No
         for name in ("text", "date", "time"):
             properties[name] = {"$ref": "#/$defs/UserQuote"}
         definitions.pop("PendingCardReference", None)
+
+    if evidence_hints and "ReminderEvidence" in definitions:
+        fields = definitions["ReminderEvidence"]["properties"]
+        for name, description in {
+            "text": "Source of task text, not a time-only reply.",
+            "date": "Source of the requested date.",
+            "time": "Source of the precise clock time.",
+        }.items():
+            fields[name]["description"] = description
 
     def hints(value):
         if isinstance(value, dict):

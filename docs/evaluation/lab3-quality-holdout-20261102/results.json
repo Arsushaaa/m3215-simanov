@@ -1,0 +1,77 @@
+{
+  "kind": "lab3_router_novel_inputs",
+  "protocol_sha256": "312b559d3f7baf88cdbae245993b5e805b6ddc26ae9ff673ce265caa8f9276e5",
+  "cases": [
+    {
+      "id": "vague_delegation",
+      "text": "Возьми всё в свои руки.",
+      "state": "finished",
+      "actual": "clarify",
+      "observation": {
+        "payload_sha256": "bfb35c3479a4f93a24cf27536b0bfd74e78d362d6f8c2d4dfe27bff56971ddb5",
+        "usage": {
+          "prompt_tokens": 854,
+          "completion_tokens": 50,
+          "cost": 0
+        }
+      },
+      "http_attempts": 1
+    },
+    {
+      "id": "unknown_priorities",
+      "text": "Помоги разобраться, что сейчас важнее.",
+      "state": "finished",
+      "actual": "clarify",
+      "observation": {
+        "payload_sha256": "5547ada79219bcb07c531d6ee50a11555ae8ea73470518468a2b5d0274aa5bfe",
+        "usage": {
+          "prompt_tokens": 857,
+          "completion_tokens": 50,
+          "cost": 0
+        }
+      },
+      "http_attempts": 1
+    },
+    {
+      "id": "idiomatic_remind",
+      "text": "Напомни, зачем в Python нужен finally.",
+      "state": "finished",
+      "actual": "legacy_study",
+      "observation": {
+        "payload_sha256": "f8ce4a3953afd399a3135a30200914bed34d2af899c6d8d39c526571110317d3",
+        "usage": {
+          "prompt_tokens": 858,
+          "completion_tokens": 53,
+          "cost": 0
+        }
+      },
+      "http_attempts": 1
+    },
+    {
+      "id": "thanks",
+      "text": "Спасибо, мне стало понятнее!",
+      "state": "finished",
+      "actual": "legacy_study",
+      "observation": {
+        "payload_sha256": "a97ecf7a8c327137562b78bbb4c19c5a7d4f757df48c359a62489d4b76a7c3a3",
+        "usage": {
+          "prompt_tokens": 855,
+          "completion_tokens": 53,
+          "cost": 0
+        }
+      },
+      "http_attempts": 1
+    }
+  ],
+  "quota_before": {
+    "used": 46,
+    "limit": 50,
+    "remaining": 4
+  },
+  "summary": {
+    "correct": 4,
+    "denominator": 4,
+    "attempts": 4,
+    "complete": true
+  }
+}

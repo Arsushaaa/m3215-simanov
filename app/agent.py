@@ -210,6 +210,7 @@ class AgentService:
                             pending=context is not None and context.pending is not None,
                             inline_refs=True,
                             message_indices=message_indices,
+                            evidence_hints=self._use_evidence_hints(),
                         ),
                     },
                 }
@@ -297,6 +298,15 @@ class AgentService:
                 ),
             }
         )
+
+    def _use_evidence_hints(self):
+        return False
+
+    def _requires_native_tool(self):
+        return False
+
+    def _local_native_decision(self, name, arguments):
+        return None
 
     def _clarification_choices(self):
         return None
@@ -453,6 +463,7 @@ class AgentService:
                     decision_schema,
                     pending=context is not None and context.pending is not None,
                     message_indices=indices,
+                    evidence_hints=self._use_evidence_hints(),
                 )
                 if structured
                 else tools
@@ -478,7 +489,12 @@ class AgentService:
                 raise ModelError(INVALID_DECISION)
             decision = parse_decision(result.text)
         else:
-            result = await self.llm.decide(messages, user.temperature, tools=tools)
+            result = await self.llm.decide(
+                messages,
+                user.temperature,
+                tools=tools,
+                **({"require_tool": True} if self._requires_native_tool() else {}),
+            )
             if len(result.tool_calls) > 1:
                 trace.decision, trace.status, trace.reason = (
                     "clarify",
@@ -503,7 +519,10 @@ class AgentService:
                 name = call["function"]["name"]
                 if name not in {tool["function"]["name"] for tool in tools}:
                     raise ValueError("Undiscovered native function")
-                if name == "prepare_reminder":
+                local = self._local_native_decision(name, arguments)
+                if local is not None:
+                    decision = local
+                elif name == "prepare_reminder":
                     prepared = ReminderPreparation.model_validate(arguments)
                     decision = ReminderDecision(
                         action="call_tool",

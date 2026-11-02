@@ -1,0 +1,33 @@
+{
+  "checked_at": "2026-11-02T11:35:28.433500+00:00",
+  "http_status": 200,
+  "model": "nvidia/nemotron-3.5-super-vl:free",
+  "endpoints": [
+    {
+      "name": "Nvidia | nvidia/nemotron-3.5-super-vl-20261015:free",
+      "supported_parameters": [
+        "reasoning",
+        "include_reasoning",
+        "temperature",
+        "max_tokens",
+        "seed",
+        "top_p",
+        "tools",
+        "tool_choice",
+        "response_format",
+        "structured_outputs"
+      ],
+      "supports_tool_choice": {
+        "none": true,
+        "auto": true,
+        "required": true,
+        "function": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0",
+        "discount": 0
+      }
+    }
+  ]
+}

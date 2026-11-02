@@ -169,3 +169,27 @@ def test_weather_city_instructions_remain_the_discovered_contract(model, inline_
         elif isinstance(node, list):
             pending.extend(node)
     assert city_descriptions and all(value == canonical for value in city_descriptions)
+
+
+@pytest.mark.parametrize("pending", [False, True])
+@pytest.mark.parametrize("inline", [False, True])
+def test_scoped_evidence_hints_survive_reference_specialization(pending, inline):
+    from app.mcp.contracts import ReminderPreparation
+
+    canonical = ReminderPreparation.model_json_schema()
+    before = deepcopy(canonical)
+    output = model_schema(canonical, pending=pending, inline_refs=inline, evidence_hints=True)
+    fields = (
+        output["properties"]["evidence"]["properties"]
+        if inline
+        else output["$defs"]["ReminderEvidence"]["properties"]
+    )
+    assert all(fields[name].get("description") for name in ("text", "date", "time"))
+    assert canonical == before
+    legacy = model_schema(canonical, pending=pending, inline_refs=inline)
+    legacy_fields = (
+        legacy["properties"]["evidence"]["properties"]
+        if inline
+        else legacy["$defs"]["ReminderEvidence"]["properties"]
+    )
+    assert all("description" not in legacy_fields[name] for name in ("text", "date", "time"))
