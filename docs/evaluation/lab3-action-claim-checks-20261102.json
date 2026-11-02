@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-11-02T10:51:09.885858+00:00",
+  "finding": "false_saved_reminder_cancellation",
+  "live_reproduction": "lab3-language-redteam-20261102/journal.json#turn5",
+  "initial_regressions": {
+    "failed": 5,
+    "passed": 0,
+    "model_http": false
+  },
+  "intermediate_rejected_run": {
+    "failed": 2,
+    "passed": 90,
+    "reason": "Clarification allowlist existed but call branch still used old helper; linked and rerun."
+  },
+  "targeted_final": {
+    "passed": 105,
+    "failed": 0,
+    "skipped": 0,
+    "command": "RUN_INTEGRATION=1 python -m pytest -q tests/test_schedule_action_claims.py tests/test_reminder_edits.py tests/test_confirmations.py tests/test_supervisor.py tests/test_lab3_redteam_console.py tests/test_lab3_experiment.py tests/test_lab3_release.py",
+    "postgresql": true,
+    "mcp": true,
+    "model_http": false
+  },
+  "scope": "Schedule model-only prose and clarification text cannot establish an effect; no-pending cancellation is explicit no-op. Existing saved reminders are read-only. No intent regex, extra LLM/MCP, SQL or dependencies."
+}

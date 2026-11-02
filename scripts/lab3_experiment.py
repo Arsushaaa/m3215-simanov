@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+from dotenv import dotenv_values
+
 from app.config import Settings
 from app.llm import OpenRouterClient
 from app.routing.contracts import AgentRequest
@@ -25,8 +27,8 @@ from scripts.semantic_routing_smoke import quota_status
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = "docs/evaluation/lab3-routing.json"
-DEFAULT_PROTOCOL = "docs/evaluation/lab3-experiment-v5-protocol.json"
-DEFAULT_OUTPUT = "docs/evaluation/lab3-experiment-v5-results.json"
+DEFAULT_PROTOCOL = "docs/evaluation/lab3-experiment-v6-protocol.json"
+DEFAULT_OUTPUT = "docs/evaluation/lab3-experiment-v6-results.json"
 MODEL = "nvidia/nemotron-3.5-super-vl:free"
 
 
@@ -59,13 +61,14 @@ def source_hashes(root=ROOT):
     return {p.relative_to(root).as_posix(): digest(p.read_bytes()) for p in paths if p.is_file()}
 
 
-def freeze(path, root=ROOT):
+def freeze(path, root=ROOT, *, key_env="OPENROUTER_API_KEY"):
     if Path(path).exists():
         raise ValueError("Protocol already exists; never overwrite a preregistration")
     dataset = json.loads((root / DATASET).read_text())
     assert len(dataset["cases"]) == 15
     protocol = {
         "kind": "lab3_router_preregistration",
+        "credential_env": key_env,
         "created_at": datetime.now(UTC).isoformat(),
         "model": MODEL,
         "temperature": 0.2,
@@ -179,6 +182,7 @@ async def _run(
     output_path,
     *,
     env_file=".env",
+    key_env="OPENROUTER_API_KEY",
     client_type=MeasuredClient,
     quota_reader=quota_status,
     require_commit=True,
@@ -199,7 +203,14 @@ async def _run(
         ).stdout
         if stored != protocol_path.read_bytes():
             raise ValueError("Commit protocol before real API")
+    if key_env != protocol.get("credential_env", "OPENROUTER_API_KEY"):
+        raise ValueError("Credential slot differs from preregistration")
     settings = Settings.load(env_file, require_llm=True)
+    if key_env != "OPENROUTER_API_KEY":
+        key = dotenv_values(env_file, interpolate=False).get(key_env)
+        if not key:
+            raise ValueError("Registered credential variable is missing")
+        settings = replace(settings, openrouter_api_key=key)
     if settings.openrouter_base_url != protocol["api_base"]:
         raise ValueError("Unexpected OpenRouter endpoint")
     settings = replace(
@@ -316,12 +327,20 @@ def main():
     parser.add_argument("--protocol", default=DEFAULT_PROTOCOL)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument("--env-file", default=".env")
+    parser.add_argument(
+        "--key-env",
+        choices=("OPENROUTER_API_KEY", "OPENROUTER_API_KEY_2", "OPENROUTER_API_KEY_3"),
+        default="OPENROUTER_API_KEY",
+        help="Explicit registered credential variable; no automatic key fallback",
+    )
     args = parser.parse_args()
     if args.action == "freeze":
-        freeze(args.protocol)
+        freeze(args.protocol, key_env=args.key_env)
         print("Protocol frozen. Commit before run.")
         return 0
-    result = asyncio.run(run(args.protocol, args.output, env_file=args.env_file))
+    result = asyncio.run(
+        run(args.protocol, args.output, env_file=args.env_file, key_env=args.key_env)
+    )
     print(json.dumps(result["summary"], ensure_ascii=False))
     if result.get("blocked_reason"):
         print(result["blocked_reason"])

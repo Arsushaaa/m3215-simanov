@@ -139,3 +139,29 @@ async def test_interrupted_started_case_is_not_retried_or_dropped(frozen):
     assert result["cases"][0]["correct"] is False
     assert FakeClient.instances[0].attempts == 14
     assert result["summary"]["denominator"] == 15
+
+
+async def test_registered_extra_key_is_explicit_and_primary_never_used(frozen, tmp_path):
+    path, output, protocol = frozen
+    protocol["credential_env"] = "OPENROUTER_API_KEY_3"
+    experiment.save(path, protocol)
+    env_file = tmp_path / "keys.env"
+    env_file.write_text("OPENROUTER_API_KEY_3=synthetic-third-key\n")
+    quota = AsyncMock(return_value={"remaining": 43})
+    with pytest.raises(ValueError, match="Credential slot"):
+        await experiment.run(
+            path, output, client_type=FakeClient, quota_reader=quota, require_commit=False
+        )
+    quota.assert_not_awaited()
+    await experiment.run(
+        path,
+        output,
+        env_file=env_file,
+        key_env="OPENROUTER_API_KEY_3",
+        client_type=FakeClient,
+        quota_reader=quota,
+        require_commit=False,
+    )
+    assert quota.call_args.args[0].openrouter_api_key == "synthetic-third-key"
+    assert FakeClient.instances[0].settings.openrouter_api_key == "synthetic-third-key"
+    assert FakeClient.instances[0].attempts == 15

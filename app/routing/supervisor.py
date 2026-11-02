@@ -187,7 +187,7 @@ class Supervisor:
                 error = None
                 if target == "knowledge":
                     status, error = "failed", "SOURCE_UNAVAILABLE"
-                elif target == "clarify" or reply.reminder is not None:
+                elif target == "clarify" or reply.reminder is not None or reply.needs_clarification:
                     status = "needs_clarification"
                 if scoped.observation is not None:
                     kind, name, raw = scoped.observation

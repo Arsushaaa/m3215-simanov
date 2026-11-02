@@ -33,7 +33,7 @@ from app.mcp.contracts import (
     validate_reminder_time,
 )
 from app.reminder_grounding import indexed_history, indexed_message, user_sources, validate_evidence
-from app.reminder_messages import BUTTON_REQUIRED, REMINDER_CLARIFY
+from app.reminder_messages import BUTTON_REQUIRED, NO_PENDING_REMINDER, REMINDER_CLARIFY
 from app.routing.policy import PolicyDenied
 from app.time_display import format_datetime
 from app.weather_reply import checked_weather_reply
@@ -138,6 +138,7 @@ class AgentReply:
     revision: int | None = None
     confirmation_epoch: int | None = None
     agent_result: object | None = field(default=None, repr=False)
+    needs_clarification: bool = False
 
 
 @dataclass
@@ -165,7 +166,7 @@ def _reminder_clarification(trace, text, *, code=None):
     trace.decision, trace.target, trace.status = "clarify", "add_reminder", "CLARIFY"
     trace.reason = "Нужны параметры напоминания; запись не выполнялась."
     trace.error_code = code
-    return AgentReply(text)
+    return AgentReply(text, needs_clarification=True)
 
 
 class AgentService:
@@ -230,6 +231,8 @@ class AgentService:
             parameters = model.model_json_schema()
             parameters["properties"].pop("action")
             parameters["required"].remove("action")
+            if name == "clarify_reminder" and self._clarification_choices() is not None:
+                parameters["properties"]["question"]["enum"] = list(self._clarification_choices())
             tools.append(
                 {
                     "type": "function",
@@ -294,6 +297,22 @@ class AgentService:
                 ),
             }
         )
+
+    def _clarification_choices(self):
+        return None
+
+    def _clarification_reply(self, question, trace):
+        choices = self._clarification_choices()
+        if choices is not None and question not in choices:
+            raise ModelError("Модель предложила некорректное уточнение. Напоминания не изменены.")
+        return _reminder_clarification(
+            trace,
+            question + "\n\nНовое напоминание ещё не сохранено. "
+            "Ранее сохранённые напоминания не изменяются.",
+        )
+
+    def _plain_reply(self, text, truncated, trace):
+        return AgentReply(text, truncated, needs_clarification=trace.status == "CLARIFY")
 
     async def _revoke(self, context, user, message_id):
         if context is None or context.pending is None or context.revoked:
@@ -423,6 +442,10 @@ class AgentService:
             indices = range(1 + sum(item["role"] == "user" for item in recent))
             tools = self._tools(context, message_indices=indices)
             decision_schema = AgentDecision.model_json_schema()
+            if self._clarification_choices() is not None:
+                decision_schema["$defs"]["ClarifyReminderDecision"]["properties"]["question"][
+                    "enum"
+                ] = list(self._clarification_choices())
             if hasattr(self.mcp, "decision_schema"):
                 decision_schema = self.mcp.decision_schema(decision_schema)
             schema = (
@@ -467,7 +490,7 @@ class AgentService:
                 if not isinstance(result.text, str) or not result.text.strip():
                     raise ModelError(INVALID_DECISION)
                 trace.status, trace.reason = "OK", "Модель сформировала обычный ответ."
-                return AgentReply(result.text, result.truncated)
+                return self._plain_reply(result.text, result.truncated, trace)
             if result.text is not None and result.text.strip():
                 raise ModelError(INVALID_DECISION)
             try:
@@ -536,13 +559,15 @@ class AgentService:
             )
             return AgentReply(BUTTON_REQUIRED if current is not None else REMINDER_CLARIFY)
         if isinstance(decision, CancelReminderDecision):
+            if context is None or context.pending is None:
+                trace.decision, trace.target, trace.status = "clarify", "add_reminder", "CLARIFY"
+                trace.reason = "Нет неподтверждённой карточки; сохранённые записи не менялись."
+                return AgentReply(NO_PENDING_REMINDER, needs_clarification=True)
             trace.decision, trace.target, trace.status = "clarify", "add_reminder", "CANCELLED"
             trace.reason = "Неподтверждённое действие отозвано по просьбе пользователя."
             return AgentReply("Подтверждение отменено. Новое напоминание не сохранено.")
         if isinstance(decision, ClarifyReminderDecision):
-            return _reminder_clarification(
-                trace, decision.question + "\n\nНапоминание ещё не сохранено."
-            )
+            return self._clarification_reply(decision.question, trace)
         trace.decision = decision.action
         if isinstance(decision, (RespondDecision, ClarifyDecision)):
             trace.status = "OK" if isinstance(decision, RespondDecision) else "CLARIFY"
@@ -551,9 +576,10 @@ class AgentService:
                 if trace.status == "OK"
                 else "Нужны уточнения запроса."
             )
-            return AgentReply(
+            return self._plain_reply(
                 decision.text if isinstance(decision, RespondDecision) else decision.question,
                 result.truncated,
+                trace,
             )
         trace.target = decision.uri if isinstance(decision, ResourceDecision) else decision.name
         if isinstance(decision, ResourceDecision):
