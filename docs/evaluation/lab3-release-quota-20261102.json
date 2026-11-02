@@ -1,0 +1,43 @@
+{
+  "checked_at": "2026-11-02T10:18:34.861074+00:00",
+  "keys": [
+    {
+      "variable": "OPENROUTER_API_KEY",
+      "api_daily_requests": {
+        "used": 30,
+        "limit": 50,
+        "remaining": 20
+      },
+      "started_generations_this_chat": 30,
+      "remaining_local_budget": 20,
+      "effective_remaining_without_external_consumption": 20
+    },
+    {
+      "variable": "OPENROUTER_API_KEY_2",
+      "api_daily_requests": {
+        "used": 17,
+        "limit": 50,
+        "remaining": 33
+      },
+      "started_generations_this_chat": 17,
+      "remaining_local_budget": 33,
+      "effective_remaining_without_external_consumption": 33
+    },
+    {
+      "variable": "OPENROUTER_API_KEY_3",
+      "api_daily_requests": {
+        "used": 7,
+        "limit": 50,
+        "remaining": 43
+      },
+      "started_generations_this_chat": 7,
+      "remaining_local_budget": 43,
+      "effective_remaining_without_external_consumption": 43
+    }
+  ],
+  "absent_variable": "OPENROUTER_API_KEY_1",
+  "total_generations_this_chat": 54,
+  "primary_reserve_required": 15,
+  "primary_reserve_preserved": true,
+  "notes": "Quota metadata may lag. Local counts include all started generations from committed protocols; external account usage cannot be inferred. No generation was made by this metadata read."
+}

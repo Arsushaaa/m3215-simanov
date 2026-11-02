@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-11-02T10:23:55.580695+00:00",
+  "status": "passed",
+  "health_status": 200,
+  "health": {
+    "status": "ok",
+    "database": "ok",
+    "polling": "running",
+    "reminders": "running"
+  },
+  "migrations": [
+    "001_dialog.sql",
+    "002_quiz_progress.sql",
+    "003_temperature_range.sql",
+    "004_incomplete_answers.sql",
+    "005_response_parts.sql",
+    "006_agent_state.sql",
+    "007_tracing.sql",
+    "008_notifications.sql",
+    "009_delivery_receipts.sql",
+    "010_briefing_cache.sql"
+  ],
+  "schedule_file": "data/schedule-demo.json",
+  "model": "nvidia/nemotron-3.5-super-vl:free",
+  "tool_mode": "native",
+  "llm_generations": 0,
+  "test_messages_sent": 0,
+  "boundary": "Actual startup, Telegram connection and health only. UI not checked, no user city or opt-in selected."
+}

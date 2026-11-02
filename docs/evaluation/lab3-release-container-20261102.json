@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-11-02T10:17:47.102915+00:00",
+  "image": "labbi:lab3",
+  "image_id": "sha256:55701576634c72f56ae6ae1ac1b4be7b5f12aef097fe629e6aeea51ab093412c",
+  "source_hashes_match": true,
+  "files": {
+    "app/llm.py": "badadd279c4b9e2c783515412d1ddbcfc6e56500049a0ab1ab230fcde1a33ff0",
+    "app/output_guard.py": "871d27d966d77ee7c3f4a5c1ca5b6d63e1c20afeaf151d465d428ee106ec8c57",
+    "app/prompts.py": "1a723e4203c2baaeccae04cdeea770e2e6869405b9cbfb5482e8647b8a4064e6",
+    "app/migrations/001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+    "app/migrations/002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+    "app/migrations/003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+    "app/migrations/004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+    "app/migrations/005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771",
+    "app/migrations/006_agent_state.sql": "70ff420027af200a9eba7c83f63ca46a17fb0e97c2ec5576972be5859f241212",
+    "app/migrations/007_tracing.sql": "665387ed7d8674f5e93e52426ead6f4a87e48f2084bd3c5a6e3c08653990bc16",
+    "app/migrations/008_notifications.sql": "18ae121a2dadef0405e0bc2cde641d7f67f1f11ad334e7a03fa7608aa2dc08f9",
+    "app/migrations/009_delivery_receipts.sql": "869e0397c5ce624e3b9a8459b7aadc945e32b8601dcacc557ebe53c27cf04b0e",
+    "app/migrations/010_briefing_cache.sql": "2b80285026dc4f382af7878fc774fdd0827089ff3b8f66793145be6b5419c001",
+    "data/schedule.json": "25805ffbdf9e96f9351184bcc6353b5a32675f26ea0e8e22583e223b4a5b5a48",
+    "data/schedule-demo.json": "29ae115cded9221cd937b21315c3e6e29022172656cd839590d3e6d482320581",
+    "data/materials/llm-context.md": "ecaf87e152ace018aaf62b6e247f67ca53ee9596b276e126f22473d4b6405152",
+    "data/materials/mcp-basics.md": "90ea07e23d685f8e8cfd2e7bc878e1ba08ec287123a887a167b80eafc819aeae",
+    "data/materials/registry.json": "5a9b24c37217f90a5b70c62dd88c4362587070742bf181404441b58ce917f94a",
+    "data/materials/reliable-delivery.md": "dfc35895fa2bddbee4d6a5d2cd6ae719e5d2d897c92ed462804dd639972d365c"
+  },
+  "archive_created": true,
+  "llm_calls": 0,
+  "telegram_http": false
+}
