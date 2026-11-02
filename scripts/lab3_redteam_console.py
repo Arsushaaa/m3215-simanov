@@ -112,6 +112,12 @@ async def freeze():
     quotas = await asyncio.gather(
         *(read_quota(replace(settings, openrouter_api_key=keys[s])) for s in SLOTS)
     )
+    limits = {}
+    for slot, quota in zip(SLOTS, quotas, strict=True):
+        remaining = quota.get("remaining")
+        if type(remaining) is not int or not 0 <= remaining <= 50:
+            raise ValueError("Valid remaining free quota required before registration")
+        limits[slot] = remaining
     save(
         FOLDER / "protocol.json",
         {
@@ -121,7 +127,8 @@ async def freeze():
             "credential_slots": SLOTS,
             "initial_quotas": dict(zip(SLOTS, quotas, strict=True)),
             "maximum_attempts_per_key": 50,
-            "maximum_attempts_total": 100,
+            "maximum_attempts_by_slot": limits,
+            "maximum_attempts_total": sum(limits.values()),
             "primary_key_reserved": "OPENROUTER_API_KEY" not in SLOTS.values(),
             "network_family": "IPv4: development host has no IPv6 route; no model payload change",
             "model": settings.openrouter_model,
@@ -171,7 +178,8 @@ class SlotClient(OpenRouterClient):
         if turn is None:
             raise ModelError("Unattributed model request refused")
         used = self.engine.document["used"][self.slot]
-        if used >= 50 or len(turn["llm_calls"]) >= turn["max_llm"]:
+        limit = self.engine.document.get("limits", {}).get(self.slot, 50)
+        if used >= limit or len(turn["llm_calls"]) >= turn["max_llm"]:
             raise ModelError("Red-team model budget exhausted before HTTP")
         self.engine.document["used"][self.slot] += 1
         record = {"slot": self.slot, "state": "started", "payload_sha256": digest(encoded(payload))}
@@ -503,8 +511,13 @@ async def run():
         "kind": "adaptive_real_redteam",
         "protocol_sha256": digest(path.read_bytes()),
         "used": dict.fromkeys(SLOTS, 0),
+        "limits": protocol.get("maximum_attempts_by_slot", dict.fromkeys(SLOTS, 50)),
         "turns": [],
     }
+    if set(document["limits"]) != set(SLOTS) or any(
+        type(limit) is not int or not 0 <= limit <= 50 for limit in document["limits"].values()
+    ):
+        raise ValueError("Invalid registered credential budgets")
     with isolated_database(settings) as isolated:
         engine = Engine(isolated, keys, document)
         try:

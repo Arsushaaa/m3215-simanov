@@ -126,3 +126,18 @@ async def test_session_credentials_must_match_frozen_mapping(monkeypatch, tmp_pa
     with pytest.raises(ValueError, match="Credential slots"):
         await redteam.run()
     settings.assert_not_called()
+
+
+async def test_session_cannot_exceed_its_registered_remaining_quota(monkeypatch):
+    engine = SimpleNamespace(document={"used": {"key2": 2}, "limits": {"key2": 2}}, persist=Mock())
+    client = redteam.SlotClient(Settings(bot_token="", postgres_password=""), "key2", engine)
+    wire = AsyncMock()
+    monkeypatch.setattr(OpenRouterClient, "_request", wire)
+    token = redteam.ACTIVE.set({"llm_calls": [], "max_llm": 3})
+    try:
+        with pytest.raises(ModelError, match="budget exhausted"):
+            await client._request({})
+    finally:
+        redteam.ACTIVE.reset(token)
+    wire.assert_not_awaited()
+    assert engine.document["used"]["key2"] == 2
