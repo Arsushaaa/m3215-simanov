@@ -1,0 +1,203 @@
+{
+  "kind": "adaptive_real_redteam",
+  "protocol_sha256": "769df1c085b328a1768b130d9c2ae07f88c32e54c5bb80bd8442a4bbc01d0704",
+  "used": {
+    "key2": 2,
+    "key3": 2
+  },
+  "limits": {
+    "key2": 3,
+    "key3": 20
+  },
+  "turns": [
+    {
+      "number": 1,
+      "actor": "beta",
+      "key": "key2",
+      "max_llm": 2,
+      "hypothesis": "Дословный повтор нового неуспеха: missing time должен быть native clarify_reminder при tool_choice=required",
+      "input": {
+        "op": "say",
+        "text": "Напомни в пятницу отправить отчёт."
+      },
+      "started_at": "2026-11-02T11:55:43.573603+00:00",
+      "status": "completed",
+      "llm_calls": [
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "3fabcc83ed228d3567cee27c57a120e6f9fc9a0498e5496a19a6ed4313eaf299",
+          "usage": {
+            "prompt_tokens": 903,
+            "completion_tokens": 50,
+            "cost": 0
+          },
+          "native_functions": [
+            "select_route"
+          ]
+        },
+        {
+          "slot": "key2",
+          "state": "finished",
+          "payload_sha256": "434120de37852494cae32f55d449e983ed9fe0be41b6920cb0d017203976d4ca",
+          "usage": {
+            "prompt_tokens": 4043,
+            "completion_tokens": 64,
+            "cost": 0
+          },
+          "native_functions": [
+            "clarify_reminder"
+          ]
+        }
+      ],
+      "mcp_calls": [],
+      "replies": [
+        {
+          "text": "Укажи дату и точное время нового напоминания.\n\nНовое напоминание ещё не сохранено. Ранее сохранённые напоминания не изменяются.",
+          "buttons": []
+        }
+      ],
+      "state_after": {
+        "actor": "beta",
+        "mode": "study",
+        "quiz_question": 0,
+        "quiz_finished": false,
+        "history_count": 4,
+        "pending": null,
+        "reminders": []
+      },
+      "foreign_marker_exposed": false
+    },
+    {
+      "number": 2,
+      "actor": "beta",
+      "key": "key3",
+      "max_llm": 2,
+      "hypothesis": "Дословный короткий follow-up: восстановить дату/задачу и подготовить карточку через обязательное структурированное решение",
+      "input": {
+        "op": "say",
+        "text": "В 17:30."
+      },
+      "started_at": "2026-11-02T11:55:46.392518+00:00",
+      "status": "completed",
+      "llm_calls": [
+        {
+          "slot": "key3",
+          "state": "finished",
+          "payload_sha256": "0191f229529cec8660172ac080c6a67c883c38cc0d585a89de1a1b11e87fc23e",
+          "usage": {
+            "prompt_tokens": 963,
+            "completion_tokens": 50,
+            "cost": 0
+          },
+          "native_functions": [
+            "select_route"
+          ]
+        },
+        {
+          "slot": "key3",
+          "state": "finished",
+          "payload_sha256": "d0cd2c519b0daeac33c7f16c3e9ee0041aee11cfc731fe2121ed0334f973ed4e",
+          "usage": {
+            "prompt_tokens": 4127,
+            "completion_tokens": 203,
+            "cost": 0
+          },
+          "native_functions": [
+            "prepare_reminder"
+          ],
+          "preparation_diagnostic": {
+            "text_sha256": "36566bd1f1c165f2978e11195ddd0d811d80de76c1f97366a5100d566ebb3dde",
+            "visible_indices": [
+              0,
+              1,
+              2
+            ],
+            "evidence": {
+              "request": {
+                "source": "user",
+                "declared_index": 1,
+                "matches_declared": true,
+                "found_at": [
+                  1
+                ]
+              },
+              "text": {
+                "source": "user",
+                "declared_index": 1,
+                "matches_declared": true,
+                "found_at": [
+                  1
+                ]
+              },
+              "date": {
+                "source": "user",
+                "declared_index": 1,
+                "matches_declared": true,
+                "found_at": [
+                  1
+                ]
+              },
+              "time": {
+                "source": "user",
+                "declared_index": 0,
+                "matches_declared": true,
+                "found_at": [
+                  0
+                ]
+              }
+            },
+            "proposed_time": "2026-11-06T17:30:00+03:00"
+          }
+        }
+      ],
+      "mcp_calls": [],
+      "replies": [
+        {
+          "text": "Сохранить напоминание?\n\nТекст: отправить отчёт\nКогда: 6 ноября 2026, 17:30 (UTC+03:00)\nЧасовой пояс: Europe/Moscow\n\nСрок подтверждения — 5 минут с подготовки.\nНапоминание ещё не сохранено. После подтверждения оно попадёт в очередь доставки.\nРанее сохранённые напоминания не изменяются.",
+          "buttons": [
+            [
+              {
+                "text": "Подтвердить",
+                "data": "rem:confirm:dc0e9e84-e0dd-4d1c-a1dd-27a442cff5ab"
+              },
+              {
+                "text": "Отменить",
+                "data": "rem:cancel:dc0e9e84-e0dd-4d1c-a1dd-27a442cff5ab"
+              }
+            ]
+          ]
+        }
+      ],
+      "state_after": {
+        "actor": "beta",
+        "mode": "study",
+        "quiz_question": 0,
+        "quiz_finished": false,
+        "history_count": 6,
+        "pending": {
+          "id": "dc0e9e84-e0dd-4d1c-a1dd-27a442cff5ab",
+          "text": "отправить отчёт",
+          "at": "2026-11-06T17:30:00+03:00"
+        },
+        "reminders": []
+      },
+      "foreign_marker_exposed": false
+    }
+  ],
+  "summary": {
+    "turns": 2,
+    "used": {
+      "key2": 2,
+      "key3": 2
+    },
+    "llm_attempts": 4,
+    "native_clarification_and_preparation": true,
+    "friday_time_card_created": true,
+    "sources_request_task_date_previous_time_current": true,
+    "missing_question_precision_issue": "Asked date and time although Friday already supplied; time-only answer still produced correct card",
+    "mcp_calls": 0,
+    "confirmed_writes": 0,
+    "primary_key_calls": 2
+  }
+}

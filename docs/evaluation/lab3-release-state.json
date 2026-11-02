@@ -1,14 +1,14 @@
 {
   "kind": "lab3_release_state",
-  "generated_at": "2026-11-02T11:04:51.582352+00:00",
-  "status": "ready_for_local_submission_after_additional_audit",
+  "generated_at": "2026-11-02T12:13:56.335300+00:00",
+  "status": "ready_after_quality_improvement",
   "release_ready": true,
   "implementation": "ready",
   "automated_acceptance": {
-    "report": "docs/evaluation/lab3-hardened-checks-20261102.json",
-    "sha256": "dec84772737f0f7f464712e600ddaadb9a7337b8c1019a6e30473938763b095f",
+    "report": "docs/evaluation/lab3-quality-release-checks-20261102.json",
+    "sha256": "6dff27b15ab9265942ed903b4e80a3aa7a65eb43ead38ee5001bb8c51797ff0c",
     "suite": {
-      "passed": 1877,
+      "passed": 1890,
       "failed": 0,
       "skipped": 0
     },
@@ -22,27 +22,29 @@
     "remaining_percent": 0,
     "method": "Equal stage weights; stage effort differs."
   },
-  "protocol_commit": "a64f9f5",
-  "live_protocol": "docs/evaluation/lab3-experiment-v6-protocol.json",
-  "live_results": "docs/evaluation/lab3-experiment-v6-results.json",
-  "routing_correct": 12,
+  "protocol_commit": "a87af93",
+  "live_protocol": "docs/evaluation/lab3-experiment-v8-protocol.json",
+  "live_results": "docs/evaluation/lab3-experiment-v8-results.json",
+  "routing_correct": 15,
   "routing_denominator": 15,
-  "requested_tag": "lab3-final-v2",
+  "requested_tag": "lab3-final-v3",
   "tag_created": true,
   "tag_scope": "Local annotated tag created with release commit; no remote publication requested.",
-  "runtime_smoke": "docs/evaluation/lab3-hardened-runtime-20261102.json",
-  "container_check": "docs/evaluation/lab3-hardened-container-20261102.json",
-  "quota": "docs/evaluation/lab3-hardened-quota-20261102.json",
+  "runtime_smoke": "docs/evaluation/lab3-quality-runtime-20261102.json",
+  "container_check": "docs/evaluation/lab3-quality-container-20261102.json",
+  "quota": "docs/evaluation/lab3-quality-quota-20261102.json",
   "report": "docs/lab3-report.md",
   "defense": "docs/lab3-defense.md",
   "remaining": [],
   "old_tags_unchanged": true,
   "boundaries": [
-    "Real adaptive LLM/MCP/isolated PostgreSQL; Telegram transport substituted.",
-    "Confirmed reminders remain read-only; only pending cards can be cancelled.",
-    "Short time follow-up failed once; full request recovered. Failure is preserved.",
-    "Three final ambiguous routes remain wrong, original threshold and denominator retained.",
-    "Literal prompt guard and free language generation do not guarantee every future answer."
+    "Real LLM/MCP/isolated PostgreSQL, Telegram transport substituted; UI not checked.",
+    "Small registered samples do not prove zero future errors.",
+    "Friday clarification still asks a redundant date; final card is correct.",
+    "Old short-time failure did not reproduce in diagnostic baseline; original failure retained.",
+    "Reserved15 were used for the expressly intended post-fix v8, remaining3/1/0."
   ],
-  "original_lab3_commit": "e7a6b909c4285e505492f5c4f53c08c58139e152"
+  "original_lab3_commit": "e7a6b909c4285e505492f5c4f53c08c58139e152",
+  "previous_lab3_final_v2_commit": "ffaf6d01ea151366799bd5030b9c9687121171c7",
+  "quality_report": "docs/evaluation/lab3-quality-improvement-20261102.md"
 }

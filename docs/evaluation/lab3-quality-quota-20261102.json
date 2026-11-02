@@ -1,0 +1,44 @@
+{
+  "checked_at": "2026-11-02T12:07:39.091292+00:00",
+  "keys": [
+    {
+      "variable": "OPENROUTER_API_KEY",
+      "api_daily_requests": {
+        "used": 47,
+        "limit": 50,
+        "remaining": 3
+      },
+      "started_generations_this_chat": 47,
+      "remaining_local_budget": 3,
+      "effective_remaining_without_external_consumption": 3
+    },
+    {
+      "variable": "OPENROUTER_API_KEY_2",
+      "api_daily_requests": {
+        "used": 49,
+        "limit": 50,
+        "remaining": 1
+      },
+      "started_generations_this_chat": 49,
+      "remaining_local_budget": 1,
+      "effective_remaining_without_external_consumption": 1
+    },
+    {
+      "variable": "OPENROUTER_API_KEY_3",
+      "api_daily_requests": {
+        "used": 50,
+        "limit": 50,
+        "remaining": 0
+      },
+      "started_generations_this_chat": 50,
+      "remaining_local_budget": 0,
+      "effective_remaining_without_external_consumption": 0
+    }
+  ],
+  "absent_variable": "OPENROUTER_API_KEY_1",
+  "total_generations_this_chat": 146,
+  "primary_reserve_originally_set_aside": 15,
+  "reserved_calls_used_for_registered_post_fix_v8": 15,
+  "primary_reserve_preserved": false,
+  "notes": "The 15-call reserve was used for its expressly intended post-fix repeat (v8), without a paid fallback. Quota metadata may lag. Local counts include all started generations from committed protocols; external account usage cannot be inferred. No generation was made by this metadata read."
+}
