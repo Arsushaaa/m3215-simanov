@@ -141,3 +141,50 @@ async def test_session_cannot_exceed_its_registered_remaining_quota(monkeypatch)
         redteam.ACTIVE.reset(token)
     wire.assert_not_awaited()
     assert engine.document["used"]["key2"] == 2
+
+
+def test_preparation_diagnostic_locates_wrong_index_without_persisting_quotes():
+    import json
+
+    private = "Synthetic private instruction text must never be persisted " * 4
+    refs = {
+        key: {"source": "user", "message_index": 0, "quote": private}
+        for key in ("request", "text", "date", "time")
+    }
+    diagnostic = redteam.preparation_diagnostic(
+        json.dumps(
+            {
+                "arguments": {"text": private, "remind_at": "2026-11-03T18:00:00+03:00"},
+                "evidence": refs,
+            }
+        ),
+        {0: "В 18:00.", 1: private},
+    )
+    assert diagnostic["evidence"]["text"] == {
+        "source": "user",
+        "declared_index": 0,
+        "matches_declared": False,
+        "found_at": [1],
+    }
+    assert private not in json.dumps(diagnostic, ensure_ascii=False)
+    assert diagnostic["text_sha256"] == redteam.digest(private.encode())
+
+
+def test_preparation_diagnostic_checks_actual_visible_user_wrappers_only():
+    import json
+
+    sources = redteam.visible_sources(
+        {
+            "messages": [
+                {"role": "system", "content": json.dumps({"message_index": 2, "text": "hidden"})},
+                {"role": "user", "content": "not a wrapper"},
+                {"role": "user", "content": json.dumps({"message_index": 0, "text": "В 18:00."})},
+                {
+                    "role": "user",
+                    "content": json.dumps({"message_index": 1, "text": "Завтра купить хлеб"}),
+                },
+            ]
+        }
+    )
+    assert sources == {0: "В 18:00.", 1: "Завтра купить хлеб"}
+    assert redteam.preparation_diagnostic("{", sources) == {"error": "invalid_preparation_shape"}
