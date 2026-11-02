@@ -27,8 +27,8 @@ from scripts.semantic_routing_smoke import quota_status
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = "docs/evaluation/lab3-routing.json"
-DEFAULT_PROTOCOL = "docs/evaluation/lab3-experiment-v6-protocol.json"
-DEFAULT_OUTPUT = "docs/evaluation/lab3-experiment-v6-results.json"
+DEFAULT_PROTOCOL = "docs/evaluation/lab3-experiment-v7-protocol.json"
+DEFAULT_OUTPUT = "docs/evaluation/lab3-experiment-v7-results.json"
 MODEL = "nvidia/nemotron-3.5-super-vl:free"
 
 

@@ -433,7 +433,10 @@ class CancelReminderDecision(StrictModel):
 class UserQuote(StrictModel):
     source: Literal["user"]
     message_index: int = Field(
-        ge=0, le=20, description="0 — текущая реплика; остальные индексы даны в истории."
+        ge=0,
+        le=20,
+        description="Индекс именно того user-сообщения, из text которого скопирована quote. "
+        "0 — текущая реплика; остальные индексы указаны в истории.",
     )
     quote: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
@@ -449,9 +452,16 @@ class ReminderEvidence(StrictModel):
     request: UserQuote = Field(
         description="Дословная просьба пользователя создать или изменить напоминание."
     )
-    text: ParameterSource
-    date: ParameterSource
-    time: ParameterSource
+    text: ParameterSource = Field(
+        description="Источник задачи arguments.text. Короткий ответ только о времени "
+        "не содержит задачу: укажи прежнее user-сообщение с задачей."
+    )
+    date: ParameterSource = Field(
+        description="Источник даты напоминания. Уточнение только часов не меняет источник даты."
+    )
+    time: ParameterSource = Field(
+        description="Источник точных часов: при новом уточнении времени цитируй его user-реплику."
+    )
 
 
 class ReminderPreparation(StrictModel):
