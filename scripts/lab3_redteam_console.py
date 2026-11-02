@@ -14,6 +14,7 @@ import sys
 from contextvars import ContextVar
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 
 import aiohttp
 from aiogram import Bot, Dispatcher
@@ -66,7 +67,7 @@ def settings_and_keys():
     raw = dotenv_values(".env", interpolate=False)
     keys = {slot: raw.get(variable) for slot, variable in SLOTS.items()}
     if not all(keys.values()) or len(set(keys.values())) != 2:
-        raise ValueError("Two distinct additional credentials required")
+        raise ValueError("Two distinct configured credentials required")
     if settings.openrouter_base_url != "https://openrouter.ai/api/v1":
         raise ValueError("Unexpected API endpoint")
     return replace(
@@ -121,7 +122,7 @@ async def freeze():
             "initial_quotas": dict(zip(SLOTS, quotas, strict=True)),
             "maximum_attempts_per_key": 50,
             "maximum_attempts_total": 100,
-            "primary_key_reserved": True,
+            "primary_key_reserved": "OPENROUTER_API_KEY" not in SLOTS.values(),
             "network_family": "IPv4: development host has no IPv6 route; no model payload change",
             "model": settings.openrouter_model,
             "temperature": 0.2,
@@ -495,6 +496,8 @@ async def run():
     assert_committed(path)
     if (FOLDER / "journal.json").exists():
         raise ValueError("This session already has a journal; never replay it")
+    if protocol["credential_slots"] != SLOTS:
+        raise ValueError("Credential slots differ from preregistration")
     settings, keys = settings_and_keys()
     document = {
         "kind": "adaptive_real_redteam",
@@ -528,8 +531,25 @@ async def run():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    global FOLDER, SLOTS
     parser.add_argument("action", choices=("freeze", "run"))
+    parser.add_argument("--folder", type=Path, default=FOLDER)
+    parser.add_argument(
+        "--key-env",
+        nargs=2,
+        choices=(
+            "OPENROUTER_API_KEY",
+            "OPENROUTER_API_KEY_1",
+            "OPENROUTER_API_KEY_2",
+            "OPENROUTER_API_KEY_3",
+        ),
+        default=list(SLOTS.values()),
+        metavar="ENV_NAME",
+        help="Explicit credential variable names for the two slots; never key values",
+    )
     args = parser.parse_args()
+    FOLDER = args.folder.resolve()
+    SLOTS = dict(zip(("key2", "key3"), args.key_env, strict=True))
     logging.basicConfig(level=logging.ERROR)
     if args.action == "freeze":
         asyncio.run(freeze())

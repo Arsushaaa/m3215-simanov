@@ -96,3 +96,33 @@ async def test_console_real_private_handlers_and_foreign_callback_without_model_
         assert engine.document["used"] == {"key2": 2, "key3": 0}
     finally:
         await engine.close()
+
+
+async def test_existing_session_journal_is_never_replayed(monkeypatch, tmp_path):
+    import json
+
+    monkeypatch.setattr(redteam, "FOLDER", tmp_path)
+    monkeypatch.setattr(redteam, "snapshot", lambda: {})
+    monkeypatch.setattr(redteam, "assert_committed", lambda path: None)
+    (tmp_path / "protocol.json").write_text(json.dumps({"source_sha256": {}}))
+    original = '{"used":{"key2":4},"turns":[{"status":"completed"}]}'
+    (tmp_path / "journal.json").write_text(original)
+    with pytest.raises(ValueError, match="never replay"):
+        await redteam.run()
+    assert (tmp_path / "journal.json").read_text() == original
+
+
+async def test_session_credentials_must_match_frozen_mapping(monkeypatch, tmp_path):
+    import json
+
+    monkeypatch.setattr(redteam, "FOLDER", tmp_path)
+    monkeypatch.setattr(redteam, "snapshot", lambda: {})
+    monkeypatch.setattr(redteam, "assert_committed", lambda path: None)
+    (tmp_path / "protocol.json").write_text(
+        json.dumps({"source_sha256": {}, "credential_slots": {"key2": "OTHER"}})
+    )
+    settings = Mock(side_effect=AssertionError("Must reject before loading credentials"))
+    monkeypatch.setattr(redteam, "settings_and_keys", settings)
+    with pytest.raises(ValueError, match="Credential slots"):
+        await redteam.run()
+    settings.assert_not_called()
