@@ -1,0 +1,12 @@
+{
+  "before": {
+    "used": 25,
+    "limit": 50,
+    "remaining": 25
+  },
+  "after": {
+    "used": 25,
+    "limit": 50,
+    "remaining": 25
+  }
+}

@@ -1,0 +1,1403 @@
+{
+  "kind": "lab3_final_acceptance",
+  "generated_at": "2026-11-04T01:09:27.100127+00:00",
+  "status": "passed",
+  "automated_status": "passed",
+  "release_ready": true,
+  "checks": [
+    {
+      "name": "pip check",
+      "command": [
+        "python",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "duration_ms": 189
+    },
+    {
+      "name": "Ruff",
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "exit_code": 0,
+      "duration_ms": 24
+    },
+    {
+      "name": "format",
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "exit_code": 0,
+      "duration_ms": 24
+    },
+    {
+      "name": "pytest + PostgreSQL",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "-o",
+        "faulthandler_timeout=60",
+        "--junitxml=/tmp/lab3-acceptance-ggbkw0hn/tests.xml"
+      ],
+      "exit_code": 0,
+      "duration_ms": 238808
+    }
+  ],
+  "suite": {
+    "passed": 1907,
+    "failed": 0,
+    "skipped": 0
+  },
+  "criteria_passed": 34,
+  "criteria_total": 34,
+  "cases": [
+    {
+      "id": "routing_targets",
+      "implementation_stage": 2,
+      "expected": "Known targets dispatch once; invalid routes report a model failure before any tool; ambiguous user goals clarify.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_schedule_routes_once_and_restricts_schema_and_model_context",
+        "tests/test_supervisor.py::test_invalid_route_safe_clarification_no_retry_no_tool",
+        "tests/test_supervisor.py::test_native_router_requires_function_and_has_no_execution_tools"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_supervisor.py::test_schedule_routes_once_and_restricts_schema_and_model_context",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_supervisor.py::test_invalid_route_safe_clarification_no_retry_no_tool",
+          "matched": 10,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_supervisor.py::test_native_router_requires_function_and_has_no_execution_tools",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "legacy_modes",
+      "implementation_stage": 2,
+      "expected": "General study remains available; translate/quiz stay isolated and preserve history/reset behavior.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_non_tool_routes_do_not_fall_back_to_combined_agent",
+        "tests/test_quiz_transitions.py::test_rejected_personal_topic_then_python_starts_question_one"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_supervisor.py::test_non_tool_routes_do_not_fall_back_to_combined_agent",
+          "matched": 3,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_quiz_transitions.py::test_rejected_personal_topic_then_python_starts_question_one",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "request_identity",
+      "implementation_stage": 2,
+      "expected": "Model output and foreign agent results cannot replace actor, request, trace or origin.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_routing_contracts.py::test_router_cannot_return_host_identity_delivery_or_authority_fields",
+        "tests/test_routing_contracts.py::test_result_rejects_untyped_facts_false_success_and_unbounded_operations"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_routing_contracts.py::test_router_cannot_return_host_identity_delivery_or_authority_fields",
+          "matched": 6,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_routing_contracts.py::test_result_rejects_untyped_facts_false_success_and_unbounded_operations",
+          "matched": 11,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "tool_allowlist",
+      "implementation_stage": 2,
+      "expected": "Every call intersects current discovery and fixed component policy; unknown tools are denied.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_scoped_mcp_denies_actual_calls_even_if_catalog_advertises_them"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_supervisor.py::test_scoped_mcp_denies_actual_calls_even_if_catalog_advertises_them",
+          "matched": 7,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "resource_allowlist",
+      "implementation_stage": 2,
+      "expected": "Schedule/Knowledge resources are read and passed only to the permitted component.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_other_roles_never_receive_or_read_materials_catalog"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_materials.py::test_other_roles_never_receive_or_read_materials_catalog",
+          "matched": 4,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "source_grounding",
+      "implementation_stage": 2,
+      "expected": "Pending reminder edits retain evidence/epoch/revision checks before and after Router.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_supervisor_keeps_confirmation_guard_during_router_and_callback_has_no_llm"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_lab3_supervisor_keeps_confirmation_guard_during_router_and_callback_has_no_llm",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "call_budget",
+      "implementation_stage": 2,
+      "expected": "Router/specialist/global budgets are enforced; no hidden model or MCP retries.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_supervisor.py::test_budget_is_reserved_before_fourth_llm_and_second_mcp"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_supervisor.py::test_budget_is_reserved_before_fourth_llm_and_second_mcp",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "trace_privacy",
+      "implementation_stage": 2,
+      "expected": "Trace contains fixed metadata only; no messages/prompts/env/capability.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_routing_contracts.py::test_trace_has_closed_safe_fields_and_checked_running_state",
+        "tests/test_tracing.py::test_handler_records_delivered_reply_without_message_contents"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_routing_contracts.py::test_trace_has_closed_safe_fields_and_checked_running_state",
+          "matched": 12,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_tracing.py::test_handler_records_delivered_reply_without_message_contents",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "trace_ownership",
+      "implementation_stage": 2,
+      "expected": "Only own last/requested trace is visible; trace failure cannot show an earlier decision as current.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_traces_survive_pool_restart_isolate_owners_and_reject_foreign_parents"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_lab3_traces_survive_pool_restart_isolate_owners_and_reject_foreign_parents",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "material_search",
+      "implementation_stage": 3,
+      "expected": "Search returns bounded fragments from at least three registered documents, with stable IDs.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_local_search_finds_the_registered_source_deterministically"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_materials.py::test_local_search_finds_the_registered_source_deterministically",
+          "matched": 6,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "catalog_context",
+      "implementation_stage": 3,
+      "expected": "Discovery is followed by resource read; validated catalogue enters only Knowledge context.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_real_sdk_reads_catalog_and_searches_without_weather_or_database"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_materials.py::test_real_sdk_reads_catalog_and_searches_without_weather_or_database",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "materials_absent",
+      "implementation_stage": 3,
+      "expected": "No matches, missing corpus and source failure remain distinct; no invented citations.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_materials.py::test_no_hits_does_not_call_final_model_or_answer_from_memory",
+        "tests/test_materials.py::test_bootstrap_rejects_self_consistent_but_substituted_catalog"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_materials.py::test_no_hits_does_not_call_final_model_or_answer_from_memory",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_materials.py::test_bootstrap_rejects_self_consistent_but_substituted_catalog",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "city_confirmation",
+      "implementation_stage": 4,
+      "expected": "Ambiguous lookup preserves alternatives; city coordinates are saved only after owner confirmation.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_city_menu_ownership_restart_expiry_and_no_connection_during_lookup"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_lab3_city_menu_ownership_restart_expiry_and_no_connection_during_lookup",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "notification_preferences",
+      "implementation_stage": 4,
+      "expected": "Briefing defaults off; enabling requires zone/city; notifications view exposes no internal IDs.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_lab3_briefing_opt_in_requires_confirmed_profile_and_outbox_is_unique_and_revocable"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_lab3_briefing_opt_in_requires_confirmed_profile_and_outbox_is_unique_and_revocable",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "delivery_destination",
+      "implementation_stage": 4,
+      "expected": "Chat destination comes from trusted private update, not actor inference or model/tool/document fields.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_notifications.py::test_commands_register_destination_from_actual_private_update_without_llm",
+        "tests/test_integration.py::test_lab3_reminder_outbox_is_atomic_idempotent_and_legacy_addresses_are_not_guessed"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_notifications.py::test_commands_register_destination_from_actual_private_update_without_llm",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_lab3_reminder_outbox_is_atomic_idempotent_and_legacy_addresses_are_not_guessed",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "outbox_uniqueness",
+      "implementation_stage": 4,
+      "expected": "Two sequential and two concurrent preparations create one event job in real PostgreSQL.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_local_eight_unique_concurrent_scheduler_and_restart"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_daily_briefing_local_eight_unique_concurrent_scheduler_and_restart",
+          "matched": 3,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "reminder_misfire",
+      "implementation_stage": 5,
+      "expected": "Future reminders do not send; delay through15minutes is marked; older becomes missed.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_never_early_and_fifteen_minute_deadline_is_inclusive"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_delivery_never_early_and_fifteen_minute_deadline_is_inclusive",
+          "matched": 4,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "delivery_retry",
+      "implementation_stage": 5,
+      "expected": "Temporary failures have at most3 total attempts; permanent failures stop; payload is reused.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_network_failures_wait_thirty_then_one_twenty_and_stop_at_three",
+        "tests/test_integration.py::test_reminder_delivery_http_policy_handles_rate_limit_deadline_and_permanent_errors"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_delivery_network_failures_wait_thirty_then_one_twenty_and_stop_at_three",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_reminder_delivery_http_policy_handles_rate_limit_deadline_and_permanent_errors",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "delivery_recovery",
+      "implementation_stage": 5,
+      "expected": "Restart at preparation/claim/send/commit resumes the same job with lease fencing and bounded attempts.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_two_workers_claim_one_send_and_stale_preparation_is_fenced",
+        "tests/test_integration.py::test_reminder_delivery_real_db_once_no_connection_during_http_and_durable_receipt"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_delivery_two_workers_claim_one_send_and_stale_preparation_is_fenced",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_reminder_delivery_real_db_once_no_connection_during_http_and_durable_receipt",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "delivery_unknown",
+      "implementation_stage": 5,
+      "expected": "Failure after external send does not claim exactly-once; duplicate risk is explicit and tested.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_reminder_delivery_unknown_commit_may_duplicate_but_keeps_payload"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_delivery_unknown_commit_may_duplicate_but_keeps_payload",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "briefing_content",
+      "implementation_stage": 6,
+      "expected": "08:00 local briefing includes date schedule, reminders, confirmed-point weather and cited study focus.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_real_db_reservations_cache_delivery_no_held_connection"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_daily_briefing_real_db_reservations_cache_delivery_no_held_connection",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "briefing_misfire",
+      "implementation_stage": 6,
+      "expected": "One local-date event; catch-up through60minutes; no backlog of older daily briefings.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_window_no_old_day_catchup_and_no_consent_retroactivity"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_daily_briefing_window_no_old_day_catchup_and_no_consent_retroactivity",
+          "matched": 5,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "briefing_partial",
+      "implementation_stage": 6,
+      "expected": "One source failure leaves other sections and preparation timestamp/timezone visible.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_briefing.py::test_daily_partial_sources_still_deliver_sections_with_bounded_reserved_calls"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_briefing.py::test_daily_partial_sources_still_deliver_sections_with_bounded_reserved_calls",
+          "matched": 5,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "briefing_consent_race",
+      "implementation_stage": 6,
+      "expected": "Latest consent/profile checked before starting send; off/change blocks unsent stale jobs.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_consent_revoked_during_preparation_and_before_send"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_daily_briefing_consent_revoked_during_preparation_and_before_send",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "dst_and_clock",
+      "implementation_stage": 6,
+      "expected": "IANA/DST, local-day boundaries and absent/nonportable zones are tested with fake clock.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_notifications.py::test_next_eight_is_computed_from_local_date_and_dst_not_a_fixed_utc_interval",
+        "tests/test_notifications.py::test_skipped_calendar_day_and_naive_clock_are_not_silently_adjusted"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_notifications.py::test_next_eight_is_computed_from_local_date_and_dst_not_a_fixed_utc_interval",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_notifications.py::test_skipped_calendar_day_and_naive_clock_are_not_silently_adjusted",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "background_budget",
+      "implementation_stage": 6,
+      "expected": "Persisted budgets survive crashes; retrying delivery does not regenerate messages.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_integration.py::test_daily_briefing_spent_preparation_never_replays_after_crash",
+        "tests/test_integration.py::test_daily_briefing_budget_concurrency_and_reminders_isolate_local_calendar"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_daily_briefing_spent_preparation_never_replays_after_crash",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_daily_briefing_budget_concurrency_and_reminders_isolate_local_calendar",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "injection_foreign_tool",
+      "implementation_stage": 7,
+      "expected": "Direct instructions to bypass role cannot execute a foreign tool.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_direct_cross_role_cannot_reach_mcp"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_security.py::test_attack_direct_cross_role_cannot_reach_mcp",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "injection_prompt_disclosure",
+      "implementation_stage": 7,
+      "expected": "Known system instructions/secrets cannot be disclosed; prohibited operations are observed.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_literal_system_prompt_is_blocked_before_display"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_security.py::test_attack_literal_system_prompt_is_blocked_before_display",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "injection_actor",
+      "implementation_stage": 7,
+      "expected": "Claiming another user does not change trusted identity or destination.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_actor_override_is_rejected_before_specialist_or_tool"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_security.py::test_attack_actor_override_is_rejected_before_specialist_or_tool",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "injection_lifestyle_write",
+      "implementation_stage": 7,
+      "expected": "Lifestyle add_reminder is denied before MCP even with confidence1.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_lifestyle_write_is_denied_even_with_forged_capability"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_security.py::test_attack_lifestyle_write_is_denied_even_with_forged_capability",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "injection_material",
+      "implementation_stage": 7,
+      "expected": "Instructions in a material cannot alter routing rights or prepare/write a reminder.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_instruction_in_material_cannot_write"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_security.py::test_attack_instruction_in_material_cannot_write",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "injection_tool_result",
+      "implementation_stage": 7,
+      "expected": "Instructions in MCP data cannot launch another action or elevate role.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_security.py::test_attack_tool_result_cannot_launch_new_write"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_security.py::test_attack_tool_result_cannot_launch_new_write",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "packaging_release",
+      "implementation_stage": 8,
+      "expected": "New data/SQL/config are packaged, report exists and lab3 tag is created only after acceptance.",
+      "kind": "tests",
+      "tests": [
+        "tests/test_lab3_release.py::test_release_packages_only_public_sources_sql_and_complete_daily_demo"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_lab3_release.py::test_release_packages_only_public_sources_sql_and_complete_daily_demo",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "routing_experiment",
+      "status": "passed",
+      "correct": 15,
+      "denominator": 15,
+      "report": "docs/evaluation/lab3-experiment-v10-results.json",
+      "sha256": "84f5de4be63eccbbd9f666eeae78be94f78f919676e28878775b8aa66161e51e"
+    }
+  ],
+  "inherited_cases": [
+    {
+      "id": "weather_success",
+      "expected": "Проверенные температура, условия, ветер и время; фиксированные HTTP URL.",
+      "tests": [
+        "tests/test_weather.py::test_weather_uses_fixed_endpoints_checked_units_and_utc_to_iana"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_weather.py::test_weather_uses_fixed_endpoints_checked_units_and_utc_to_iana",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "weather_not_found",
+      "expected": "not_found, без погодного HTTP и выдуманных значений.",
+      "tests": [
+        "tests/test_weather.py::test_missing_city_is_not_found_and_does_not_fetch_weather"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_weather.py::test_missing_city_is_not_found_and_does_not_fetch_weather",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "weather_failure",
+      "expected": "Ошибки/тайм-аут ограничены, ответ API не раскрывается, повторов нет.",
+      "tests": [
+        "tests/test_weather.py::test_both_http_calls_share_one_total_timeout",
+        "tests/test_weather.py::test_malformed_current_values_are_rejected",
+        "tests/test_weather.py::test_network_errors_hide_request_details_and_do_not_retry"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_weather.py::test_both_http_calls_share_one_total_timeout",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_weather.py::test_malformed_current_values_are_rejected",
+          "matched": 13,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_weather.py::test_network_errors_hide_request_details_and_do_not_retry",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "schedule_fields_and_empty_day",
+      "expected": "Точные занятия; свободный день отличается от отсутствия покрытия.",
+      "tests": [
+        "tests/test_schedule.py::test_schedule_returns_exact_observable_lesson_fields",
+        "tests/test_schedule.py::test_empty_day_and_outside_coverage_are_distinct"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_schedule.py::test_schedule_returns_exact_observable_lesson_fields",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_schedule.py::test_empty_day_and_outside_coverage_are_distinct",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "invalid_arguments",
+      "expected": "Невозможные даты, пустой текст и лишние поля отклоняются.",
+      "tests": [
+        "tests/test_mcp_contracts.py::test_schedule_date_is_real_iso_and_in_range",
+        "tests/test_mcp_contracts.py::test_reminder_text_limits",
+        "tests/test_mcp_contracts.py::test_agent_decision_rejects_unknown_actions_extras_and_mismatched_arguments"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_contracts.py::test_schedule_date_is_real_iso_and_in_range",
+          "matched": 7,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_contracts.py::test_reminder_text_limits",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_contracts.py::test_agent_decision_rejects_unknown_actions_extras_and_mismatched_arguments",
+          "matched": 7,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "week_boundary",
+      "expected": "Неделя понедельник–воскресенье корректна на границе месяца/года.",
+      "tests": [
+        "tests/test_schedule.py::test_week_crosses_month_and_year_without_changing_system_clock"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_schedule.py::test_week_crosses_month_and_year_without_changing_system_clock",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "confirmation_real_stdio",
+      "expected": "Карточка без записи; callback владельца 0 LLM/1 MCP, одна квитанция PostgreSQL.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_model_calls"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_dialog_confirmation_real_stdio_postgres_and_no_extra_model_calls",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "update_deduplication",
+      "expected": "Восемь повторов одного update дают один action/request/audit/history pair.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_prepare_is_concurrent_atomic_and_separate_from_dialog_revision"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_prepare_is_concurrent_atomic_and_separate_from_dialog_revision",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "concurrent_confirmation",
+      "expected": "Шесть подтверждений через разные пулы дают одно напоминание; replay не вызывает MCP.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_services_race_across_pools_commits_once_and_replays_without_mcp"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_services_race_across_pools_commits_once_and_replays_without_mcp",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "idempotent_write",
+      "expected": "Повтор ключа возвращает тот же reminder ID без новой записи.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_repository_concurrent_confirmation_and_restart_receipt"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_concurrent_confirmation_and_restart_receipt",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "ownership",
+      "expected": "Чужой владелец не читает/подтверждает/отменяет действие и не меняет запись.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_repository_rejects_unauthorized_stale_or_changed_actions",
+        "tests/test_confirmation_handlers.py::test_callback_from_foreign_or_inaccessible_chat_is_rejected"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_rejects_unauthorized_stale_or_changed_actions",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_callback_from_foreign_or_inaccessible_chat_is_rejected",
+          "matched": 4,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "restart_persistence",
+      "expected": "Настоящий рестарт PostgreSQL и новые пулы сохраняют зоны, состояния, квитанции и аудит.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_database_restart_preserves_zone_actions_receipts_and_private_audit"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_database_restart_preserves_zone_actions_receipts_and_private_audit",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "database_atomic_failure",
+      "expected": "Сбой аудита откатывает выдачу capability и все операции отзыва; нет частичного состояния.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_database_failure_rolls_back_permission_and_every_revocation",
+        "tests/test_integration.py::test_reminder_repository_rolls_back_write_when_audit_fails"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_database_failure_rolls_back_permission_and_every_revocation",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_rolls_back_write_when_audit_fails",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "unknown_commit",
+      "expected": "Потеря ACK восстанавливает прежний action/receipt; неизвестный исход не объявляется успехом.",
+      "tests": [
+        "tests/test_integration.py::test_reminder_repository_unknown_commit_ack_recovers_same_action",
+        "tests/test_confirmations.py::test_timeout_with_uncommitted_action_reports_unknown_not_success"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_reminder_repository_unknown_commit_ack_recovers_same_action",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmations.py::test_timeout_with_uncommitted_action_reports_unknown_not_success",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "timezone_dst_expiry",
+      "expected": "IANA, будущее время, DST gap/overlap, TTL и epoch проверяются; отозванное действие не записывается.",
+      "tests": [
+        "tests/test_integration.py::test_confirmation_preparation_checks_saved_zone_db_time_and_dst",
+        "tests/test_integration.py::test_confirmation_revocation_covers_pending_and_approved_cards_and_expiry",
+        "tests/test_mcp_contracts.py::test_reminder_rejects_missing_or_nonportable_zone"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_confirmation_preparation_checks_saved_zone_db_time_and_dst",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_integration.py::test_confirmation_revocation_covers_pending_and_approved_cards_and_expiry",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_contracts.py::test_reminder_rejects_missing_or_nonportable_zone",
+          "matched": 7,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "timezone_readonly",
+      "expected": "Поиск/просмотр не меняют зону и карточку; подтверждённая смена атомарно отзывает старое действие.",
+      "tests": [
+        "tests/test_integration.py::test_timezone_menu_only_applies_after_owner_confirmation_and_persists"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_integration.py::test_timezone_menu_only_applies_after_owner_confirmation_and_persists",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "mcp_failure_plain_dialog",
+      "expected": "Отказ старта, каталога или разрыв MCP не выключают обычный ответ; чтение честно отклоняется.",
+      "tests": [
+        "tests/test_mcp_client.py::test_failed_real_client_preserves_plain_dialog_without_reconnect"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_client.py::test_failed_real_client_preserves_plain_dialog_without_reconnect",
+          "matched": 3,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "tool_allowlist",
+      "expected": "Неизвестные инструменты, лишние аргументы и несовместимые входные схемы не доходят до SDK; совместимые ограничения обновляются и проверяются.",
+      "tests": [
+        "tests/test_mcp_client.py::test_invalid_calls_never_reach_sdk",
+        "tests/test_mcp_client.py::test_catalog_changes_quarantine_only_unsupported_tools",
+        "tests/test_mcp_client.py::test_notification_refreshes_discovered_constraints_and_recovers_tool",
+        "tests/test_mcp_client.py::test_server_city_constraints_reach_model_in_both_modes"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_client.py::test_invalid_calls_never_reach_sdk",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_catalog_changes_quarantine_only_unsupported_tools",
+          "matched": 7,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_notification_refreshes_discovered_constraints_and_recovers_tool",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_server_city_constraints_reach_model_in_both_modes",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "result_binding",
+      "expected": "Другая дата не становится фактом; квитанция на другой момент даёт OUTCOME_UNKNOWN.",
+      "tests": [
+        "tests/test_mcp_client.py::test_well_formed_schedule_for_another_day_is_not_a_fact",
+        "tests/test_mcp_client.py::test_well_formed_receipt_for_another_moment_is_unknown"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_mcp_client.py::test_well_formed_schedule_for_another_day_is_not_a_fact",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_well_formed_receipt_for_another_moment_is_unknown",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "untrusted_result",
+      "expected": "Инъекция из MCP не может запустить новый инструмент в финале structured/native.",
+      "tests": [
+        "tests/test_llm_tools.py::test_injected_tool_data_cannot_start_another_action_in_read_final"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_llm_tools.py::test_injected_tool_data_cannot_start_another_action_in_read_final",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "no_hidden_retries",
+      "expected": "Ошибки HTTP, тайм-аут и отказ записи не вызывают retry или смену режима.",
+      "tests": [
+        "tests/test_llm_tools.py::test_tool_http_errors_are_safe_and_never_retried",
+        "tests/test_llm_tools.py::test_routing_modes_are_selected_before_http_not_fallback_after_error",
+        "tests/test_mcp_client.py::test_write_outer_timeout_is_unknown_and_does_not_retry"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_llm_tools.py::test_tool_http_errors_are_safe_and_never_retried",
+          "matched": 6,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_llm_tools.py::test_routing_modes_are_selected_before_http_not_fallback_after_error",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_mcp_client.py::test_write_outer_timeout_is_unknown_and_does_not_retry",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "bounded_calls_context",
+      "expected": "Чтение максимум2 LLM/1 MCP; контекст включает схемы и результаты; новые вызовы в финале запрещены.",
+      "tests": [
+        "tests/test_agent.py::test_read_uses_two_models_one_mcp_and_final_disables_tools",
+        "tests/test_agent.py::test_context_budget_accounts_for_schema_and_tool_result",
+        "tests/test_llm_tools.py::test_response_body_is_bounded_before_json_decoding"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_agent.py::test_read_uses_two_models_one_mcp_and_final_disables_tools",
+          "matched": 4,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_agent.py::test_context_budget_accounts_for_schema_and_tool_result",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_llm_tools.py::test_response_body_is_bounded_before_json_decoding",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "stop_reset_isolation",
+      "expected": "/stop отменяет активные/ожидающие запросы владельца; reset прерывает модель, другие пользователи работают.",
+      "tests": [
+        "tests/test_handlers.py::test_stop_cancels_active_and_queued_requests_and_new_request_still_works",
+        "tests/test_handlers.py::test_reset_interrupts_model_immediately_and_preserves_other_users"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_handlers.py::test_stop_cancels_active_and_queued_requests_and_new_request_still_works",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_handlers.py::test_reset_interrupts_model_immediately_and_preserves_other_users",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "shutdown_waits",
+      "expected": "Завершение дожидается генераций, callbacks, обычных команд и отзыва в БД.",
+      "tests": [
+        "tests/test_handlers.py::test_shutdown_cancels_active_and_queued_generations_before_closing_resources",
+        "tests/test_confirmation_handlers.py::test_shutdown_waits_for_non_generating_command_before_closing_resources",
+        "tests/test_confirmation_handlers.py::test_shutdown_waits_for_in_flight_revocation_before_closing_resources",
+        "tests/test_confirmation_handlers.py::test_shutdown_waits_for_callback_cancellation_before_closing_resources"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_handlers.py::test_shutdown_cancels_active_and_queued_generations_before_closing_resources",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_shutdown_waits_for_non_generating_command_before_closing_resources",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_shutdown_waits_for_in_flight_revocation_before_closing_resources",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_shutdown_waits_for_callback_cancellation_before_closing_resources",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "cleanup_failure",
+      "expected": "Сбой одного close не пропускает остальные; отмена ждёт cleanup, ошибка пула вызывает terminate.",
+      "tests": [
+        "tests/test_stage6_lifecycle.py::test_failing_resource_does_not_skip_other_cleanup_or_leak_details",
+        "tests/test_stage6_lifecycle.py::test_cancel_during_cleanup_waits_for_remaining_closes_and_propagates",
+        "tests/test_stage6_lifecycle.py::test_pool_close_failure_terminates_and_does_not_mask_original_error"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_failing_resource_does_not_skip_other_cleanup_or_leak_details",
+          "matched": 6,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_cancel_during_cleanup_waits_for_remaining_closes_and_propagates",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_pool_close_failure_terminates_and_does_not_mask_original_error",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "telegram_delivery",
+      "expected": "Сначала квитанция, затем удаление карточки; сбой отправки/unknown сохраняют кнопку, второй MCP не вызывается.",
+      "tests": [
+        "tests/test_confirmation_handlers.py::test_receipt_delivery_failure_keeps_card_for_receipt_recovery",
+        "tests/test_confirmation_handlers.py::test_unknown_outcome_or_plain_model_text_does_not_remove_card",
+        "tests/test_confirmation_handlers.py::test_delete_failure_removes_buttons_without_repeating_committed_action"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_confirmation_handlers.py::test_receipt_delivery_failure_keeps_card_for_receipt_recovery",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_unknown_outcome_or_plain_model_text_does_not_remove_card",
+          "matched": 2,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_confirmation_handlers.py::test_delete_failure_removes_buttons_without_repeating_committed_action",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "privacy_logs",
+      "expected": "Журнал не содержит Telegram identity, текст запроса, инструкции, capability, сырые payload/traceback.",
+      "tests": [
+        "tests/test_stage6_privacy.py::test_library_payloads_are_replaced_before_formatting_and_never_logged",
+        "tests/test_stage6_privacy.py::test_actual_dispatcher_send_failure_does_not_log_update_identity_or_telegram_payload",
+        "tests/test_stage6_lifecycle.py::test_main_reports_error_type_without_untrusted_exception_body",
+        "tests/test_stage6_privacy.py::test_agent_audit_failure_does_not_log_question_prompt_or_model_reason"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_stage6_privacy.py::test_library_payloads_are_replaced_before_formatting_and_never_logged",
+          "matched": 9,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_privacy.py::test_actual_dispatcher_send_failure_does_not_log_update_identity_or_telegram_payload",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_lifecycle.py::test_main_reports_error_type_without_untrusted_exception_body",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_stage6_privacy.py::test_agent_audit_failure_does_not_log_question_prompt_or_model_reason",
+          "matched": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "why_and_history",
+      "expected": "/why читает безопасный owner audit; технические tool messages не попадают в историю; translate/quiz сохранены.",
+      "tests": [
+        "tests/test_confirmations.py::test_why_shows_owner_event_safe_arguments_and_fixed_reason",
+        "tests/test_agent.py::test_dialog_persists_only_user_and_final_and_respects_revision",
+        "tests/test_agent.py::test_other_modes_keep_legacy_model_path"
+      ],
+      "status": "passed",
+      "checks": [
+        {
+          "test": "tests/test_confirmations.py::test_why_shows_owner_event_safe_arguments_and_fixed_reason",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_agent.py::test_dialog_persists_only_user_and_final_and_respects_revision",
+          "matched": 1,
+          "status": "passed"
+        },
+        {
+          "test": "tests/test_agent.py::test_other_modes_keep_legacy_model_path",
+          "matched": 2,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "source_checks": {
+    "python_312": true,
+    "migrations_001_to_006_unchanged": true,
+    "lab1_commit_unchanged": true,
+    "evaluation_dataset_unchanged": true,
+    "migrations_001_to_010": true,
+    "historical_tags": true,
+    "fifteen_cases": true
+  },
+  "runtime_source_sha256": {
+    "app/__init__.py": "0194b688b9cbfc9123e1933c008ae2bd730f79c0bd70d4d04fdaf8ea4253c976",
+    "app/__main__.py": "61cb8302a5dceaf90774db720363812b3f5d38e286b74e4aada85ce3868760af",
+    "app/agent.py": "7b7d751b8092097e248335c32098381fb071182d3f11181eceb69870fb632a82",
+    "app/agent_prompts.py": "650fa13e847aaba7c3b6e57b5f161a6b8b7414b2a3e46c9a377162bfb3f7846a",
+    "app/agent_repository.py": "0b1a48d5c73e9b62fdf2f12f56c956bae3f7c322e9c42d36c4b395b0318b83ef",
+    "app/agents/__init__.py": "bbe02218e24b61fc8ecd6910fc7dc7cf8523f866df8183056aa3a974df3d7c1e",
+    "app/agents/knowledge.py": "c0ba90a826cdbee5c2ad10091b473f34ae3c6161fd14cb4dea17e813a60a914e",
+    "app/agents/specialists.py": "1d569914b4a5eabfca79d967dfa844f9aab784d15ab8c35e426282fa71e2fd55",
+    "app/config.py": "32bee510ed04079134ad9d41ff205fd6b35a103fd5aeb26116e83f6258f3dff1",
+    "app/confirmation_models.py": "2d68e00a7c5d6838abec1b893a788d530a32f81b3bcda88fd0aaf75b6480988f",
+    "app/confirmations.py": "700ea9825ca09f07137e830f140c51b9cca701d4dff9ee11ee21d6ae13f0188b",
+    "app/db.py": "99004e91609d12d6a5aae7a4554224d99ea5812e87bd8168ada0bc32a0d6d2ff",
+    "app/decision_schema.py": "6818fae4c620d2d0229a7aa895ba20431801a9e48c8ff71d21618b9fda193ad1",
+    "app/dialog.py": "f88b59e3bf9c755fd075abbf75994ead61d4eed994ad1b5ad192c3b38808f14c",
+    "app/essay.py": "0504bb0299d5097e05d402553aa2db74f8873a60b1c8a579acce7e6e8e4fed13",
+    "app/formatting.py": "5c3e2eafd3c9babe0f5b415da58e3df192d79dcdacf7462308556faff0937982",
+    "app/handlers/__init__.py": "515f371a14c58f963b10a17acebe3a5fbbc427d8ece84f26f98a95e407050225",
+    "app/handlers/assistant.py": "1a367a7f3ba388d99c31b990c2c5edc29325b8ef9b162443a7c518e68c4b775d",
+    "app/health.py": "b2975f40c0b330fb5f27c3bf73c677f2bc4b72ed57e4a09f73fdfa956cc21fe3",
+    "app/healthcheck.py": "6faebfba0b40567441b3cd28196b48e0322612badd0b2a27921972678dc57d15",
+    "app/llm.py": "18b475676a8273aa6f14be0703921bd4884b7750802bc55b885a077519e717c8",
+    "app/logging_setup.py": "fc49ef18a823f5c85a0d5dc07819c25aa0ade21e46d7e654374f02ea7780b2c5",
+    "app/materials/__init__.py": "e6d857119e6964f0dd74a14ea0030117909db47060455d7469d0405e0ad84b45",
+    "app/materials/contracts.py": "ba335c02c0b603887aea044d53ba406446d98466b7e5731628d79df8a9391eca",
+    "app/materials/corpus.py": "cd13a0fcd08bea26dd30281f8f5663c04f3dbd1fc267e25122db7804a336fdea",
+    "app/mcp/__init__.py": "42a60c05d28604d8e74fde3fd613e1af0f940cf65b0976dc9597a32904f1ab87",
+    "app/mcp/client.py": "f79998b2db037adda1c8c261390882ca411ab440bc07bd6e3efc47034197d576",
+    "app/mcp/contracts.py": "96f41b9bf80d86e7db511ce3ce964e0fa2ef948f09d689f4c4e8bbc06ad47921",
+    "app/mcp/schedule.py": "249b3f43dda93829e118ecc2015bd7725639f864b9fd7f57a75882e40b3e6a14",
+    "app/mcp/schema_compatibility.py": "a221c3b361acbe2ccb5533eddddeed59491c9a8ed4cb798c95c96264b17bd1bd",
+    "app/mcp/server.py": "490f10210fcfb0ccfbe50d68bc927ab5aa6ed9724c6dfd7eb8e6484ba6b4fc02",
+    "app/mcp/weather.py": "34d8cf18bef46d158fafd8f12d9583ea301d38ef6b447d550ddb73201d59cf6f",
+    "app/migration.py": "1b2663fd1cc3c17ad2d5687cc1638bb7c46ce515eb8bb05e286b31344eb4d6a8",
+    "app/migrations/001_dialog.sql": "438800c309057a01447358800d346a922739a709cac08a18c83dbd7148d80b3d",
+    "app/migrations/002_quiz_progress.sql": "b6d181d0cb2685c83b27d2fe5eb38d64811618a2082a2fc6982942162bb0e3b5",
+    "app/migrations/003_temperature_range.sql": "eccfc3de3d56d719f046643caa365b54fc3dea682f16df16b888b362419ff682",
+    "app/migrations/004_incomplete_answers.sql": "a95484f4ca33e649aeae5dce00df1548b84927a39dea82fc13e7f06a32a4d1db",
+    "app/migrations/005_response_parts.sql": "dfa14561a55d692223b47e3a01c04ed64e32ff834cc48d38aaaeae2e3a37d771",
+    "app/migrations/006_agent_state.sql": "70ff420027af200a9eba7c83f63ca46a17fb0e97c2ec5576972be5859f241212",
+    "app/migrations/007_tracing.sql": "665387ed7d8674f5e93e52426ead6f4a87e48f2084bd3c5a6e3c08653990bc16",
+    "app/migrations/008_notifications.sql": "18ae121a2dadef0405e0bc2cde641d7f67f1f11ad334e7a03fa7608aa2dc08f9",
+    "app/migrations/009_delivery_receipts.sql": "869e0397c5ce624e3b9a8459b7aadc945e32b8601dcacc557ebe53c27cf04b0e",
+    "app/migrations/010_briefing_cache.sql": "2b80285026dc4f382af7878fc774fdd0827089ff3b8f66793145be6b5419c001",
+    "app/notifications/__init__.py": "e6320fe1ceac8aeb5179eecd3f670d708070e3f63a431141c8e4fa2847121540",
+    "app/notifications/briefing.py": "e1f0968c1db6f5f42715b573ea41ff34526b74998bd12e7f2f44b10e95c77bdf",
+    "app/notifications/briefing_repository.py": "36bf9041898ed8c5ea52b9f2bfef01069de445b08d46c792c3cdfe59766b0b4f",
+    "app/notifications/city.py": "a6fcdba781c28ba049c44d8bc4db5a388bfa61d88503a0db9e45a7553e39eb71",
+    "app/notifications/delivery_models.py": "d0c5f5b8aca3980779f7c5b90aeafedd3f1626ad0fb0e6a7e9a0414ae6aa5553",
+    "app/notifications/delivery_repository.py": "6e40b0a880087336d1a31f7cc241498f6a9305f23f4aa6f6ea2f6fda3fa844ae",
+    "app/notifications/models.py": "6ed2ea3da100450fb1e1a022afc0202ecf8896259facf73b3d9c83ebccd1e699",
+    "app/notifications/repository.py": "9165cb47a8c999e27b67be026e08f42db3aed2864071714c6deb2212cccf75a4",
+    "app/notifications/service.py": "ebf0cf4758e3548b911f35e686f20153bc520acf20e4c7996ccbb8ecbf7a7400",
+    "app/notifications/worker.py": "7e6e613a5f849e49d8015c550b71ced8c3f720a5586d44ed5af839330cbd8fa0",
+    "app/output_guard.py": "871d27d966d77ee7c3f4a5c1ca5b6d63e1c20afeaf151d465d428ee106ec8c57",
+    "app/output_limits.py": "1b80c4c6a2b50d45f7cc5012f26de5a2a348b1ba50137ab073d13f5dcb95438f",
+    "app/prompts.py": "1a723e4203c2baaeccae04cdeea770e2e6869405b9cbfb5482e8647b8a4064e6",
+    "app/quiz.py": "9aa387f8155580698a1820301d14d794ae502f0d0f43e66bde228bf0e7be9586",
+    "app/reminder_grounding.py": "9b5788a80b9d6e8d2e577373bb0b9114e57beeba5fc2ea2878498c5a44720236",
+    "app/reminder_messages.py": "0fc7d23e254b5bb8f7383aac38ab49e6566b77812b0247e9849e7864550185aa",
+    "app/repository.py": "ac0e467caee0492c809b18ec232a4366286d1820136d2ac2d3d3f44f17cfe4e7",
+    "app/request_limits.py": "8456082068dcb5276257d987a2594533c0ac40d77045d37ae5018dadaff57718",
+    "app/routing/__init__.py": "367e87d89a3121265ba3b52b55a250f65340b12fdb5f7a9f3d2e9f26bd315db4",
+    "app/routing/contracts.py": "190b55e7838abb4d8b06ea3a40f7a8414cec1c49430df11b2e5d645892719507",
+    "app/routing/policy.py": "2f3493361336ab1372b8b812200312ecf7e0ee21325cd2f02b93b3e15d09d5e2",
+    "app/routing/router.py": "e47be5f9465626973a9ecec4640a2b9c41c1b8a87170d5239b6aa1d998acad7e",
+    "app/routing/supervisor.py": "44ca1eeeac290aa1a4f89ec90e7ff17f4a32aea15d5b3a6aef840b88e8a49c16",
+    "app/telegram.py": "1c79d74965c6c81bae28b735e2c435d0a67aa75f9383d537f2835bd3feac0d75",
+    "app/time_display.py": "cdd2df591410e66bb90dbc4472700e1bbd62037b3041d25fc456894be8602cac",
+    "app/timezone_lookup.py": "e499b752e4139acca97a78618c0dde3a03e55e73c98981ee583b26c3d95ba4dc",
+    "app/timezone_ui.py": "c15bd451cd32db53b5ef7c666e08bd73eb313cdd2dfb6d33ba6db5e3a20fb265",
+    "app/tracing/__init__.py": "49291023c44681083227ad0456d06c397d25f7d668383757fe2cc3eb8775cd01",
+    "app/tracing/repository.py": "89e1433f9ac3efcbeb1ce9ee3cbcc7e663390c0bc418ae5fc2a5cdccfa18a638",
+    "app/tracing/runtime.py": "42774e3e908bbf9f6120be4af2ba2309731950414257a7b9b0c49f4c5c663518",
+    "app/weather_reply.py": "39e505005b5902aeebc3dcca176d5b8f029222773904e76cbfbb0c7ea13db713"
+  },
+  "boundaries": {
+    "real_llm": "Only the separately registered experiment, never pytest.",
+    "telegram_http": false,
+    "postgresql": "Real isolated databases and restart tests",
+    "mcp": "Real stdio/SDK plus fake HTTP where controlled failures are necessary",
+    "tag": "Readiness gate; annotated lab3 is created only after release_ready=true."
+  }
+}

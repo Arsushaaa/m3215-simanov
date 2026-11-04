@@ -1,14 +1,14 @@
 {
   "kind": "lab3_release_state",
-  "generated_at": "2026-11-02T12:13:56.335300+00:00",
-  "status": "ready_after_quality_improvement",
+  "generated_at": "2026-11-04T01:11:39.005587+00:00",
+  "status": "ready_after_teacher_feedback",
   "release_ready": true,
   "implementation": "ready",
   "automated_acceptance": {
-    "report": "docs/evaluation/lab3-quality-release-checks-20261102.json",
-    "sha256": "6dff27b15ab9265942ed903b4e80a3aa7a65eb43ead38ee5001bb8c51797ff0c",
+    "report": "docs/evaluation/teacher-feedback-20261104-final-checks.json",
+    "sha256": "5bc4c4ca84fbb1d495d43ee762ad8348a2edcf62cfe962a6bca5f5be6b392f5b",
     "suite": {
-      "passed": 1890,
+      "passed": 1907,
       "failed": 0,
       "skipped": 0
     },
@@ -22,29 +22,34 @@
     "remaining_percent": 0,
     "method": "Equal stage weights; stage effort differs."
   },
-  "protocol_commit": "a87af93",
-  "live_protocol": "docs/evaluation/lab3-experiment-v8-protocol.json",
-  "live_results": "docs/evaluation/lab3-experiment-v8-results.json",
+  "protocol_commit": "b5d6829",
+  "live_protocol": "docs/evaluation/lab3-experiment-v10-protocol.json",
+  "live_results": "docs/evaluation/lab3-experiment-v10-results.json",
   "routing_correct": 15,
   "routing_denominator": 15,
-  "requested_tag": "lab3-final-v3",
-  "tag_created": true,
-  "tag_scope": "Local annotated tag created with release commit; no remote publication requested.",
-  "runtime_smoke": "docs/evaluation/lab3-quality-runtime-20261102.json",
+  "requested_tag": null,
+  "tag_created": false,
+  "tag_scope": "Teacher fixes on main; historical tags retained, no new release tag created.",
+  "runtime_smoke": "docs/evaluation/teacher-feedback-20261104-runtime.json",
   "container_check": "docs/evaluation/lab3-quality-container-20261102.json",
-  "quota": "docs/evaluation/lab3-quality-quota-20261102.json",
+  "quota": "docs/evaluation/teacher-feedback-20261104-quota.json",
   "report": "docs/lab3-report.md",
   "defense": "docs/lab3-defense.md",
   "remaining": [],
   "old_tags_unchanged": true,
   "boundaries": [
-    "Real LLM/MCP/isolated PostgreSQL, Telegram transport substituted; UI not checked.",
-    "Small registered samples do not prove zero future errors.",
-    "Friday clarification still asks a redundant date; final card is correct.",
-    "Old short-time failure did not reproduce in diagnostic baseline; original failure retained.",
-    "Reserved15 were used for the expressly intended post-fix v8, remaining3/1/0."
+    "Real model trials use no Telegram; full study examples use fresh memory and real materials MCP.",
+    "Automated tests use real isolated PostgreSQL/stdio and substituted LLM/Telegram/weather HTTP.",
+    "Compatible field constraints refresh automatically; breaking parameter shapes need explicit adapters.",
+    "Teacher failure did not reproduce in two baseline Router trials; samples do not prove zero future errors.",
+    "v9 and v10 have identical 15 Router payloads; two v9 ModelErrors retained with unknown exact HTTP cause.",
+    "69 attempted HTTP requests; primary unused, API reported remaining 50/13/20, reserved15 intact."
   ],
   "original_lab3_commit": "e7a6b909c4285e505492f5c4f53c08c58139e152",
   "previous_lab3_final_v2_commit": "ffaf6d01ea151366799bd5030b9c9687121171c7",
-  "quality_report": "docs/evaluation/lab3-quality-improvement-20261102.md"
+  "quality_report": "docs/evaluation/teacher-feedback-20261104.md",
+  "previous_release_tag": "lab3-final-v3-published",
+  "source_commit": "b5d6829",
+  "container_rebuilt_for_teacher_fixes": false,
+  "container_check_scope": "Historical image from 2 November; current source runs from .venv."
 }

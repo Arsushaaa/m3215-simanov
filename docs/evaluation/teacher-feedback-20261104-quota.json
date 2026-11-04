@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-11-04T01:08:51.915179+00:00",
+  "api_reported": {
+    "OPENROUTER_API_KEY": {
+      "used": 0,
+      "limit": 50,
+      "remaining": 50
+    },
+    "OPENROUTER_API_KEY_2": {
+      "used": 37,
+      "limit": 50,
+      "remaining": 13
+    },
+    "OPENROUTER_API_KEY_3": {
+      "used": 30,
+      "limit": 50,
+      "remaining": 20
+    }
+  },
+  "task_http_attempts": {
+    "OPENROUTER_API_KEY": 0,
+    "OPENROUTER_API_KEY_2": 39,
+    "OPENROUTER_API_KEY_3": 30
+  },
+  "reserved_primary_15_used": false,
+  "notes": [
+    "API counters may lag; attempts are counted locally including failures.",
+    "No paid models, automatic retries or credential fallback."
+  ]
+}

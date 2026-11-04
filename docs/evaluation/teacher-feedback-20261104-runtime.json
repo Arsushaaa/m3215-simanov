@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-11-04T01:06:50.008739+00:00",
+  "http_status": 200,
+  "health": {
+    "status": "ok",
+    "database": "ok",
+    "polling": "running",
+    "reminders": "running"
+  },
+  "source_commit": "b5d6829",
+  "telegram_ui_test": false,
+  "test_messages_sent": 0,
+  "llm_calls": 0,
+  "description": "Startup and existing polling only; no test message or profile changes."
+}
