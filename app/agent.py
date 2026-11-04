@@ -519,8 +519,10 @@ class AgentService:
                     raise ModelError(INVALID_DECISION)
                 trace.status, trace.reason = "OK", "Модель сформировала обычный ответ."
                 return self._plain_reply(result.text, result.truncated, trace)
-            if result.text is not None and result.text.strip():
-                raise ModelError(INVALID_DECISION)
+            # Native content may accompany one valid call. It is neither an
+            # instruction nor an outcome: discard it before parsing/execution
+            # and before constructing the final tool context.
+            result = replace(result, text=None)
             try:
                 call = result.tool_calls[0]
                 arguments = json.loads(

@@ -1,0 +1,146 @@
+{
+  "protocol_sha256": "fb5e2efcf811df96ea552cce3ada92858fc0eaf8ef8bb40df2faf45ee0b4bc84",
+  "cases": [
+    {
+      "id": "list_tuple",
+      "state": "finished",
+      "actual": "legacy_study",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "c7ad9a4acd54c363b69963a4e4c665b83118772a9fca3268104eb6b06862ac81",
+        "usage": {
+          "prompt_tokens": 944,
+          "completion_tokens": 52,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "revision",
+      "state": "finished",
+      "actual": "knowledge",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "c7b996d577698c3d786307e96f29e7adfbc43070bda7f1816aa0a5f1031a1cb1",
+        "usage": {
+          "prompt_tokens": 944,
+          "completion_tokens": 50,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "concrete_help",
+      "state": "finished",
+      "actual": "legacy_study",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "053ef271df94c4674cdb8cb3c743b9421cba5d620d1ea38de602d8bc34765bad",
+        "usage": {
+          "prompt_tokens": 947,
+          "completion_tokens": 52,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "quoted_weather",
+      "state": "finished",
+      "actual": "legacy_study",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "8bbbae9dce6e7b198889ea556fe9278bf34e848ccadf82fd5790dad488548a4a",
+        "usage": {
+          "prompt_tokens": 951,
+          "completion_tokens": 52,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "idiom",
+      "state": "finished",
+      "actual": "legacy_study",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "8824b3c2cbe68d89cfc8a1ccbf76c323b6834da72f4a011ca2eeed840fdd34fa",
+        "usage": {
+          "prompt_tokens": 946,
+          "completion_tokens": 51,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "materials",
+      "state": "finished",
+      "actual": "knowledge",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "f32f61702625f37493a7fd86be7a0e9254e90d70b00f343ef56921eaca49cf1e",
+        "usage": {
+          "prompt_tokens": 944,
+          "completion_tokens": 50,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "vague",
+      "state": "finished",
+      "actual": "clarify",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "4288fc7d0968b4a1c48a6c0538ca2c40800bb71bca6b792692e19d49fc6e7b9e",
+        "usage": {
+          "prompt_tokens": 940,
+          "completion_tokens": 50,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "multiple",
+      "state": "finished",
+      "actual": "clarify",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "cb132ba6ee52a635ae3ecdddafde9381ea051bf3b67174e6a0949194aa69a6d6",
+        "usage": {
+          "prompt_tokens": 946,
+          "completion_tokens": 49,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "list_tuple_full_study",
+      "state": "finished",
+      "answer": "**Список** (`list`) — изменяемая упорядоченная коллекция.  \n**Кортеж** (`tuple`) — неизменяемая упорядоченная коллекция.\n\n### Основные различия\n\n| Критерий | Список `[]` | Кортеж `()` |\n|----------|-------------|-------------|\n| Изменяемость | Можно добавлять, удалять и менять элементы | После создания нельзя изменить |\n| Синтаксис | `a = [1, 2, 3]` | `a = (1, 2, 3)` |\n| Методы | `append`, `insert`, `remove`, `pop`, `sort`, `reverse` | Только `count` и `index` |\n| Память | Занимает чуть больше места | Занимает чуть меньше места |\n| Использование в качестве ключа словаря | Нельзя (нехешируемый) | Можно, если все элементы хешируемы |\n\n### Пример\n\n```python\n# Список — можно менять\nnums = [1, 2, 3]\nnums.append(4)      # [1, 2, 3, 4]\nnums[0] = 10        # [10, 2, 3, 4]\n\n# Кортеж — нельзя менять\ncoords = (10, 20)\n# coords[0] = 5     # TypeError: 'tuple' object does not support item assignment\n# coords.append(30) # AttributeError: 'tuple' object has no attribute 'append'\n```\n\n### Когда что использовать\n\n- **Список** — когда коллекция должна меняться в процессе работы (например, список пользователей, товаров в корзине).\n- **Кортеж** — когда данные фиксированы (координаты точки, дата, конфигурация). Также кортеж удобен, если нужно использовать коллекцию в качестве ключа в словаре.\n\n### Типичные ошибки\n\n1. **Попытка изменить элемент кортежа** — вызовет `TypeError`.\n2. **Один элемент в кортеже** — нужно ставить запятую, иначе это не кортеж:\n   ```python\n   a = (5)      # это просто число 5\n   b = (5,)     # это кортеж из одного элемента\n   ```\n3. **Использование списка как ключа словаря** — вызовет `TypeError: unhashable type: 'list'`.",
+      "status": "success",
+      "used_tools": [],
+      "http_attempts": 2
+    },
+    {
+      "id": "revision_full_study",
+      "state": "finished",
+      "answer": "Нужно повторить, что идемпотентность означает отсутствие дополнительного эффекта при повторении одной и той же операции с тем же ключом, и что повтор возвращает прежнюю квитанцию вместо создания нового результата.\n\nИсточники:\n• [reliable-delivery] Идемпотентность и восстановление доставки — версия dfc35895fa2b",
+      "status": "success",
+      "used_tools": [
+        "search_materials"
+      ],
+      "http_attempts": 3
+    }
+  ],
+  "quota_before": {
+    "used": 2,
+    "limit": 50,
+    "remaining": 48
+  },
+  "http_attempts": 13,
+  "quota_after": {
+    "used": 4,
+    "limit": 50,
+    "remaining": 46
+  }
+}

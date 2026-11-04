@@ -1,0 +1,2068 @@
+{
+  "created_at": "2026-11-04T01:01:39.477201+00:00",
+  "protocol": {
+    "version": 2,
+    "dataset_sha256": "0a9c9f06f85e094ae42aaa3b684ea368b8f051055f5476ed676203e2a1afdc98",
+    "evaluation_context": {
+      "now": "2026-10-12T09:00:00+03:00",
+      "timezone": "Europe/Moscow"
+    },
+    "case_ids": [
+      "weather_1",
+      "weather_2",
+      "weather_3",
+      "schedule_1",
+      "schedule_2",
+      "schedule_3",
+      "reminder_1",
+      "reminder_2",
+      "reminder_3",
+      "respond_1",
+      "respond_2",
+      "clarify_1"
+    ],
+    "model": "nvidia/nemotron-3.5-super-vl:free",
+    "tool_mode": "native",
+    "mode": "study",
+    "temperature": 0.3,
+    "max_output_tokens": 2048,
+    "llm_timeout_seconds": 60,
+    "agent_timeout_seconds": 135,
+    "history_max_messages": 20,
+    "history_max_tokens": 6000,
+    "history": "fresh empty per case; trusted saved timezone from evaluation_context",
+    "reasoning": {
+      "enabled": false
+    },
+    "provider": {
+      "max_price": {
+        "prompt": 0,
+        "completion": 0
+      }
+    },
+    "catalog": {
+      "tools": {
+        "search_materials": {
+          "name": "search_materials",
+          "description": "Найти фрагменты учебных материалов по текстовому запросу. document_id — только ID из materials://catalog, не путь и не URL. Пустая выдача означает отсутствие ответа в материалах.",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Query",
+                "type": "string"
+              },
+              "document_id": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Document Id"
+              },
+              "limit": {
+                "default": 3,
+                "maximum": 5,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "title": "SearchArguments"
+          },
+          "outputSchema": {
+            "$defs": {
+              "ErrorDetails": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_ARGUMENTS",
+                      "UNKNOWN_TOOL",
+                      "UNAUTHORIZED",
+                      "CONFIRMATION_REQUIRED",
+                      "ACTION_CANCELLED",
+                      "ACTION_EXPIRED",
+                      "ACTION_CONFLICT",
+                      "TIMEZONE_REQUIRED",
+                      "AMBIGUOUS_TIME",
+                      "AMBIGUOUS_PLACE",
+                      "MCP_UNAVAILABLE",
+                      "TIMEOUT",
+                      "UPSTREAM_ERROR",
+                      "INVALID_RESULT",
+                      "SOURCE_UNAVAILABLE",
+                      "CALL_LIMIT",
+                      "OUTCOME_UNKNOWN"
+                    ],
+                    "title": "Code",
+                    "type": "string"
+                  },
+                  "message": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "title": "Message",
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "title": "Retryable",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retryable"
+                ],
+                "title": "ErrorDetails",
+                "type": "object"
+              },
+              "ErrorResult": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "error",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "error": {
+                    "$ref": "#/$defs/ErrorDetails"
+                  }
+                },
+                "required": [
+                  "status",
+                  "error"
+                ],
+                "title": "ErrorResult",
+                "type": "object"
+              },
+              "MaterialMatch": {
+                "additionalProperties": false,
+                "properties": {
+                  "document_id": {
+                    "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                    "title": "Document Id",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Title",
+                    "type": "string"
+                  },
+                  "version": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "title": "Version",
+                    "type": "string"
+                  },
+                  "snippet": {
+                    "maxLength": 1200,
+                    "minLength": 1,
+                    "title": "Snippet",
+                    "type": "string"
+                  },
+                  "score": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "title": "Score",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "document_id",
+                  "title",
+                  "version",
+                  "snippet",
+                  "score"
+                ],
+                "title": "MaterialMatch",
+                "type": "object"
+              },
+              "SearchData": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "ok",
+                      "not_found"
+                    ],
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "query": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Query",
+                    "type": "string"
+                  },
+                  "document_id": {
+                    "anyOf": [
+                      {
+                        "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Document Id"
+                  },
+                  "limit": {
+                    "maximum": 5,
+                    "minimum": 1,
+                    "title": "Limit",
+                    "type": "integer"
+                  },
+                  "catalog_version": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "title": "Catalog Version",
+                    "type": "string"
+                  },
+                  "matches": {
+                    "items": {
+                      "$ref": "#/$defs/MaterialMatch"
+                    },
+                    "maxItems": 5,
+                    "title": "Matches",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "status",
+                  "query",
+                  "document_id",
+                  "limit",
+                  "catalog_version",
+                  "matches"
+                ],
+                "title": "SearchData",
+                "type": "object"
+              }
+            },
+            "discriminator": {
+              "mapping": {
+                "error": "#/$defs/ErrorResult",
+                "not_found": "#/$defs/SearchData",
+                "ok": "#/$defs/SearchData"
+              },
+              "propertyName": "status"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/SearchData"
+              },
+              {
+                "$ref": "#/$defs/ErrorResult"
+              }
+            ],
+            "title": "SearchResult"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+          }
+        },
+        "get_weather": {
+          "name": "get_weather",
+          "description": "Текущая погода в городе. city принимает только название на русском языке; переведи иностранное название города и указанные страну/регион на русский до вызова. Не расширяй короткое имя и не дополняй неуказанную страну/регион. При одноимённых городах место выбирает пользователь, а не модель. Это наблюдение, а не прогноз на весь день.",
+          "inputSchema": {
+            "type": "object",
+            "$defs": {
+              "Coordinates": {
+                "additionalProperties": false,
+                "properties": {
+                  "latitude": {
+                    "maximum": 90,
+                    "minimum": -90,
+                    "title": "Latitude",
+                    "type": "number"
+                  },
+                  "longitude": {
+                    "maximum": 180,
+                    "minimum": -180,
+                    "title": "Longitude",
+                    "type": "number"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "latitude",
+                  "longitude",
+                  "timezone"
+                ],
+                "title": "Coordinates",
+                "type": "object"
+              },
+              "WeatherArguments": {
+                "additionalProperties": false,
+                "properties": {
+                  "city": {
+                    "description": "Название города на русском языке с той же точностью, что у пользователя. Переведи иностранное название, но не расширяй короткое имя до другого полного названия. Страна и регион допустимы только из явного запроса пользователя или явно выбранного им варианта. Не угадывай их по своим знаниям, языку сообщения, часовому поясу или популярности города. Для запроса без уточнений передай только название города: неоднозначность выявляет MCP, место выбирает пользователь. Если пользователь указал город и страну вместе, переведи обе указанные части. После явного выбора однозначного полного имени достаточно самого имени: не требуй дописывать страну/регион из подписи кандидата. Латиница и ISO-коды стран не принимаются.",
+                    "examples": [
+                      "Ростов",
+                      "Москва",
+                      "Казань, Россия"
+                    ],
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "pattern": "^[А-Яа-яЁё][А-Яа-яЁё .'’\\-‐‑‒–—]*(?:, *[А-Яа-яЁё][А-Яа-яЁё .'’\\-‐‑‒–—]*)*$",
+                    "title": "City",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "title": "WeatherArguments",
+                "type": "object"
+              },
+              "WeatherPointArguments": {
+                "additionalProperties": false,
+                "properties": {
+                  "point": {
+                    "$ref": "#/$defs/Coordinates"
+                  }
+                },
+                "required": [
+                  "point"
+                ],
+                "title": "WeatherPointArguments",
+                "type": "object"
+              }
+            },
+            "anyOf": [
+              {
+                "$ref": "#/$defs/WeatherArguments"
+              },
+              {
+                "$ref": "#/$defs/WeatherPointArguments"
+              }
+            ],
+            "title": "WeatherToolArguments"
+          },
+          "outputSchema": {
+            "$defs": {
+              "Coordinates": {
+                "additionalProperties": false,
+                "properties": {
+                  "latitude": {
+                    "maximum": 90,
+                    "minimum": -90,
+                    "title": "Latitude",
+                    "type": "number"
+                  },
+                  "longitude": {
+                    "maximum": 180,
+                    "minimum": -180,
+                    "title": "Longitude",
+                    "type": "number"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "latitude",
+                  "longitude",
+                  "timezone"
+                ],
+                "title": "Coordinates",
+                "type": "object"
+              },
+              "ErrorDetails": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_ARGUMENTS",
+                      "UNKNOWN_TOOL",
+                      "UNAUTHORIZED",
+                      "CONFIRMATION_REQUIRED",
+                      "ACTION_CANCELLED",
+                      "ACTION_EXPIRED",
+                      "ACTION_CONFLICT",
+                      "TIMEZONE_REQUIRED",
+                      "AMBIGUOUS_TIME",
+                      "AMBIGUOUS_PLACE",
+                      "MCP_UNAVAILABLE",
+                      "TIMEOUT",
+                      "UPSTREAM_ERROR",
+                      "INVALID_RESULT",
+                      "SOURCE_UNAVAILABLE",
+                      "CALL_LIMIT",
+                      "OUTCOME_UNKNOWN"
+                    ],
+                    "title": "Code",
+                    "type": "string"
+                  },
+                  "message": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "title": "Message",
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "title": "Retryable",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retryable"
+                ],
+                "title": "ErrorDetails",
+                "type": "object"
+              },
+              "ErrorResult": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "error",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "error": {
+                    "$ref": "#/$defs/ErrorDetails"
+                  }
+                },
+                "required": [
+                  "status",
+                  "error"
+                ],
+                "title": "ErrorResult",
+                "type": "object"
+              },
+              "Place": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Name",
+                    "type": "string"
+                  },
+                  "country": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Country",
+                    "type": "string"
+                  },
+                  "region": {
+                    "maxLength": 100,
+                    "title": "Region",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "country",
+                  "region"
+                ],
+                "title": "Place",
+                "type": "object"
+              },
+              "PointWeatherResult": {
+                "discriminator": {
+                  "mapping": {
+                    "error": "#/$defs/ErrorResult",
+                    "ok": "#/$defs/WeatherPointOk"
+                  },
+                  "propertyName": "status"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/WeatherPointOk"
+                  },
+                  {
+                    "$ref": "#/$defs/ErrorResult"
+                  }
+                ],
+                "title": "PointWeatherResult"
+              },
+              "WeatherAmbiguous": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "ambiguous",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "query": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Query",
+                    "type": "string"
+                  },
+                  "candidates": {
+                    "items": {
+                      "$ref": "#/$defs/Place"
+                    },
+                    "maxItems": 5,
+                    "minItems": 2,
+                    "title": "Candidates",
+                    "type": "array"
+                  },
+                  "source": {
+                    "const": "Open-Meteo",
+                    "title": "Source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "query",
+                  "candidates",
+                  "source"
+                ],
+                "title": "WeatherAmbiguous",
+                "type": "object"
+              },
+              "WeatherCondition": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "title": "Code",
+                    "type": "integer"
+                  },
+                  "description": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Description",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "description"
+                ],
+                "title": "WeatherCondition",
+                "type": "object"
+              },
+              "WeatherNotFound": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "not_found",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "query": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Query",
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "Open-Meteo",
+                    "title": "Source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "query",
+                  "source"
+                ],
+                "title": "WeatherNotFound",
+                "type": "object"
+              },
+              "WeatherOk": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "ok",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "place": {
+                    "$ref": "#/$defs/Place"
+                  },
+                  "temperature_c": {
+                    "description": "Температура воздуха, °C.",
+                    "title": "Temperature C",
+                    "type": "number"
+                  },
+                  "condition": {
+                    "$ref": "#/$defs/WeatherCondition"
+                  },
+                  "wind": {
+                    "$ref": "#/$defs/Wind"
+                  },
+                  "observed_at": {
+                    "description": "ISO 8601 дата и время с явным смещением UTC.",
+                    "format": "date-time",
+                    "title": "Observed At",
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "Open-Meteo",
+                    "title": "Source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "place",
+                  "temperature_c",
+                  "condition",
+                  "wind",
+                  "observed_at",
+                  "timezone",
+                  "source"
+                ],
+                "title": "WeatherOk",
+                "type": "object"
+              },
+              "WeatherPointOk": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "ok",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "point": {
+                    "$ref": "#/$defs/Coordinates"
+                  },
+                  "temperature_c": {
+                    "maximum": 100,
+                    "minimum": -100,
+                    "title": "Temperature C",
+                    "type": "number"
+                  },
+                  "condition": {
+                    "$ref": "#/$defs/WeatherCondition"
+                  },
+                  "wind": {
+                    "$ref": "#/$defs/Wind"
+                  },
+                  "observed_at": {
+                    "description": "ISO 8601 дата и время с явным смещением UTC.",
+                    "format": "date-time",
+                    "title": "Observed At",
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "Open-Meteo",
+                    "title": "Source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "point",
+                  "temperature_c",
+                  "condition",
+                  "wind",
+                  "observed_at",
+                  "timezone",
+                  "source"
+                ],
+                "title": "WeatherPointOk",
+                "type": "object"
+              },
+              "WeatherResult": {
+                "discriminator": {
+                  "mapping": {
+                    "ambiguous": "#/$defs/WeatherAmbiguous",
+                    "error": "#/$defs/ErrorResult",
+                    "not_found": "#/$defs/WeatherNotFound",
+                    "ok": "#/$defs/WeatherOk"
+                  },
+                  "propertyName": "status"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/WeatherOk"
+                  },
+                  {
+                    "$ref": "#/$defs/WeatherNotFound"
+                  },
+                  {
+                    "$ref": "#/$defs/WeatherAmbiguous"
+                  },
+                  {
+                    "$ref": "#/$defs/ErrorResult"
+                  }
+                ],
+                "title": "WeatherResult",
+                "type": "object"
+              },
+              "Wind": {
+                "additionalProperties": false,
+                "properties": {
+                  "speed": {
+                    "description": "Скорость ветра в км/ч.",
+                    "minimum": 0,
+                    "title": "Speed",
+                    "type": "number"
+                  },
+                  "unit": {
+                    "const": "km/h",
+                    "title": "Unit",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "speed",
+                  "unit"
+                ],
+                "title": "Wind",
+                "type": "object"
+              }
+            },
+            "anyOf": [
+              {
+                "$ref": "#/$defs/WeatherResult"
+              },
+              {
+                "$ref": "#/$defs/PointWeatherResult"
+              }
+            ],
+            "title": "WeatherToolResult",
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true
+          }
+        },
+        "get_schedule": {
+          "name": "get_schedule",
+          "description": "Учебные занятия на календарную дату YYYY-MM-DD в зоне расписания. Вне покрытия данных нет; пустой список внутри покрытия означает свободный день.",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "date": {
+                "description": "Календарная дата YYYY-MM-DD, 2000–2100 годы.",
+                "format": "date",
+                "title": "Date",
+                "type": "string"
+              }
+            },
+            "required": [
+              "date"
+            ],
+            "title": "ScheduleArguments"
+          },
+          "outputSchema": {
+            "$defs": {
+              "ErrorDetails": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_ARGUMENTS",
+                      "UNKNOWN_TOOL",
+                      "UNAUTHORIZED",
+                      "CONFIRMATION_REQUIRED",
+                      "ACTION_CANCELLED",
+                      "ACTION_EXPIRED",
+                      "ACTION_CONFLICT",
+                      "TIMEZONE_REQUIRED",
+                      "AMBIGUOUS_TIME",
+                      "AMBIGUOUS_PLACE",
+                      "MCP_UNAVAILABLE",
+                      "TIMEOUT",
+                      "UPSTREAM_ERROR",
+                      "INVALID_RESULT",
+                      "SOURCE_UNAVAILABLE",
+                      "CALL_LIMIT",
+                      "OUTCOME_UNKNOWN"
+                    ],
+                    "title": "Code",
+                    "type": "string"
+                  },
+                  "message": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "title": "Message",
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "title": "Retryable",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retryable"
+                ],
+                "title": "ErrorDetails",
+                "type": "object"
+              },
+              "ErrorResult": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "error",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "error": {
+                    "$ref": "#/$defs/ErrorDetails"
+                  }
+                },
+                "required": [
+                  "status",
+                  "error"
+                ],
+                "title": "ErrorResult",
+                "type": "object"
+              },
+              "Lesson": {
+                "additionalProperties": false,
+                "properties": {
+                  "start": {
+                    "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$",
+                    "title": "Start",
+                    "type": "string"
+                  },
+                  "end": {
+                    "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$",
+                    "title": "End",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Title",
+                    "type": "string"
+                  },
+                  "location": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Location",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "end",
+                  "title",
+                  "location"
+                ],
+                "title": "Lesson",
+                "type": "object"
+              },
+              "ScheduleOk": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "ok",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "date": {
+                    "description": "Календарная дата YYYY-MM-DD, 2000–2100 годы.",
+                    "format": "date",
+                    "title": "Date",
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  },
+                  "lessons": {
+                    "items": {
+                      "$ref": "#/$defs/Lesson"
+                    },
+                    "maxItems": 32,
+                    "title": "Lessons",
+                    "type": "array"
+                  },
+                  "source": {
+                    "const": "local_schedule",
+                    "title": "Source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "date",
+                  "timezone",
+                  "lessons",
+                  "source"
+                ],
+                "title": "ScheduleOk",
+                "type": "object"
+              },
+              "ScheduleOutsideCoverage": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "outside_coverage",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "date": {
+                    "description": "Календарная дата YYYY-MM-DD, 2000–2100 годы.",
+                    "format": "date",
+                    "title": "Date",
+                    "type": "string"
+                  },
+                  "coverage_start": {
+                    "description": "Календарная дата YYYY-MM-DD, 2000–2100 годы.",
+                    "format": "date",
+                    "title": "Coverage Start",
+                    "type": "string"
+                  },
+                  "coverage_end": {
+                    "description": "Календарная дата YYYY-MM-DD, 2000–2100 годы.",
+                    "format": "date",
+                    "title": "Coverage End",
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  },
+                  "source": {
+                    "const": "local_schedule",
+                    "title": "Source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "date",
+                  "coverage_start",
+                  "coverage_end",
+                  "timezone",
+                  "source"
+                ],
+                "title": "ScheduleOutsideCoverage",
+                "type": "object"
+              }
+            },
+            "discriminator": {
+              "mapping": {
+                "error": "#/$defs/ErrorResult",
+                "ok": "#/$defs/ScheduleOk",
+                "outside_coverage": "#/$defs/ScheduleOutsideCoverage"
+              },
+              "propertyName": "status"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ScheduleOk"
+              },
+              {
+                "$ref": "#/$defs/ScheduleOutsideCoverage"
+              },
+              {
+                "$ref": "#/$defs/ErrorResult"
+              }
+            ],
+            "title": "ScheduleResult",
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+          }
+        },
+        "add_reminder": {
+          "name": "add_reminder",
+          "description": "Сохранить напоминание только по уже подтверждённому действию владельца. До вызова приложение обязано показать параметры и получить подтверждение. Сам инструмент не рассылает уведомления.",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "maxLength": 500,
+                "minLength": 1,
+                "title": "Text",
+                "type": "string"
+              },
+              "remind_at": {
+                "description": "ISO 8601 дата и время с явным смещением UTC.",
+                "format": "date-time",
+                "title": "Remind At",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text",
+              "remind_at"
+            ],
+            "title": "ReminderArguments"
+          },
+          "outputSchema": {
+            "$defs": {
+              "ErrorDetails": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "INVALID_ARGUMENTS",
+                      "UNKNOWN_TOOL",
+                      "UNAUTHORIZED",
+                      "CONFIRMATION_REQUIRED",
+                      "ACTION_CANCELLED",
+                      "ACTION_EXPIRED",
+                      "ACTION_CONFLICT",
+                      "TIMEZONE_REQUIRED",
+                      "AMBIGUOUS_TIME",
+                      "AMBIGUOUS_PLACE",
+                      "MCP_UNAVAILABLE",
+                      "TIMEOUT",
+                      "UPSTREAM_ERROR",
+                      "INVALID_RESULT",
+                      "SOURCE_UNAVAILABLE",
+                      "CALL_LIMIT",
+                      "OUTCOME_UNKNOWN"
+                    ],
+                    "title": "Code",
+                    "type": "string"
+                  },
+                  "message": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "title": "Message",
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "title": "Retryable",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "retryable"
+                ],
+                "title": "ErrorDetails",
+                "type": "object"
+              },
+              "ErrorResult": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "error",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "error": {
+                    "$ref": "#/$defs/ErrorDetails"
+                  }
+                },
+                "required": [
+                  "status",
+                  "error"
+                ],
+                "title": "ErrorResult",
+                "type": "object"
+              },
+              "ReminderOk": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "const": "ok",
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "reminder_id": {
+                    "format": "uuid",
+                    "title": "Reminder Id",
+                    "type": "string"
+                  },
+                  "remind_at": {
+                    "description": "ISO 8601 дата и время с явным смещением UTC.",
+                    "format": "date-time",
+                    "title": "Remind At",
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "title": "Timezone",
+                    "type": "string"
+                  },
+                  "created": {
+                    "title": "Created",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "status",
+                  "reminder_id",
+                  "remind_at",
+                  "timezone",
+                  "created"
+                ],
+                "title": "ReminderOk",
+                "type": "object"
+              }
+            },
+            "discriminator": {
+              "mapping": {
+                "error": "#/$defs/ErrorResult",
+                "ok": "#/$defs/ReminderOk"
+              },
+              "propertyName": "status"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ReminderOk"
+              },
+              {
+                "$ref": "#/$defs/ErrorResult"
+              }
+            ],
+            "title": "ReminderResult",
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+          }
+        }
+      },
+      "resources": {
+        "materials://catalog": {
+          "uri": "materials://catalog",
+          "name": "materials-catalog",
+          "description": "Проверяемый каталог версий учебных документов.",
+          "mimeType": "application/json"
+        },
+        "schedule://current-week": {
+          "uri": "schedule://current-week",
+          "name": "current-week",
+          "description": "Учебное расписание на текущую неделю.",
+          "mimeType": "application/json"
+        }
+      }
+    },
+    "catalog_sha256": "df549af1ba59bec6a71a8d759ee7b8e8f548b5a978aafc2c536ac0c43ee3f5b1",
+    "source_sha256": {
+      "scripts/lab2_experiment.py": "e1be102c9f3a83de35a402908169ff9598ab7d2dc74792f3945441b6808a7187",
+      "app/dialog.py": "f88b59e3bf9c755fd075abbf75994ead61d4eed994ad1b5ad192c3b38808f14c",
+      "app/agent.py": "c8b5fe8fa50a2b1cf28d97af4b6dcc50062aef1156ab6e6a5fc617175614d6a1",
+      "app/llm.py": "18b475676a8273aa6f14be0703921bd4884b7750802bc55b885a077519e717c8",
+      "app/prompts.py": "1a723e4203c2baaeccae04cdeea770e2e6869405b9cbfb5482e8647b8a4064e6",
+      "app/agent_prompts.py": "650fa13e847aaba7c3b6e57b5f161a6b8b7414b2a3e46c9a377162bfb3f7846a",
+      "app/reminder_grounding.py": "9b5788a80b9d6e8d2e577373bb0b9114e57beeba5fc2ea2878498c5a44720236",
+      "app/reminder_messages.py": "0fc7d23e254b5bb8f7383aac38ab49e6566b77812b0247e9849e7864550185aa",
+      "app/mcp/contracts.py": "96f41b9bf80d86e7db511ce3ce964e0fa2ef948f09d689f4c4e8bbc06ad47921"
+    },
+    "study_prompt_sha256": "7a1ed4989eab9854ef34baedf99518e4537260ce6c23c33924b4a9484622f37d",
+    "scoring": "Exact action; argument keys exact. Text: casefold, ё→е, collapsed whitespace, terminal .!? stripped. Datetime: equal aware UTC instant. Missing/wrong actions remain failures in the fixed denominators 12 and 9. No semantic aliases.",
+    "boundaries": {
+      "llm": "real OpenRouter client when invoked through CLI",
+      "mcp": "real stdio discovery; stop before every application call",
+      "storage": "isolated memory only; no PostgreSQL connection",
+      "reminders": "validated proposal only; no confirmation or capability",
+      "telegram": "no API calls",
+      "expected_answers_in_model_context": false,
+      "automatic_retries": false,
+      "routing": "one semantic LLM decision per case; no local intent parsing"
+    }
+  },
+  "attempts": [
+    {
+      "id": "weather_1",
+      "query": "Какая сейчас погода в Санкт-Петербурге?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Санкт-Петербург"
+      },
+      "started_at": "2026-11-04T01:01:39.477232+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:39.483534+00:00",
+          "request_sha256": "f568a1c77643a937836a130295a13b23eeed3098a7f504869f361f4ec17a2d11",
+          "input_sha256": "8b39b81d7fd8866e29101372970b97601e2bd72f935332962188270432166dc0",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3078,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-f09493ea-9e5f-4ce8-9394-d35c09a220a0",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Санкт-Петербург\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754099-ILAiOHk3TUlEfUKYxVpM",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4056,
+            "completion_tokens": 28,
+            "total_tokens": 4084,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 747,
+          "finished_at": "2026-11-04T01:01:40.232092+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_weather",
+        "arguments": {
+          "city": "Санкт-Петербург"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_weather",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 755,
+        "argument_summary": "Город: Санкт-Петербург"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:40.233621+00:00"
+    },
+    {
+      "id": "weather_2",
+      "query": "Нужен ли сегодня зонт в Казани?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Казань"
+      },
+      "started_at": "2026-11-04T01:01:40.241271+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:40.247499+00:00",
+          "request_sha256": "ab1711fe2f9d729ac172eeea0b76d1ea51e0067255c88e56778b295feccce05f",
+          "input_sha256": "00a15e09b769871758a13bc12bd5d830a311f81252ac4761a8f13005b25cb9e1",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3073,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-57f7d4ed-696d-47bf-8e4d-663ea5ee930c",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Казань\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754100-cCprl1z4k1n7YxPClh8X",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4058,
+            "completion_tokens": 27,
+            "total_tokens": 4085,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 677,
+          "finished_at": "2026-11-04T01:01:40.925665+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_weather",
+        "arguments": {
+          "city": "Казань"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_weather",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 684,
+        "argument_summary": "Город: Казань"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:40.927258+00:00"
+    },
+    {
+      "id": "weather_3",
+      "query": "Сколько сейчас градусов в Тбилиси, Грузия?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Тбилиси, Грузия"
+      },
+      "started_at": "2026-11-04T01:01:40.928539+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:40.935482+00:00",
+          "request_sha256": "0078bef0809f5673c0144b34ddd4c4874dc7145b64aeb141a87c823b4aa362d5",
+          "input_sha256": "7e968c4780fea1a001aac126d98993702192974d2afbe75508afc6dea3a2166c",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3080,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-14e1cceb-417c-43c4-8bcd-399dba51d3db",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Тбилиси, Грузия\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754101-WTCfLHNtpRyAfbZu2BfO",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4060,
+            "completion_tokens": 30,
+            "total_tokens": 4090,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 741,
+          "finished_at": "2026-11-04T01:01:41.678471+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_weather",
+        "arguments": {
+          "city": "Тбилиси, Грузия"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_weather",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 751,
+        "argument_summary": "Город: Тбилиси, Грузия"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:41.680719+00:00"
+    },
+    {
+      "id": "schedule_1",
+      "query": "Какие занятия у меня сегодня?",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-12"
+      },
+      "started_at": "2026-11-04T01:01:41.682527+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:41.690752+00:00",
+          "request_sha256": "0e98d0a843b29b254dcbed0d59d63613dcb1e6cdb1d431e3267a5a72586b2c0a",
+          "input_sha256": "cd93e40d9eb6025196f93ce76f1ee5b0688db6bdf38c08c59b2b2cb7231910c6",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3072,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-d2e49fe0-6676-40c8-950b-cec78a1d8b1e",
+              "type": "function",
+              "function": {
+                "name": "get_schedule",
+                "arguments": "{\"date\":\"2026-10-12\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754101-lC9yPqnMcRWRucJaacR5",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4054,
+            "completion_tokens": 34,
+            "total_tokens": 4088,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 706,
+          "finished_at": "2026-11-04T01:01:42.398696+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-12"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_schedule",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 716,
+        "argument_summary": "Дата: 2026-10-12"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:42.401037+00:00"
+    },
+    {
+      "id": "schedule_2",
+      "query": "Покажи расписание на завтра.",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-13"
+      },
+      "started_at": "2026-11-04T01:01:42.402401+00:00",
+      "status": "captured_before_mcp",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:42.408441+00:00",
+          "request_sha256": "173c446dae3cff24dd46abdb36da1b13479f480457caff0994daec121285371c",
+          "input_sha256": "335ddfb1b947917ac97e4d52b5ea4b850c8f92dbd3a6fab53e53883fea9417c0",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3071,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-90a3a3b1-0ef6-4a2b-9d16-4a7ecf7b8fc8",
+              "type": "function",
+              "function": {
+                "name": "get_schedule",
+                "arguments": "{\"date\":\"2026-10-13\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754102-vNpUtuqmeMf2ggZF6Bt2",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4056,
+            "completion_tokens": 34,
+            "total_tokens": 4090,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 729,
+          "finished_at": "2026-11-04T01:01:43.139538+00:00"
+        }
+      ],
+      "actual": {
+        "action": "get_schedule",
+        "arguments": {
+          "date": "2026-10-13"
+        }
+      },
+      "audit": {
+        "decision": "call_tool",
+        "target": "get_schedule",
+        "status": "FAILED",
+        "reason": "Обработка не завершена.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 1,
+        "duration_ms": 738,
+        "argument_summary": "Дата: 2026-10-13"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:43.141645+00:00"
+    },
+    {
+      "id": "schedule_3",
+      "query": "Есть ли у меня пары в ближайшее воскресенье?",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-18"
+      },
+      "started_at": "2026-11-04T01:01:43.143641+00:00",
+      "status": "failed",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:43.150146+00:00",
+          "request_sha256": "65c62d9b08ebd6ea2a8739a924e1d4f02ff7bcc75f643b1d8385ce0f80d8c3db",
+          "input_sha256": "c0783424fdb0fd13e6c9a8a306d2f94493ee80fe62d6b83ce07e8eaefca86824",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3081,
+          "raw_content": "Ближайшее воскресенье — 2026-10-18. Проверю учебные занятия на этот день.\n",
+          "raw_tool_calls": [
+            {
+              "id": "call-7a69fe19-f4c1-4394-a1f7-202e37f61436",
+              "type": "function",
+              "function": {
+                "name": "get_schedule",
+                "arguments": "{\"date\":\"2026-10-18\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754103-FY1pq4YNe7f6wQYdscJ4",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4063,
+            "completion_tokens": 66,
+            "total_tokens": 4129,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 895,
+          "finished_at": "2026-11-04T01:01:44.047029+00:00"
+        }
+      ],
+      "actual": {
+        "action": null,
+        "arguments": null
+      },
+      "error": {
+        "type": "ModelError",
+        "message": "Модель предложила некорректное действие. Уточни запрос и попробуй снова."
+      },
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "FAILED",
+        "reason": "Ответ не прошёл проверку или сервис недоступен.",
+        "error_code": "INVALID_RESULT",
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 904,
+        "argument_summary": ""
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": false,
+        "arguments_required": true,
+        "arguments_correct": false
+      },
+      "finished_at": "2026-11-04T01:01:44.048771+00:00"
+    },
+    {
+      "id": "reminder_1",
+      "query": "Напомни завтра в 18:30 отправить отчёт.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "отправить отчёт",
+        "remind_at": "2026-10-13T18:30:00+03:00"
+      },
+      "started_at": "2026-11-04T01:01:44.050381+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:44.056866+00:00",
+          "request_sha256": "41084ecd8ae38ffff9d6fc779d02f28eec1168bf9b9626c830d474bb9b93b63a",
+          "input_sha256": "9709fa752588b30642851bc5774ccdfe40a46db99f87a1a88b9a26227a977fe2",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3076,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-6b859b5a-0560-41c4-a684-18a6245ea7e6",
+              "type": "function",
+              "function": {
+                "name": "prepare_reminder",
+                "arguments": "{\"arguments\":{\"text\":\"отправить отчёт\",\"remind_at\":\"2026-10-13T18:30:00+03:00\"},\"evidence\":{\"request\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Напомни завтра в 18:30 отправить отчёт.\"},\"text\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"отправить отчёт\"},\"date\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"завтра\"},\"time\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"18:30\"}}}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754104-ZgsUIXHbHSlBhile5Lwl",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4064,
+            "completion_tokens": 192,
+            "total_tokens": 4256,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1599,
+          "finished_at": "2026-11-04T01:01:45.657472+00:00"
+        }
+      ],
+      "actual": {
+        "action": "add_reminder",
+        "arguments": {
+          "text": "отправить отчёт",
+          "remind_at": "2026-10-13T18:30:00+03:00"
+        },
+        "timezone": "Europe/Moscow"
+      },
+      "displayed_answer": "Параметры напоминания:\nотправить отчёт\nКогда: 13 октября 2026, 18:30 (UTC+03:00)\nЧасовой пояс: Europe/Moscow.\n\nНапоминание не сохранено: требуется подтверждение.",
+      "audit": {
+        "decision": "call_tool",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Для напоминания нужно подтверждение; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1607,
+        "argument_summary": "Время: 2026-10-13T18:30:00+03:00; зона: Europe/Moscow"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:45.659739+00:00"
+    },
+    {
+      "id": "reminder_2",
+      "query": "Напомни 15 октября в 09:00 проверить расписание.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "проверить расписание",
+        "remind_at": "2026-10-15T09:00:00+03:00"
+      },
+      "started_at": "2026-11-04T01:01:45.661247+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:45.667555+00:00",
+          "request_sha256": "6af91faa3f4495bd5547abecb7cb2b0dde0bd17982cdca48b335b34bca44f70c",
+          "input_sha256": "1ab98acc7e5f94c3063c24abae8e6b0ff9daf2d66418f128f91227a87241bb4a",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3081,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-975c03ea-4e2c-490a-abad-d387b85b84d9",
+              "type": "function",
+              "function": {
+                "name": "prepare_reminder",
+                "arguments": "{\"arguments\":{\"text\":\"проверить расписание\",\"remind_at\":\"2026-10-15T09:00:00+03:00\"},\"evidence\":{\"request\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Напомни 15 октября в 09:00 проверить расписание.\"},\"text\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"проверить расписание\"},\"date\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"15 октября\"},\"time\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"09:00\"}}}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754105-eddGHGwURaBrBZrD0WqR",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4067,
+            "completion_tokens": 197,
+            "total_tokens": 4264,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1317,
+          "finished_at": "2026-11-04T01:01:46.986491+00:00"
+        }
+      ],
+      "actual": {
+        "action": "add_reminder",
+        "arguments": {
+          "text": "проверить расписание",
+          "remind_at": "2026-10-15T09:00:00+03:00"
+        },
+        "timezone": "Europe/Moscow"
+      },
+      "displayed_answer": "Параметры напоминания:\nпроверить расписание\nКогда: 15 октября 2026, 09:00 (UTC+03:00)\nЧасовой пояс: Europe/Moscow.\n\nНапоминание не сохранено: требуется подтверждение.",
+      "audit": {
+        "decision": "call_tool",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Для напоминания нужно подтверждение; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1326,
+        "argument_summary": "Время: 2026-10-15T09:00:00+03:00; зона: Europe/Moscow"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:46.988480+00:00"
+    },
+    {
+      "id": "reminder_3",
+      "query": "Через два часа напомни сделать перерыв.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "сделать перерыв",
+        "remind_at": "2026-10-12T11:00:00+03:00"
+      },
+      "started_at": "2026-11-04T01:01:46.989859+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:46.995928+00:00",
+          "request_sha256": "0a871edf363c9cae516f073c029105cbfbc6343ee1523eebc1de299a440b5f9d",
+          "input_sha256": "b1afbfb2aed1ef550a90f5ace690105c6109c1b69811770dd266ed9789abf426",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3078,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-9c4e9c01-09d8-44a8-ba89-350cb87cabd7",
+              "type": "function",
+              "function": {
+                "name": "prepare_reminder",
+                "arguments": "{\"arguments\":{\"text\":\"сделать перерыв\",\"remind_at\":\"2026-10-12T11:00:00+03:00\"},\"evidence\":{\"request\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Через два часа напомни сделать перерыв.\"},\"text\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"сделать перерыв\"},\"date\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Через два часа\"},\"time\":{\"source\":\"user\",\"message_index\":0,\"quote\":\"Через два часа\"}}}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754107-q6kRjiY9WhFTapeSiKcD",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4057,
+            "completion_tokens": 185,
+            "total_tokens": 4242,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1804,
+          "finished_at": "2026-11-04T01:01:48.801366+00:00"
+        }
+      ],
+      "actual": {
+        "action": "add_reminder",
+        "arguments": {
+          "text": "сделать перерыв",
+          "remind_at": "2026-10-12T11:00:00+03:00"
+        },
+        "timezone": "Europe/Moscow"
+      },
+      "displayed_answer": "Параметры напоминания:\nсделать перерыв\nКогда: 12 октября 2026, 11:00 (UTC+03:00)\nЧасовой пояс: Europe/Moscow.\n\nНапоминание не сохранено: требуется подтверждение.",
+      "audit": {
+        "decision": "call_tool",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Для напоминания нужно подтверждение; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1812,
+        "argument_summary": "Время: 2026-10-12T11:00:00+03:00; зона: Europe/Moscow"
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": true,
+        "arguments_correct": true
+      },
+      "finished_at": "2026-11-04T01:01:48.803409+00:00"
+    },
+    {
+      "id": "respond_1",
+      "query": "Кратко объясни разницу между списком и кортежем в Python.",
+      "expected_action": "respond",
+      "expected_arguments": {},
+      "started_at": "2026-11-04T01:01:48.805105+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:48.811222+00:00",
+          "request_sha256": "882f2fde6966f996368d752789295e5902e87b0ec0a79fc4a00c587e56c7beae",
+          "input_sha256": "9661c30188a989a8c98aed22b785d6c4a771e5de8b63cd4ad8d361354817b929",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3087,
+          "raw_content": "**Список** (`list`) — изменяемая последовательность. Можно добавлять, удалять и менять элементы после создания.\n\n**Кортеж** (`tuple`) — неизменяемая последовательность. После создания элементы нельзя добавить, удалить или заменить.\n\nПример:\n\n```python\n# Список: можно менять\nnums = [1, 2, 3]\nnums[0] = 10      # ок\nnums.append(4)    # ок\n\n# Кортеж: нельзя менять\ncoords = (1, 2, 3)\n# coords[0] = 10  # TypeError\n# coords.append(4)  # AttributeError\n```\n\n**Когда использовать:**\n- `list` — если набор данных будет меняться.\n- `tuple` — если данные фиксированы (например, координаты, настройки), а также в качестве ключа словаря.\n\nТипичная ошибка: пытаться присвоить значение по индексу элементу кортежа — это вызовет `TypeError`.",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754109-rSF2FFbPmgfEjQQCSJK9",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4064,
+            "completion_tokens": 233,
+            "total_tokens": 4297,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 1581,
+          "finished_at": "2026-11-04T01:01:50.394258+00:00"
+        }
+      ],
+      "actual": {
+        "action": "respond",
+        "arguments": {}
+      },
+      "displayed_answer": "**Список** (`list`) — изменяемая последовательность. Можно добавлять, удалять и менять элементы после создания.\n\n**Кортеж** (`tuple`) — неизменяемая последовательность. После создания элементы нельзя добавить, удалить или заменить.\n\nПример:\n\n```python\n# Список: можно менять\nnums = [1, 2, 3]\nnums[0] = 10      # ок\nnums.append(4)    # ок\n\n# Кортеж: нельзя менять\ncoords = (1, 2, 3)\n# coords[0] = 10  # TypeError\n# coords.append(4)  # AttributeError\n```\n\n**Когда использовать:**\n- `list` — если набор данных будет меняться.\n- `tuple` — если данные фиксированы (например, координаты, настройки), а также в качестве ключа словаря.\n\nТипичная ошибка: пытаться присвоить значение по индексу элементу кортежа — это вызовет `TypeError`.",
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "OK",
+        "reason": "Модель сформировала обычный ответ.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1589,
+        "argument_summary": ""
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null
+      },
+      "finished_at": "2026-11-04T01:01:50.396043+00:00"
+    },
+    {
+      "id": "respond_2",
+      "query": "Переведи на английский: лабораторная работа завершена.",
+      "expected_action": "respond",
+      "expected_arguments": {},
+      "started_at": "2026-11-04T01:01:50.397712+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:50.404127+00:00",
+          "request_sha256": "0d5080a5bc72a634dd13adb8ec3ef7219d9650d96fbaeecd06102ac16e56a203",
+          "input_sha256": "9c0a0aa7ef1048d352b8522e95886e13fdffe2a3c1d9112bc6525cf1c9037a53",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3088,
+          "raw_content": "Laboratory work completed.",
+          "raw_tool_calls": [],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754110-0EmUw5IAfvh3tmNsy4jd",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4060,
+            "completion_tokens": 6,
+            "total_tokens": 4066,
+            "cost": 0
+          },
+          "finish_reason": "stop",
+          "duration_ms": 787,
+          "finished_at": "2026-11-04T01:01:51.192994+00:00"
+        }
+      ],
+      "actual": {
+        "action": "respond",
+        "arguments": {}
+      },
+      "displayed_answer": "Laboratory work completed.",
+      "audit": {
+        "decision": "respond",
+        "target": null,
+        "status": "OK",
+        "reason": "Модель сформировала обычный ответ.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 796,
+        "argument_summary": ""
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null
+      },
+      "finished_at": "2026-11-04T01:01:51.195736+00:00"
+    },
+    {
+      "id": "clarify_1",
+      "query": "Напомни вечером про лабораторную.",
+      "expected_action": "clarify",
+      "expected_arguments": {},
+      "started_at": "2026-11-04T01:01:51.197825+00:00",
+      "status": "ok",
+      "calls": [
+        {
+          "started_at": "2026-11-04T01:01:51.204928+00:00",
+          "request_sha256": "32d00eb647895a143868f20233f1838c4cd4c41b70662772a0bbd46eac7cb79a",
+          "input_sha256": "5e0972792a6214f3f0c44651386aefdb59ba774f9b668780e156f549f3d5d283",
+          "temperature": 0.3,
+          "message_roles": [
+            "system",
+            "user"
+          ],
+          "context_estimate_tokens": 3075,
+          "raw_content": null,
+          "raw_tool_calls": [
+            {
+              "id": "call-ec93c7d4-0638-406e-9e6d-ec2a1bb475fa",
+              "type": "function",
+              "function": {
+                "name": "clarify_reminder",
+                "arguments": "{\"question\":\"Укажи, пожалуйста, точное время напоминания (например, 18:00) и дату, если это не сегодня.\",\"reason\":\"«Вечером» — это часть дня, а не конкретное время; без точного времени не могу составить карточку напоминания.\"}"
+              }
+            }
+          ],
+          "truncated": false,
+          "model": "nvidia/nemotron-3.5-super-vl:free",
+          "id": "gen-1793754111-bJZHyoQIEiAmFbWfp0T0",
+          "provider": "Nvidia",
+          "usage": {
+            "prompt_tokens": 4057,
+            "completion_tokens": 99,
+            "total_tokens": 4156,
+            "cost": 0
+          },
+          "finish_reason": "tool_calls",
+          "duration_ms": 1162,
+          "finished_at": "2026-11-04T01:01:52.369327+00:00"
+        }
+      ],
+      "actual": {
+        "action": "clarify",
+        "arguments": {}
+      },
+      "displayed_answer": "Укажи, пожалуйста, точное время напоминания (например, 18:00) и дату, если это не сегодня.\n\nНовое напоминание ещё не сохранено. Ранее сохранённые напоминания не изменяются.",
+      "audit": {
+        "decision": "clarify",
+        "target": "add_reminder",
+        "status": "CLARIFY",
+        "reason": "Нужны параметры напоминания; запись не выполнялась.",
+        "error_code": null,
+        "llm_calls": 1,
+        "mcp_calls": 0,
+        "duration_ms": 1172,
+        "argument_summary": ""
+      },
+      "routing_source": "llm",
+      "score": {
+        "routing_correct": true,
+        "arguments_required": false,
+        "arguments_correct": null
+      },
+      "finished_at": "2026-11-04T01:01:52.371474+00:00"
+    }
+  ],
+  "metrics": {
+    "scope": "full_12_cases",
+    "completed": true,
+    "routing_accuracy": {
+      "correct": 11,
+      "total": 12,
+      "ratio": 0.9166666666666666
+    },
+    "argument_accuracy": {
+      "correct": 8,
+      "total": 9,
+      "ratio": 0.8888888888888888
+    },
+    "acceptance": "passed",
+    "llm_calls": 12,
+    "mcp_application_calls": 0,
+    "database_writes": 0
+  },
+  "updated_at": "2026-11-04T01:01:52.379176+00:00"
+}

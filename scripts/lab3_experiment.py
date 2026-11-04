@@ -20,15 +20,15 @@ from uuid import UUID
 from dotenv import dotenv_values
 
 from app.config import Settings
-from app.llm import OpenRouterClient
+from app.llm import ModelError, OpenRouterClient
 from app.routing.contracts import AgentRequest
 from app.routing.router import Router
 from scripts.semantic_routing_smoke import quota_status
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = "docs/evaluation/lab3-routing.json"
-DEFAULT_PROTOCOL = "docs/evaluation/lab3-experiment-v9-protocol.json"
-DEFAULT_OUTPUT = "docs/evaluation/lab3-experiment-v9-results.json"
+DEFAULT_PROTOCOL = "docs/evaluation/lab3-experiment-v10-protocol.json"
+DEFAULT_OUTPUT = "docs/evaluation/lab3-experiment-v10-results.json"
 MODEL = "nvidia/nemotron-3.5-super-vl:free"
 
 
@@ -288,6 +288,8 @@ async def _run(
                 entry["error"] = None if decision is not None else "INVALID_ROUTE"
             except Exception as error:
                 entry.update(actual_target=None, confidence=None, error=type(error).__name__)
+                if isinstance(error, ModelError):
+                    entry["error_message"] = error.user_message
             entry.update(
                 state="finished",
                 expected_target=case["expected_target"],
