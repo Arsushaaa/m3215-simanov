@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError as InvalidSchema
 from jsonschema.exceptions import ValidationError as SchemaError
 from mcp import Client, StdioServerParameters, types
 from mcp.shared.exceptions import MCPError
@@ -28,18 +29,19 @@ from app.mcp.contracts import (
     ScheduleArguments,
     ScheduleResult,
     WeatherArguments,
-    WeatherResult,
     WeatherToolArguments,
     WeatherToolResult,
     WeekResult,
     tool_schemas,
 )
+from app.mcp.schema_compatibility import input_shape
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[2]
 WEEK_URI = "schedule://current-week"
 CATALOG_URI = "materials://catalog"
 MAX_RESULT_BYTES = 32 * 1024
+CATALOG_REFRESH_SECONDS = 60
 MODELS = {
     "search_materials": (SearchArguments, SearchResult),
     "get_weather": (WeatherToolArguments, WeatherToolResult),
@@ -48,6 +50,7 @@ MODELS = {
 }
 MESSAGES = {
     "MCP_UNAVAILABLE": "Инструменты сейчас недоступны. Попробуй позже.",
+    "CONTRACT_CHANGED": "Контракт инструмента изменился. Отправь запрос заново.",
     "UNKNOWN_TOOL": "Такой инструмент не разрешён.",
     "INVALID_ARGUMENTS": "Аргументы инструмента не соответствуют допустимому формату.",
     "INVALID_RESULT": "Инструмент вернул некорректный результат.",
@@ -113,6 +116,8 @@ class _Operation:
     future: asyncio.Future = field(repr=False)
     task: asyncio.Task | None = field(default=None, repr=False)
     action_context: dict | None = field(default=None, repr=False)
+    generation: int = 0
+    validators: tuple | None = field(default=None, repr=False)
 
     @property
     def writing(self) -> bool:
@@ -130,10 +135,17 @@ class MCPClient:
         self._worker: asyncio.Task | None = None
         self._ready: asyncio.Future | None = None
         self._closing = False
+        self._refresh_event = asyncio.Event()
+        self._generation = 0
+        self._disabled_tools: set[str] = set()
 
     @property
     def tools(self) -> dict:
         return deepcopy(self._tools)
+
+    @property
+    def disabled_tools(self) -> tuple[str, ...]:
+        return tuple(sorted(self._disabled_tools))
 
     @property
     def resources(self) -> dict:
@@ -194,11 +206,39 @@ class MCPClient:
                 self._ready.set_result(None)
 
     def _invalidate(self) -> None:
+        self._generation += 1
         self.available = False
         self._tools.clear()
         self._resources.clear()
+        self._validators.clear()
+
+    async def _on_message(self, message) -> None:
+        if isinstance(
+            message, (types.ToolListChangedNotification, types.ResourceListChangedNotification)
+        ):
+            # Never query from the notification callback: it can run on the SDK reader task.
+            self._invalidate()
+            self._refresh_event.set()
+
+    async def _maintain_catalog(self, sdk) -> None:
+        while not self._closing:
+            try:
+                async with asyncio.timeout(CATALOG_REFRESH_SECONDS):
+                    await self._refresh_event.wait()
+            except TimeoutError:
+                pass
+            self._refresh_event.clear()
+            try:
+                async with asyncio.timeout(self.settings.mcp_timeout_seconds):
+                    await self._discover(sdk)
+                if not self._closing:
+                    self.available = bool(self._tools or self._resources)
+            except Exception as exc:
+                self._invalidate()
+                logger.warning("MCP discovery status=FAILED error_type=%s", type(exc).__name__)
 
     async def _discover(self, sdk) -> None:
+        generation = self._generation
         tools = await sdk.session.list_tools()
         resources = await sdk.session.list_resources()
         _bounded(tools.model_dump(mode="json", by_alias=True, exclude_none=True))
@@ -206,55 +246,57 @@ class MCPClient:
         if tools.next_cursor or resources.next_cursor:
             raise ValueError("Unexpected paginated catalog")
         names = [tool.name for tool in tools.tools]
-        base = set(MODELS) - {"search_materials"}
-        if len(names) != len(set(names)) or set(names) not in (base, set(MODELS)):
-            raise ValueError("Unexpected tools")
+        if len(names) != len(set(names)):
+            raise ValueError("Duplicate tools")
         resource_names = [str(resource.uri) for resource in resources.resources]
-        expected_resources = {WEEK_URI, CATALOG_URI} if "search_materials" in names else {WEEK_URI}
-        if (
-            len(resource_names) != len(set(resource_names))
-            or set(resource_names) != expected_resources
-        ):
-            raise ValueError("Unexpected resources")
-        catalog, validators = {}, {}
+        if len(resource_names) != len(set(resource_names)):
+            raise ValueError("Duplicate resources")
+        catalog, validators, disabled = {}, {}, set()
         for tool in tools.tools:
-            expected = tool_schemas(tool.name)
-            if (
-                tool.name == "get_weather"
-                and tool.input_schema == WeatherArguments.model_json_schema()
-                and tool.output_schema == WeatherResult.model_json_schema()
-            ):
-                # Explicit previous wire version; its validator still forbids point arguments.
-                expected = {"inputSchema": tool.input_schema, "outputSchema": tool.output_schema}
-            for schema in (tool.input_schema, tool.output_schema):
-                _local_references(schema)
-                Draft202012Validator.check_schema(schema)
-            if (
-                tool.input_schema != expected["inputSchema"]
-                or tool.output_schema != expected["outputSchema"]
-            ):
-                raise ValueError("Unexpected schema")
-            if (
-                not tool.description
-                or len(tool.description) > 500
-                or tool.annotations is None
-                or tool.annotations.read_only_hint is not (tool.name != "add_reminder")
-            ):
-                raise ValueError("Invalid tool metadata")
+            if tool.name not in MODELS:
+                continue  # Discovery never grants a new tool authority.
+            try:
+                for schema in (tool.input_schema, tool.output_schema):
+                    _local_references(schema)
+                    Draft202012Validator.check_schema(schema)
+                expected = tool_schemas(tool.name)["inputSchema"]
+                compatible = input_shape(tool.input_schema) == input_shape(expected)
+                if tool.name == "get_weather":
+                    compatible |= input_shape(tool.input_schema) == input_shape(
+                        WeatherArguments.model_json_schema()
+                    )
+                if not compatible:
+                    raise ValueError("Unsupported parameter shape")
+                if (
+                    not tool.description
+                    or len(tool.description) > 500
+                    or tool.annotations is None
+                    or tool.annotations.read_only_hint is not (tool.name != "add_reminder")
+                ):
+                    raise ValueError("Invalid tool metadata")
+            except (ValueError, TypeError, KeyError, RecursionError, InvalidSchema):
+                disabled.add(tool.name)
+                continue
             catalog[tool.name] = {
                 "name": tool.name,
                 "description": tool.description,
-                **expected,
+                "inputSchema": deepcopy(tool.input_schema),
+                "outputSchema": deepcopy(tool.output_schema),
                 "annotations": tool.annotations.model_dump(
                     mode="json", by_alias=True, exclude_none=True
                 ),
             }
             validators[tool.name] = (
-                Draft202012Validator(tool.input_schema),
-                Draft202012Validator(tool.output_schema),
+                Draft202012Validator(deepcopy(tool.input_schema)),
+                Draft202012Validator(deepcopy(tool.output_schema)),
             )
+        disabled.update(set(MODELS) - set(names))
         if any(resource.mime_type != "application/json" for resource in resources.resources):
             raise ValueError("Unexpected resource MIME type")
+        if generation != self._generation:
+            raise ValueError("Catalog changed during discovery")
+        self._generation += 1
+        self._disabled_tools = disabled
         self._tools = catalog
         self._validators = validators
         self._resources = {
@@ -265,6 +307,8 @@ class MCPClient:
                 "mimeType": resource.mime_type,
             }
             for resource in resources.resources
+            if str(resource.uri) in {WEEK_URI, CATALOG_URI}
+            and (str(resource.uri) != CATALOG_URI or "search_materials" in catalog)
         }
 
     async def _run(self) -> None:
@@ -275,14 +319,20 @@ class MCPClient:
             async with Client(
                 self._parameters(),
                 cache=None,
+                message_handler=self._on_message,
                 read_timeout_seconds=self.settings.mcp_timeout_seconds,
             ) as sdk:
-                await self._discover(sdk)
+                try:
+                    await self._discover(sdk)
+                except Exception as exc:
+                    self._invalidate()
+                    logger.warning("MCP discovery status=FAILED error_type=%s", type(exc).__name__)
                 if self._closing:
                     return
-                self.available = True
+                self.available = bool(self._tools or self._resources)
                 if not self._ready.done():
                     self._ready.set_result(None)
+                maintenance = asyncio.create_task(self._maintain_catalog(sdk))
                 try:
                     while (operation := await self._queue.get()) is not None:
                         if operation.future.cancelled():
@@ -292,6 +342,8 @@ class MCPClient:
                         active.add(task)
                         task.add_done_callback(active.discard)
                 finally:
+                    maintenance.cancel()
+                    await asyncio.gather(maintenance, return_exceptions=True)
                     for task in active:
                         task.cancel()
                     if active:
@@ -311,6 +363,8 @@ class MCPClient:
 
     async def _execute(self, sdk, operation: _Operation) -> None:
         try:
+            if operation.generation != self._generation:
+                raise MCPClientError("CONTRACT_CHANGED")
             if operation.method == "tools/call":
                 metadata = (
                     {"meta": {"labbi/action-capability": operation.action_context}}
@@ -323,7 +377,9 @@ class MCPClient:
                     allow_input_required=True,
                     **metadata,
                 )
-                value = self._tool_value(operation.target, result, operation.arguments)
+                value = self._tool_value(
+                    operation.target, result, operation.arguments, validators=operation.validators
+                )
             else:
                 result = await sdk.session.read_resource(
                     operation.target, allow_input_required=True
@@ -371,12 +427,13 @@ class MCPClient:
             if not operation.future.done():
                 operation.future.set_result(value)
 
-    def _tool_value(self, name: str, result, arguments: dict) -> dict:
+    def _tool_value(self, name: str, result, arguments: dict, *, validators=None) -> dict:
         if not isinstance(result, types.CallToolResult):
             raise ValueError("Unsupported MCP result")
         _bounded(result.model_dump(mode="json", by_alias=True, exclude_none=True))
+        # Validate the actual wire value before local DTO normalization.
+        (validators or self._validators[name])[1].validate(result.structured_content)
         value = MODELS[name][1].model_validate(result.structured_content).model_dump(mode="json")
-        self._validators[name][1].validate(value)
         if result.is_error is not (value["status"] == "error"):
             raise ValueError("Mismatched error flag")
         # A valid schema does not prove that a response belongs to this request.
@@ -433,7 +490,15 @@ class MCPClient:
         if not self.available or self._closing:
             raise MCPClientError("MCP_UNAVAILABLE")
         future = asyncio.get_running_loop().create_future()
-        operation = _Operation(method, target, arguments, future, action_context=action_context)
+        operation = _Operation(
+            method,
+            target,
+            arguments,
+            future,
+            action_context=action_context,
+            generation=self._generation,
+            validators=self._validators.get(target),
+        )
         self._queue.put_nowait(operation)
         try:
             async with asyncio.timeout(self.settings.mcp_timeout_seconds):
@@ -454,6 +519,8 @@ class MCPClient:
             raise MCPClientError("INVALID_ARGUMENTS")
         if not self.available:
             raise MCPClientError("MCP_UNAVAILABLE")
+        if name not in self._tools:
+            raise MCPClientError("CONTRACT_CHANGED")
         try:
             arguments = MODELS[name][0].model_validate(args).model_dump(mode="json")
             _bounded(arguments)
@@ -465,6 +532,10 @@ class MCPClient:
         )
 
     async def read_resource(self, uri: str) -> dict:
-        if uri not in {WEEK_URI, CATALOG_URI} or (uri == CATALOG_URI and uri not in self.resources):
+        if uri not in {WEEK_URI, CATALOG_URI}:
             raise MCPClientError("UNKNOWN_TOOL")
+        if not self.available:
+            raise MCPClientError("MCP_UNAVAILABLE")
+        if uri not in self._resources:
+            raise MCPClientError("CONTRACT_CHANGED")
         return await self._request("resources/read", uri)

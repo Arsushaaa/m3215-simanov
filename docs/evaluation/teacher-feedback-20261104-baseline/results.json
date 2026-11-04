@@ -1,0 +1,44 @@
+{
+  "protocol_sha256": "0e3595bff9251078f3ce2d8316f7682a4d6300cb70801a1e54c47165ef8ca917",
+  "cases": [
+    {
+      "id": "list_tuple",
+      "state": "finished",
+      "actual": "legacy_study",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "df977ed5978950ad7392f40ee42d5e9aa973dd5e62b63aedf49783a5ab834729",
+        "usage": {
+          "prompt_tokens": 857,
+          "completion_tokens": 53,
+          "cost": 0
+        }
+      }
+    },
+    {
+      "id": "revision",
+      "state": "finished",
+      "actual": "legacy_study",
+      "correct": true,
+      "observation": {
+        "payload_sha256": "e974e90f0a4f1643d2a019490170668325b2dde6ea0a801fc18aaa5388522edd",
+        "usage": {
+          "prompt_tokens": 857,
+          "completion_tokens": 52,
+          "cost": 0
+        }
+      }
+    }
+  ],
+  "quota_before": {
+    "used": 0,
+    "limit": 50,
+    "remaining": 50
+  },
+  "http_attempts": 2,
+  "quota_after": {
+    "used": 0,
+    "limit": 50,
+    "remaining": 50
+  }
+}

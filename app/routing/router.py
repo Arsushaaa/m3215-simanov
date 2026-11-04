@@ -17,14 +17,19 @@ or confirming a reminder. A reply to a missing-parameter question inherits the
 explicit reminder goal from visible history, even before a pending card exists.
 lifestyle/weather_request: actual current-weather requests and grounded weather advice.
 knowledge/materials_request: find/summarize/explain from our course materials/catalog.
+Revision of a specified course topic may use knowledge; a general explanation without
+a request for course sources uses legacy_study. A named topic is enough to proceed.
 legacy_study/general_study: a concrete programming/content question, a well-defined
 conversational exchange (such as a greeting or thanks), translations or explanations
 of quoted commands; not actual requests to execute the quoted text.
 clarify/ambiguous: unclear intent, unsupported action, multiple requested actions,
 or vague delegation with no concrete task/domain or subject to answer about.
+A concrete subject or comparison is a meaningful study question even when phrased
+as help, preparation, revision or an informal fragment. Answer it through a study route.
+Missing level, preferred format or detail does not require Router clarification.
 First check whether the user supplied an actionable goal or a meaningful question.
 Do not invent a task, choose priorities or assume personal context for the user.
-An unspecified request to organize, prepare, help or decide needs clarification;
+A request to organize, prepare, help or decide WITH NO SPECIFIED SUBJECT needs clarification;
 it is not general_study merely because it sounds conversational. A day/date alone
 does not establish university classes or a reminder. legacy_study is not a fallback
 for missing intent; explicit greetings and concrete explanations remain valid there.
@@ -64,7 +69,11 @@ class Router:
                 result = await self.llm.decide(
                     messages,
                     temperature,
-                    **({"tools": tools} if native else {"decision_schema": schema}),
+                    **(
+                        {"tools": tools, "require_tool": True}
+                        if native
+                        else {"decision_schema": schema}
+                    ),
                 )
             try:
                 if result.truncated:
@@ -94,3 +103,5 @@ class Router:
 
 
 CLARIFY = "Уточни, пожалуйста, одно действие: расписание, напоминание, погода или учебный вопрос."
+
+ROUTING_ERROR = "Не удалось разобрать ответ модели при выборе маршрута. Отправь вопрос ещё раз."

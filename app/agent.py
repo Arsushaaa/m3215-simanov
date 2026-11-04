@@ -28,10 +28,10 @@ from app.mcp.contracts import (
     ReminderTimeError,
     ResourceDecision,
     RespondDecision,
-    WeatherArguments,
     WeatherResult,
     validate_reminder_time,
 )
+from app.mcp.schema_compatibility import weather_city_schema
 from app.reminder_grounding import indexed_history, indexed_message, user_sources, validate_evidence
 from app.reminder_messages import BUTTON_REQUIRED, NO_PENDING_REMINDER, REMINDER_CLARIFY
 from app.routing.policy import PolicyDenied
@@ -183,7 +183,7 @@ class AgentService:
                     "name": value["name"],
                     "description": value["description"],
                     "parameters": model_schema(
-                        WeatherArguments.model_json_schema()
+                        weather_city_schema(value["inputSchema"])
                         if value["name"] == "get_weather"
                         else value["inputSchema"],
                         inline_refs=True,
@@ -452,6 +452,18 @@ class AgentService:
             indices = range(1 + sum(item["role"] == "user" for item in recent))
             tools = self._tools(context, message_indices=indices)
             decision_schema = AgentDecision.model_json_schema()
+            for tool_name, definition in (
+                ("get_weather", "WeatherArguments"),
+                ("get_schedule", "ScheduleArguments"),
+            ):
+                metadata = self.mcp.tools.get(tool_name)
+                if metadata is not None:
+                    discovered = metadata["inputSchema"]
+                    decision_schema["$defs"][definition] = (
+                        weather_city_schema(discovered)
+                        if tool_name == "get_weather"
+                        else model_schema(discovered, inline_refs=True)
+                    )
             if self._clarification_choices() is not None:
                 decision_schema["$defs"]["ClarifyReminderDecision"]["properties"]["question"][
                     "enum"

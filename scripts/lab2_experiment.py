@@ -349,9 +349,11 @@ def protocol(settings, dataset, cases, catalog, *, temperature=TEMPERATURE, mode
             for model in models
         )
         or settings.openrouter_model not in models
-        or settings.llm_tool_mode != "structured"
+        or settings.llm_tool_mode not in {"structured", "native"}
     ):
-        raise ValueError("Use the selected free model and structured routing, without fallback.")
+        raise ValueError(
+            "Use the selected free model and explicit structured/native routing, without fallback."
+        )
     if (
         type(temperature) not in (int, float)
         or not math.isfinite(temperature)

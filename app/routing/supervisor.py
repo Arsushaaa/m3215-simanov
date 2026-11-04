@@ -22,7 +22,7 @@ from app.routing.contracts import (
     WeekFacts,
 )
 from app.routing.policy import Budget, ScopedMCP
-from app.routing.router import CLARIFY, Router
+from app.routing.router import CLARIFY, ROUTING_ERROR, Router
 from app.tracing.runtime import TracedLLM, current_trace, span
 
 
@@ -162,7 +162,7 @@ class Supervisor:
                         # A failed/uncertain interpretation must not leave an old card live.
                         if context is not None and context.pending is not None:
                             await self._revoke(user, message_id, context)
-                        reply = AgentReply(CLARIFY)
+                        reply = AgentReply(CLARIFY if decision is not None else ROUTING_ERROR)
                 if not specialist_started:
                     await self._audit(
                         user,
@@ -189,6 +189,8 @@ class Supervisor:
                     status, error = "failed", "SOURCE_UNAVAILABLE"
                 elif target == "clarify" or reply.reminder is not None or reply.needs_clarification:
                     status = "needs_clarification"
+                if decision is None:
+                    status, error = "failed", "INVALID_ROUTE"
                 if scoped.observation is not None:
                     kind, name, raw = scoped.observation
                     facts = (

@@ -4,11 +4,12 @@
     {
       "id": "routing_targets",
       "implementation_stage": 2,
-      "expected": "Known targets dispatch once; unknown/invalid routes clarify before any tool.",
+      "expected": "Known targets dispatch once; invalid routes report a model failure before any tool; ambiguous user goals clarify.",
       "kind": "tests",
       "tests": [
         "tests/test_supervisor.py::test_schedule_routes_once_and_restricts_schema_and_model_context",
-        "tests/test_supervisor.py::test_invalid_route_safe_clarification_no_retry_no_tool"
+        "tests/test_supervisor.py::test_invalid_route_safe_clarification_no_retry_no_tool",
+        "tests/test_supervisor.py::test_native_router_requires_function_and_has_no_execution_tools"
       ]
     },
     {

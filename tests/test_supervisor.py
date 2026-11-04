@@ -17,7 +17,7 @@ from app.mcp.contracts import tool_schemas
 from app.repository import UserSettings
 from app.routing.contracts import AgentRequest
 from app.routing.policy import Budget, ScopedMCP
-from app.routing.router import CLARIFY, Router
+from app.routing.router import ROUTING_ERROR, Router
 from app.routing.supervisor import Supervisor
 from app.tracing.runtime import TraceManager, current_trace, span
 
@@ -184,7 +184,10 @@ async def test_invalid_route_safe_clarification_no_retry_no_tool(setup_superviso
     llm.decide.return_value = RoutingCompletion(bad, [])
     memory = MemoryTraces()
     async with TraceManager(memory).request(1):
-        assert (await ask(supervisor)).text == CLARIFY
+        reply = await ask(supervisor)
+        assert reply.text == ROUTING_ERROR
+        assert reply.agent_result.status == "failed"
+        assert reply.agent_result.error_code == "INVALID_ROUTE"
     llm.decide.assert_awaited_once()
     llm.complete.assert_not_awaited()
     mcp.call_tool.assert_not_awaited()
@@ -340,3 +343,27 @@ async def test_router_native_rejects_free_text_and_multiple_or_unknown_calls(bot
     ):
         llm.decide.return_value = invalid
         assert await router.route(request, [], 0.3) is None
+
+
+async def test_native_router_requires_function_and_has_no_execution_tools(bot_settings):
+    from app.llm import OpenRouterClient
+
+    llm = OpenRouterClient(bot_settings)
+    llm._request = AsyncMock(return_value=choice("legacy_study", native=True))
+    router = Router(llm, replace(bot_settings, llm_tool_mode="native"))
+    request = AgentRequest(
+        request_id=uuid4(),
+        trace_id=uuid4(),
+        actor_id=123,
+        text="Чем список отличается от кортежа в Python?",
+        intent="user_query",
+        occurred_at=NOW,
+        timezone="Europe/Moscow",
+    )
+    result = await router.route(request, [], 0.2)
+    assert result.target == "legacy_study"
+    payload = llm._request.call_args.args[0]
+    assert payload["tool_choice"] == "required"
+    assert [t["function"]["name"] for t in payload["tools"]] == ["select_route"]
+    assert "actor_id" not in json.dumps(payload)
+    llm._request.assert_awaited_once()

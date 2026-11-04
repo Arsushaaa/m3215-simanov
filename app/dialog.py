@@ -308,6 +308,9 @@ class DialogService:
                 else "изменение после подтверждения"
             )
             lines.append(f"{name} ({kind}) — {metadata['description']}")
+        disabled = getattr(mcp, "disabled_tools", ())
+        if disabled:
+            lines.append("Недоступны после изменения MCP-контракта: " + ", ".join(disabled))
         for uri, metadata in mcp.resources.items():
             lines.append(f"{uri} (чтение) — {metadata['description']}")
         lines.append(

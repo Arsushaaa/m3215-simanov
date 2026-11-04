@@ -133,10 +133,12 @@
     },
     {
       "id": "tool_allowlist",
-      "expected": "Неизвестные инструменты, лишние аргументы и изменённые схемы не доходят до SDK.",
+      "expected": "Неизвестные инструменты, лишние аргументы и несовместимые входные схемы не доходят до SDK; совместимые ограничения обновляются и проверяются.",
       "tests": [
         "tests/test_mcp_client.py::test_invalid_calls_never_reach_sdk",
-        "tests/test_mcp_client.py::test_unexpected_catalog_disables_tools"
+        "tests/test_mcp_client.py::test_catalog_changes_quarantine_only_unsupported_tools",
+        "tests/test_mcp_client.py::test_notification_refreshes_discovered_constraints_and_recovers_tool",
+        "tests/test_mcp_client.py::test_server_city_constraints_reach_model_in_both_modes"
       ]
     },
     {

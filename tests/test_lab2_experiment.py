@@ -212,7 +212,7 @@ async def test_checkpoint_protocol_and_case_selection_are_fail_closed(bot_settin
         with pytest.raises(ValueError, match="different protocol"):
             await run_trials(settings, client, catalog(), output, case_ids=cases)
     for changed in (
-        replace(bot_settings, llm_tool_mode="native"),
+        replace(bot_settings, llm_tool_mode="invalid"),
         replace(bot_settings, openrouter_model="other/model:free"),
         replace(bot_settings, schedule_timezone="UTC"),
     ):

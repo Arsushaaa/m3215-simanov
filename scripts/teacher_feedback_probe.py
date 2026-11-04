@@ -39,7 +39,10 @@ CONTROLS = (
 
 
 def snapshot():
-    return {**source_hashes(), __file__: digest(Path(__file__).read_bytes())}
+    return {
+        **source_hashes(),
+        "scripts/teacher_feedback_probe.py": digest(Path(__file__).read_bytes()),
+    }
 
 
 class Client(MeasuredClient):

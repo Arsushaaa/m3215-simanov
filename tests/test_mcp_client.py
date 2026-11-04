@@ -151,15 +151,37 @@ async def test_start_failure_is_nonfatal_and_never_retried(bot_settings, monkeyp
         await client.read_resource(module.WEEK_URI)
 
 
+@pytest.mark.parametrize("defect", ["mime", "pagination"])
+async def test_malformed_catalog_is_nonfatal(setup_client, defect):
+    client, sdk, _factory = setup_client
+    if defect == "mime":
+        sdk.list_resources.return_value.resources[0].mime_type = "text/plain"
+    else:
+        sdk.list_tools.return_value.next_cursor = "more"
+    await client.start()
+    assert not client.available
+    assert client.tools == client.resources == {}
+    await client.close()
+    sdk.call_tool.assert_not_awaited()
+
+
 @pytest.mark.parametrize(
     "defect",
-    ["missing-tool", "extra-tool", "input-schema", "remote-ref", "read-only", "mime", "pagination"],
+    [
+        "missing-tool",
+        "extra-tool",
+        "input-schema",
+        "remote-ref",
+        "read-only",
+        "invalid-schema",
+        "renamed-parameter",
+    ],
 )
-async def test_unexpected_catalog_disables_tools(setup_client, defect):
+async def test_catalog_changes_quarantine_only_unsupported_tools(setup_client, defect):
     client, sdk, _factory = setup_client
     listing = sdk.list_tools.return_value
     if defect == "missing-tool":
-        listing.tools.pop()
+        listing.tools = [t for t in listing.tools if t.name != "get_weather"]
     elif defect == "extra-tool":
         listing.tools.append(listing.tools[0].model_copy(update={"name": "run_shell"}))
     elif defect == "input-schema":
@@ -168,15 +190,29 @@ async def test_unexpected_catalog_disables_tools(setup_client, defect):
         listing.tools[0].output_schema = {"$ref": "https://private-key.example/schema"}
     elif defect == "read-only":
         listing.tools[0].annotations.read_only_hint = False
-    elif defect == "mime":
-        sdk.list_resources.return_value.resources[0].mime_type = "text/plain"
+    elif defect == "invalid-schema":
+        listing.tools[0].input_schema = {"type": "not-a-type"}
     else:
-        listing.next_cursor = "more"
+        listing.tools[0].input_schema = {
+            "type": "object",
+            "properties": {"town": {"type": "string"}},
+            "required": ["town"],
+            "additionalProperties": False,
+        }
     await client.start()
-    await client.close()
-    assert not client.available
-    assert client.tools == client.resources == {}
-    sdk.call_tool.assert_not_awaited()
+    try:
+        assert client.available
+        assert "get_schedule" in client.tools and "add_reminder" in client.tools
+        assert "run_shell" not in client.tools
+        if defect != "extra-tool":
+            assert "get_weather" not in client.tools
+            assert "get_weather" in client.disabled_tools
+            with pytest.raises(MCPClientError) as error:
+                await client.call_tool("get_weather", {"city": "Казань"})
+            assert error.value.code == "CONTRACT_CHANGED"
+        assert await client.call_tool("get_schedule", {"date": DAY["date"]}) == DAY
+    finally:
+        await client.close()
 
 
 @pytest.mark.parametrize(
@@ -671,7 +707,7 @@ async def test_failed_real_client_preserves_plain_dialog_without_reconnect(setup
     if failure == "startup":
         factory.side_effect = OSError("PRIVATE startup diagnostics")
     elif failure == "catalog":
-        sdk.list_tools.return_value.tools.pop()
+        sdk.list_tools.return_value.next_cursor = "unexpected-page"
     await client.start()
     calls_before = sdk.call_tool.await_count
     if failure == "disconnect":
@@ -717,5 +753,229 @@ async def test_failed_real_client_preserves_plain_dialog_without_reconnect(setup
         # Neither an ordinary question nor a later read silently reconnects MCP.
         await client.start()
         factory.assert_called_once()
+    finally:
+        await client.close()
+
+
+async def wait_for_catalog(client, predicate):
+    async with asyncio.timeout(3):
+        while not predicate(client.tools):  # noqa: ASYNC110 -- bounded external catalog observation
+            await asyncio.sleep(0.001)
+
+
+async def test_notification_refreshes_discovered_constraints_and_recovers_tool(setup_client):
+    client, sdk, factory = setup_client
+    await client.start()
+    try:
+        changed = catalog()
+        weather = changed.tools[0]
+        city = weather.input_schema["$defs"]["WeatherArguments"]["properties"]["city"]
+        city.update(maxLength=5, description="Новое ограничение сервера: до пяти символов.")
+        sdk.list_tools.return_value = changed
+        notify = factory.call_args.kwargs["message_handler"]
+        await notify(types.ToolListChangedNotification(method="notifications/tools/list_changed"))
+        assert not client.available  # Old schemas cannot be used after notification.
+        await wait_for_catalog(
+            client,
+            lambda tools: (
+                tools.get("get_weather")
+                == {
+                    "name": weather.name,
+                    "description": weather.description,
+                    "inputSchema": weather.input_schema,
+                    "outputSchema": weather.output_schema,
+                    "annotations": weather.annotations.model_dump(
+                        mode="json", by_alias=True, exclude_none=True
+                    ),
+                }
+            ),
+        )
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool("get_weather", {"city": "Санкт-Петербург"})
+        assert error.value.code == "INVALID_ARGUMENTS"
+        sdk.call_tool.assert_not_awaited()
+        sdk.list_tools.return_value = catalog()
+        await notify(types.ToolListChangedNotification(method="notifications/tools/list_changed"))
+        await wait_for_catalog(
+            client,
+            lambda tools: (
+                tools.get("get_weather", {}).get("inputSchema")
+                == tool_schemas("get_weather")["inputSchema"]
+            ),
+        )
+        assert client.available
+    finally:
+        await client.close()
+
+
+async def test_discovered_output_constraint_is_enforced_before_local_normalization(setup_client):
+    client, sdk, _ = setup_client
+    schema = sdk.list_tools.return_value.tools[1].output_schema
+    schema["$defs"]["ScheduleOk"]["properties"]["date"]["const"] = "2026-10-19"
+    await client.start()
+    try:
+        assert "get_schedule" in client.tools
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool("get_schedule", {"date": DAY["date"]})
+        assert error.value.code == "INVALID_RESULT"
+        sdk.call_tool.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+async def test_queued_write_is_rejected_if_catalog_changed_before_dispatch(setup_client):
+    client, sdk, _ = setup_client
+    await client.start()
+    try:
+        future = asyncio.get_running_loop().create_future()
+        operation = module._Operation(
+            "tools/call",
+            "add_reminder",
+            REMINDER_ARGUMENTS,
+            future,
+            action_context=ACTION_CONTEXT,
+            generation=client._generation,
+            validators=client._validators["add_reminder"],
+        )
+        await client._discover(sdk)
+        await client._execute(sdk, operation)
+        with pytest.raises(MCPClientError) as error:
+            await future
+        assert error.value.code == "CONTRACT_CHANGED"
+        sdk.call_tool.assert_not_awaited()
+    finally:
+        await client.close()
+
+
+async def test_inflight_read_uses_its_original_output_validator_during_refresh(setup_client):
+    client, sdk, _ = setup_client
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def blocked(*args, **kwargs):
+        entered.set()
+        await finish.wait()
+        return tool_result(DAY)
+
+    sdk.call_tool.side_effect = blocked
+    await client.start()
+    try:
+        task = asyncio.create_task(client.call_tool("get_schedule", {"date": DAY["date"]}))
+        await asyncio.wait_for(entered.wait(), 2)
+        sdk.list_tools.return_value.tools[1].output_schema.clear()
+        sdk.list_tools.return_value.tools[1].output_schema["type"] = "null"
+        await client._discover(sdk)
+        finish.set()
+        assert await task == DAY
+        with pytest.raises(MCPClientError) as error:
+            await client.call_tool("get_schedule", {"date": DAY["date"]})
+        assert error.value.code == "INVALID_RESULT"
+    finally:
+        finish.set()
+        await client.close()
+
+
+async def test_live_sdk_catalog_refreshes_without_notification(bot_settings, monkeypatch):
+    from mcp import Client as RealClient
+    from mcp.server.lowlevel import Server
+
+    listing = catalog()
+
+    async def list_tools(_ctx, _params):
+        return listing
+
+    async def list_resources(_ctx, _params):
+        return types.ListResourcesResult(
+            resources=[
+                types.Resource(uri=module.WEEK_URI, name="week", mimeType="application/json")
+            ]
+        )
+
+    server = Server("changing-contract", on_list_tools=list_tools, on_list_resources=list_resources)
+    monkeypatch.setattr(module, "Client", lambda *a, **kw: RealClient(server, **kw))
+    monkeypatch.setattr(module, "CATALOG_REFRESH_SECONDS", 0.02)
+    client = MCPClient(bot_settings)
+    await client.start()
+    try:
+        assert client.available and "get_weather" in client.tools
+        listing.tools[0].description = "Обновлённое описание сервера."
+        await wait_for_catalog(
+            client,
+            lambda tools: (
+                tools.get("get_weather", {}).get("description") == "Обновлённое описание сервера."
+            ),
+        )
+        # A breaking rename removes only weather; restoration needs no bot restart.
+        original = listing.tools[0].input_schema
+        listing.tools[0].input_schema = {
+            "type": "object",
+            "properties": {"town": {"type": "string"}},
+            "required": ["town"],
+        }
+        await wait_for_catalog(client, lambda tools: "get_weather" not in tools)
+        assert client.available and "get_schedule" in client.tools
+        listing.tools[0].input_schema = original
+        await wait_for_catalog(client, lambda tools: "get_weather" in tools)
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize("native", [False, True])
+async def test_server_city_constraints_reach_model_in_both_modes(setup_client, native):
+    client, sdk, _ = setup_client
+    weather = sdk.list_tools.return_value.tools[0]
+    city = weather.input_schema["$defs"]["WeatherArguments"]["properties"]["city"]
+    city.update(maxLength=5, description="Актуальное описание города с сервера.")
+    await client.start()
+    llm = SimpleNamespace(
+        decide=AsyncMock(
+            return_value=RoutingCompletion(
+                "Учебный ответ."
+                if native
+                else '{"action":"respond","text":"Учебный ответ.","reason":"Вопрос."}',
+                [],
+            )
+        )
+    )
+    repo = SimpleNamespace(
+        timezone=AsyncMock(return_value=None),
+        has_processed=AsyncMock(return_value=False),
+        start_request=AsyncMock(),
+        record=AsyncMock(),
+    )
+    settings = replace(client.settings, llm_tool_mode="native" if native else "structured")
+    try:
+        await AgentService(llm, client, repo, settings).respond(
+            UserSettings(1, "study", 0.2, 0),
+            1,
+            "Что такое Python?",
+            prompt="You are Labbi",
+            history=[],
+        )
+        kwargs = llm.decide.call_args.kwargs
+        schema = (
+            next(t for t in kwargs["tools"] if t["function"]["name"] == "get_weather")["function"][
+                "parameters"
+            ]
+            if native
+            else kwargs["decision_schema"]["$defs"]["WeatherArguments"]
+        )
+        assert schema["properties"]["city"]["maxLength"] == 5
+        assert schema["properties"]["city"]["description"] == city["description"]
+        assert "point" not in schema["properties"]
+        sdk.call_tool.assert_not_awaited()
+    finally:
+        await client.close()
+
+
+async def test_removed_resource_cannot_be_read_from_stale_known_uri(setup_client):
+    client, sdk, _ = setup_client
+    sdk.list_resources.return_value.resources.clear()
+    await client.start()
+    try:
+        assert client.available and "get_schedule" in client.tools
+        with pytest.raises(MCPClientError) as error:
+            await client.read_resource(module.WEEK_URI)
+        assert error.value.code == "CONTRACT_CHANGED"
+        sdk.read_resource.assert_not_awaited()
     finally:
         await client.close()
